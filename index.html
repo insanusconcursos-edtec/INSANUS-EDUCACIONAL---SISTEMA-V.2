@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Insanus Educacional</title>
+    <meta name="description" content="Gestão de Estudos de Alta Performance" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- ReactFlow CSS Injection (Correção de MIME Type) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css" />
+
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Insanus">
+    <link rel="apple-touch-icon" href="https://insanusconcursos.com/wp-content/uploads/2026/05/LOGO-MOBILE-2-INSANUS.png">
+    <meta name="theme-color" content="#000000">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Service Worker Registration (Modo Ultra-Seguro)
+      try {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            // Limpeza preventiva de caches antigos
+            if ('caches' in window) {
+              caches.keys().then(names => {
+                for (let name of names) caches.delete(name);
+              }).catch(() => {});
+            }
+
+            navigator.serviceWorker.register('/sw.js')
+              .then(reg => console.log('✅ PWA pronto'))
+              .catch(() => {}); // Falha silenciosa
+          });
+        }
+      } catch (e) {}
+
+      // Help debug PWA installability
+      window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('📱 App instalável');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        console.log('🎉 PWA instalado');
+      });
+    </script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                  black: '#000000',
+                  dark: '#0a0a0a',
+                  gray: '#121212',
+                  'zinc-custom': '#1f1f1f',
+                  red: '#ff0000',
+                  'red-glow': '#ff0000',
+                  'red-dark': '#800000'
+              },
+              border: "hsl(var(--border))",
+              input: "hsl(var(--input))",
+              ring: "hsl(var(--ring))",
+              background: "#09090b", // zinc-950
+              foreground: "#ffffff",
+              primary: { DEFAULT: "#dc2626", foreground: "#ffffff" }, // red-600
+              secondary: { DEFAULT: "#27272a", foreground: "#ffffff" }, // zinc-800
+              destructive: { DEFAULT: "#ef4444", foreground: "#ffffff" },
+              muted: { DEFAULT: "#27272a", foreground: "#a1a1aa" },
+              accent: { DEFAULT: "#27272a", foreground: "#ffffff" },
+              popover: { DEFAULT: "#09090b", foreground: "#ffffff" },
+              card: { DEFAULT: "#18181b", foreground: "#ffffff" }, // zinc-900
+            },
+            fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                orbitron: ['Orbitron', 'sans-serif'],
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body { font-family: 'Inter', sans-serif; background-color: #09090b; color: white; margin: 0; }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #000000; }
+      ::-webkit-scrollbar-thumb { background: #1f1f1f; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #ff0000; }
+      
+      .grid-bg {
+          background-image: linear-gradient(to right, #111111 1px, transparent 1px),
+                            linear-gradient(to bottom, #111111 1px, transparent 1px);
+          background-size: 40px 40px;
+      }
+
+      @keyframes highlight-pulse {
+        0% { border-color: #dc2626; box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+        50% { border-color: #ff0000; box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+        100% { border-color: #dc2626; box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+      }
+      .highlight-pulse {
+        animation: highlight-pulse 1.5s ease-in-out infinite;
+        border-width: 2px !important;
+        z-index: 50;
+      }
+
+      .hide-scrollbar::-webkit-scrollbar { display: none; }
+      .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom": "https://esm.sh/react-dom@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "firebase/": "https://esm.sh/firebase@^12.9.0/",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.574.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
+    "@dnd-kit/utilities": "https://esm.sh/@dnd-kit/utilities@^3.2.2",
+    "@dnd-kit/core": "https://esm.sh/@dnd-kit/core@^6.3.1",
+    "pdf-lib": "https://esm.sh/pdf-lib@^1.17.1",
+    "@dnd-kit/sortable": "https://esm.sh/@dnd-kit/sortable@^10.0.0",
+    "path": "https://esm.sh/path@^0.12.7",
+    "url": "https://esm.sh/url@^0.11.4"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "BAKCUP VERCEL - INSANUS EDUCACIONAL - V2",
+  "description": "Uma plataforma futurista de gestão de estudos para concursos, com foco em gamificação, ciclos de estudo inteligentes e gestão financeira de coprodutores.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
