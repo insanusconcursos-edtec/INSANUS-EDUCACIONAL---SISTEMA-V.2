@@ -196,35 +196,35 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   // 2. Cálculo das Taxas Pagar.me (Dedução 1)
   const pagarmeFees = calculatePagarmeFees(grossAmount, paymentMethod, installments);
 
-  // 3. Saldo A: Bruto - Taxas (Base para comissões)
+  // 3. Saldo A: Bruto - Taxas (Base para comissões - RATEIO AUTOMÁTICO)
   const saldoA = grossAmount - pagarmeFees;
-  console.log(`[Pagarme Cascade] Bruto: ${grossAmount} | Taxas Pagar.me: ${pagarmeFees} | Saldo A (Base): ${saldoA}`);
+  console.log(`[Pagarme Cascade] Bruto: ${grossAmount} | Taxas Pagar.me: ${pagarmeFees} | Saldo A (Líquido Base): ${saldoA}`);
 
   const splitArray: any[] = [];
-  let totalDeductionsAfterFees = 0;
+  let totalNetDistributed = 0;
 
-  // 4. Saldo A -> Dedução Vendedor/Afiliado (Comissão sobre Saldo A)
+  // 4. Saldo A -> Dedução Vendedor/Afiliado (Comissão sobre Saldo Líquido A)
   let affiliateAmount = 0;
   if (affiliateDataFromDB && affiliateDataFromDB.recipientId && affiliateDataFromDB.percentage > 0) {
     affiliateAmount = Math.floor(saldoA * (affiliateDataFromDB.percentage / 100));
     if (affiliateAmount > 0) {
-      console.log(`[SPLIT] Processando regras para o recebedor ${affiliateDataFromDB.recipientId} (Afiliado) no valor de ${affiliateAmount}`);
+      console.log(`[SPLIT] Processando regras para o recebedor ${affiliateDataFromDB.recipientId} (Afiliado) no valor líquido de ${affiliateAmount}`);
       splitArray.push({
         amount: affiliateAmount,
         recipient_id: affiliateDataFromDB.recipientId,
         type: 'flat',
-        options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Liable false para comissionados
+        options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Taxas já rateadas no cálculo
       });
-      totalDeductionsAfterFees += affiliateAmount;
+      totalNetDistributed += affiliateAmount;
       console.log(`✅ [Pagarme Split] Vendedor ${affiliateDataFromDB.recipientId} recebe ${affiliateAmount} (${affiliateDataFromDB.percentage}% do Saldo A)`);
     }
   }
 
   // 5. Saldo B: Saldo A - Comissão Vendedor (Base para Coprodutores)
   const saldoB = saldoA - affiliateAmount;
-  console.log(`[Pagarme Cascade] Saldo B (Base Coprodução): ${saldoB}`);
+  console.log(`[Pagarme Cascade] Saldo B (Base Coprodução Líquida): ${saldoB}`);
 
-  // 6. Saldo B -> Loop de Coprodutores (Comissão sobre Saldo B)
+  // 6. Saldo B -> Loop de Coprodutores (Comissão sobre Saldo Líquido B)
   const coprodutoresArray = coproducers || [];
   if (coprodutoresArray.length > 0) {
     coprodutoresArray.forEach((copro: any) => {
@@ -234,14 +234,14 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       if (recipientId && recipientId.startsWith('re_') && percentage > 0) {
         const coproAmount = Math.floor(saldoB * (percentage / 100));
         if (coproAmount > 0) {
-          console.log(`[SPLIT] Processando regras para o recebedor ${recipientId} no valor de ${coproAmount}`);
+          console.log(`[SPLIT] Processando regras para o recebedor ${recipientId} no valor líquido de ${coproAmount}`);
           splitArray.push({
             amount: coproAmount,
             recipient_id: recipientId,
             type: 'flat',
-            options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Liable false para coprodutores
+            options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Taxas já rateadas no cálculo
           });
-          totalDeductionsAfterFees += coproAmount;
+          totalNetDistributed += coproAmount;
           console.log(`✅ [Pagarme Split] Coprodutor ${recipientId} recebe ${coproAmount} (${percentage}% do Saldo B)`);
         }
       } else {
@@ -250,29 +250,29 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     });
   }
 
-  // 7. Conta Master (Recebe o que sobrar e assume a responsabilidade total das taxas)
-  const masterAmount = grossAmount - totalDeductionsAfterFees; // Master recebe o bruto - repasses (e o gateway desconta as taxas dele depois)
+  // 7. Conta Master NET (Líquido após todos os repasses e taxas)
+  const masterNetAmount = saldoA - totalNetDistributed;
   const masterRecipientId = await getMasterRecipientId();
 
   if (masterRecipientId) {
     splitArray.push({
-      amount: masterAmount,
+      amount: masterNetAmount,
       recipient_id: masterRecipientId,
       type: 'flat',
-      options: { charge_processing_fee: true, charge_remainder_fee: true, liable: true } // Master assume taxas e estornos
+      options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Master já recebe valor líquido
     });
     
     // LOG DETALHADO DO SPLIT SOLICITADO
-    process.stderr.write(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY <<<<\n");
+    process.stderr.write(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY (LÍQUIDO) <<<<\n");
     splitArray.forEach((s, idx) => {
-      process.stderr.write(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor: ${s.amount} | Liable: ${s.options.liable} | Rules: ${JSON.stringify(s.options)}\n`);
+      process.stderr.write(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor Líquido: ${s.amount} | Liable: ${s.options.liable}\n`);
     });
     
     // LOG 3: Auditoria de cálculo final
-    const calcLog = `[AUDITORIA-CALCULO] Valor Bruto: ${grossAmount} | Taxa Pagar.me Est.: ${pagarmeFees} | Montante Final Split: ${totalDeductionsAfterFees + masterAmount}\n`;
+    const calcLog = `[AUDITORIA-CALCULO] Valor Bruto: ${grossAmount} | Taxa Pagar.me Paga: ${pagarmeFees} | Total Distribuído Líquido: ${totalNetDistributed + masterNetAmount}\n`;
     process.stderr.write(calcLog);
     
-    const auditMsg = `[AUDITORIA-DETALHE-VALORES] Valor Líquido Master: ${masterAmount} | Vendedor: ${affiliateAmount} | Total Coprodutores: ${totalDeductionsAfterFees - affiliateAmount}\n`;
+    const auditMsg = `[AUDITORIA-DETALHE-VALORES] Valor Líquido Master: ${masterNetAmount} | Vendedor: ${affiliateAmount} | Total Coprodutores: ${totalNetDistributed - affiliateAmount}\n`;
     process.stderr.write(auditMsg);
   } else {
     console.error("❌ [ERRO CRÍTICO] PAGARME_MASTER_RECIPIENT_ID não configurado!");
