@@ -138,9 +138,22 @@ const CoproductionDashboard: React.FC = () => {
   };
 
   const fetchBalance = async (recipientId: string) => {
-    // A tela agora é responsiva via onSnapshot (tempo real) utilizando o Firebase DB diretamente
-    // Evita chamadas API para o Pagar.me ou rotas que podem estar bloqueadas ou retornar stale data.
-    console.log(`[CARTEIRA] Fetch balance request bypassado (usando tempo real localmente) para ${recipientId}`);
+    if (!recipientId || recipientId === 'undefined') return;
+    
+    setLoadingBalance(true);
+    try {
+      const response = await fetch(`/api/payments/pagarme/balance?recipientId=${recipientId}`);
+      const data = await response.json();
+      
+      if (data.success && data.balance) {
+        setBalance(data.balance);
+        console.log(`[CARTEIRA] Saldo real sincronizado: R$ ${data.balance.available / 100}`);
+      }
+    } catch (err) {
+      console.error('Error fetching real-time balance:', err);
+    } finally {
+      setLoadingBalance(false);
+    }
   };
 
   const handleRequestPayout = async () => {
@@ -336,14 +349,19 @@ const CoproductionDashboard: React.FC = () => {
     };
   }, [currentUser, dateFilter, isCoprodutorRole]); 
 
-  // Efeito isolado para a Carteira em tempo real
+  // Efeito para sincronizar saldo real da Pagar.me
   useEffect(() => {
     if (!userProfile?.pagarmeRecipientId || !currentUser) return;
     
-    setLoadingBalance(true);
-    console.log("[CARTEIRA DEBUG] Iniciando onSnapshot para:", userProfile.pagarmeRecipientId);
+    // Busca inicial do saldo real
+    fetchBalance(userProfile.pagarmeRecipientId);
 
-    // 1. Assinatura de Saques
+    // Opcional: Polling a cada 5 minutos para manter o saldo atualizado sem onSnapshot (que não funciona para APIs externas)
+    const interval = setInterval(() => {
+      fetchBalance(userProfile.pagarmeRecipientId);
+    }, 300000); // 5 minutos
+
+    // 1. Assinatura de Saques (Mantemos para integridade local de lançamentos)
     const wQuery = query(
       collection(db, 'withdrawals'), 
       where('recipientId', '==', userProfile.pagarmeRecipientId)
@@ -354,90 +372,11 @@ const CoproductionDashboard: React.FC = () => {
       setWithdrawalsAmount(totalWd);
     });
 
-    // 2. Assinatura de Transações (Novo sistema via 'orders' e 'transactions')
-    const ordersQuery = query(
-      collection(db, 'orders'),
-      where('status', 'in', ['paid', 'succeeded'])
-    );
-
-    const unsubscribeOrders = onSnapshot(ordersQuery, async (snap) => {
-      let availTotal = 0;
-      let grossTotal = 0;
-      const myRecipientId = userProfile.pagarmeRecipientId;
-      const myEmail = currentUser.email?.toLowerCase();
-
-      console.log(`[INTEGRIDADE] Sincronizando carteira | Recebedor: ${myRecipientId}`);
-
-      snap.forEach(doc => {
-        const order = doc.data();
-        const splits = order.split_rules || order.splits || [];
-        
-        // 1. Busca por Recipient ID no Split (Prioridade Máxima)
-        const mySplit = splits.find((s: any) => s.recipient_id === myRecipientId);
-        
-        if (mySplit) {
-          const amount = mySplit.amount || 0;
-          availTotal += amount;
-          grossTotal += (order.amount || 0);
-          console.log(`[SPLIT] Processando regras para o recebedor ${myRecipientId} na ordem ${order.id}: ${amount} centavos`);
-        } else if (myEmail) {
-          // 2. Fallback por Email nos Metadados da Ordem
-          const meta = order.metadata || {};
-          const orderEmail = (meta.userEmail || meta.email || meta.affiliateEmail || '').toLowerCase();
-          
-          if (orderEmail === myEmail) {
-            console.log(`[INTEGRIDADE] Ordem ${order.id} corresponde ao seu email, mas seu recipientId não está no split. Verifique as configurações.`);
-            // Nota: Não somamos aqui para evitar duplicidade ou valores incorretos se o split for a fonte da verdade.
-            // O fallback real de valores vem do bloco 'availTotal === 0' abaixo (Legado).
-          }
-        }
-      });
-
-      console.log(`[CARTEIRA DEBUG] Vendas em 'orders' encontradas: ${snap.size}. Saldo: ${availTotal}`);
-
-      // Se orders estiver com pouco dado, tenta comissões legadas
-      if (availTotal === 0) {
-        try {
-          if (userRole === 'ADMIN' || userRole === 'OWNER') {
-            const adminSnap = await getDocs(collection(db, 'admin_sales_report'));
-            adminSnap.forEach(doc => {
-              const d = doc.data();
-              availTotal += (d.netCompanyValue || 0);
-              grossTotal += (d.grossValue || d.amount || 0);
-            });
-          } else {
-            const qUid = query(collection(db, 'coproduction_commissions'), where('coproducerId', '==', currentUser.uid));
-            const qEmail = query(collection(db, 'coproduction_commissions'), where('coproducerEmail', '==', currentUser.email));
-            const [snapUid, snapEmail] = await Promise.all([getDocs(qUid), getDocs(qEmail)]);
-            const seenOrders = new Set();
-            [...snapUid.docs, ...snapEmail.docs].forEach(doc => {
-              const d = doc.data();
-              if (!seenOrders.has(d.orderId)) {
-                seenOrders.add(d.orderId);
-                availTotal += (d.commissionValue || 0);
-                grossTotal += (d.grossValue || d.commissionValue || 0);
-              }
-            });
-          }
-        } catch (err) {
-          console.error("[CARTEIRA ERROR] Fallback legado:", err);
-        }
-      }
-
-      setBalance((prev: any) => ({
-        ...prev,
-        available: availTotal - withdrawalsAmount,
-        total_sales: grossTotal,
-        waiting_funds: 0
-      }));
-      setLoadingBalance(false);
-    });
-
     return () => {
+      clearInterval(interval);
       unsubscribeWithdrawals();
-      unsubscribeOrders();
     };
-  }, [userProfile?.pagarmeRecipientId, currentUser, userRole, withdrawalsAmount]);
+  }, [userProfile?.pagarmeRecipientId, currentUser]);
 
 
 
@@ -809,24 +748,24 @@ const CoproductionDashboard: React.FC = () => {
             </div>
           </motion.div>
 
-          {/* Card 3: Total Vendas */}
+          {/* Card 3: Sacado (Transferred) */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-[#111] p-6 rounded-xl border border-[#222] relative overflow-hidden group hover:border-green-400/30 transition-colors"
+            className="bg-[#111] p-6 rounded-xl border border-[#222] relative overflow-hidden group hover:border-blue-400/30 transition-colors"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-green-400/10 rounded-lg">
-                <ShoppingBag className="w-5 h-5 text-green-400" />
+              <div className="p-2 bg-blue-400/10 rounded-lg">
+                <ArrowRightCircle className="w-5 h-5 text-blue-400" />
               </div>
             </div>
-            <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">Vendas Totais (Bruto)</p>
+            <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">Total Sacado (Baixado)</p>
             <h3 className="text-2xl font-black text-white tracking-tighter">
               {loadingBalance ? (
-                <span className="text-xs font-medium animate-pulse text-gray-500">Processando...</span>
-              ) : formatCurrency(((balance as any)?.total_sales || 0) / 100)}
+                <span className="text-xs font-medium animate-pulse text-gray-500">Buscando...</span>
+              ) : formatCurrency(((balance as any)?.transferred || 0) / 100)}
             </h3>
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-               <ShoppingBag className="w-24 h-24" />
+               <ArrowRightCircle className="w-24 h-24" />
             </div>
           </motion.div>
 

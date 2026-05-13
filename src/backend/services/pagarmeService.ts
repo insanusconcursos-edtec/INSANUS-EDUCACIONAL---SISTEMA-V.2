@@ -485,91 +485,35 @@ export const getPagarmeRecipientBalance = async (recipientId: string) => {
     ? recipientId 
     : await getMasterRecipientId();
 
-  console.log(`[CARTEIRA] Calculando saldo local para o recipient: ${actualRecipientId}`);
+  console.log(`[CARTEIRA] Consultando saldo real via API Pagar.me para: ${actualRecipientId}`);
 
   try {
-    const { dbAdmin } = getAdminConfig();
-    let totalAvailable = 0;
-    let grossTotal = 0;
-    const masterId = await getMasterRecipientId();
-    
-    console.log(`[CARTEIRA] Buscando vendas na coleção 'orders' para recebedor: ${actualRecipientId}`);
+    const pagarme = await getPagarmeClient();
+    const response = await pagarme.get(`/recipients/${actualRecipientId.trim()}/balance`);
+    const data = response.data;
 
-    // Consulta a coleção "orders" (onde status='paid' ou 'succeeded')
-    const ordersSnap = await dbAdmin.collection('orders')
-      .where('status', 'in', ['paid', 'succeeded'])
-      .get();
-
-    ordersSnap.forEach((doc: any) => {
-      const order = doc.data();
-      const splits = order.split_rules || order.splits || [];
-      
-      // Procura o split destinado a este recebedor
-      const mySplit = splits.find((s: any) => s.recipient_id === actualRecipientId);
-      
-      if (mySplit) {
-        const value = mySplit.amount || 0;
-        totalAvailable += value;
-        grossTotal += (order.amount || 0);
-        console.log(`[CARTEIRA DEBUG] Venda encontrada no split: Order ${order.id} | Valor: ${value}`);
-      }
-    });
-
-    // Se estiver vazio em orders, verifica se existe em transactions (para manter compatibilidade com registros novos que fizemos)
-    if (ordersSnap.empty) {
-      const txSnap = await dbAdmin.collection('transactions')
-        .where('recipientId', '==', actualRecipientId)
-        .where('status', '==', 'paid')
-        .get();
-
-      txSnap.forEach((doc: any) => {
-        const data = doc.data();
-        totalAvailable += (data.commissionValue || data.netCompanyValue || 0);
-        grossTotal += (data.grossValue || 0);
-      });
-    }
-
-    // Retrocompatibilidade Legado
-    if (ordersSnap.empty && totalAvailable === 0) {
-      if (actualRecipientId === masterId) {
-        const adminSalesSnap = await dbAdmin.collection('admin_sales_report').get();
-        adminSalesSnap.forEach((doc: any) => {
-          totalAvailable += (doc.data().netCompanyValue || 0);
-          grossTotal += (doc.data().amount || doc.data().orderAmount || doc.data().netCompanyValue || 0);
-        });
-      } else {
-        const usersSnap = await dbAdmin.collection('users').where('pagarmeRecipientId', '==', actualRecipientId).limit(1).get();
-        if (!usersSnap.empty) {
-          const uid = usersSnap.docs[0].id;
-          const commSnap = await dbAdmin.collection('coproduction_commissions').where('coproducerId', '==', uid).get();
-          commSnap.forEach((doc: any) => {
-            const data = doc.data();
-            totalAvailable += (data.commissionValue || 0);
-            grossTotal += (data.grossValue || data.commissionValue || 0); // fallback to commission if gross unknown
-          });
-        } else {
-          console.warn(`[CARTEIRA] Recebedor ${actualRecipientId} não encontrado na base de usuários.`);
-        }
-      }
-    }
-
-    // Deduz saques realizados
-    const withdrawalsSnap = await dbAdmin.collection('withdrawals').where('recipientId', '==', actualRecipientId).get();
-    withdrawalsSnap.forEach((doc: any) => {
-      totalAvailable -= (doc.data().amount || 0);
-    });
-
-    console.log(`[CARTEIRA] Saldo final retornado para ${actualRecipientId}: ${totalAvailable} centavos | Vendas Brutas: ${grossTotal}`);
+    console.log(">>>> [DEBUG-CARTEIRA] JSON Bruto:", JSON.stringify(data));
+    console.log(`>>>> [CARTEIRA-SUCESSO] Valor processado: R$ ${(data.available_amount || 0) / 100}`);
 
     return {
-      available: totalAvailable,
-      waiting_funds: 0,
-      transferred: 0,
-      total_sales: grossTotal
+      available: data.available_amount || 0,
+      waiting_funds: data.waiting_funds_amount || 0,
+      transferred: data.transferred_amount || 0,
+      total_sales: 0 // Note: Balance API does not provide historical gross sales
     };
   } catch (error: any) {
-    console.error('[CARTEIRA] Exception in getPagarmeRecipientBalance via DB:', error.message);
-    throw new Error('Erro ao calcular saldo internamente via banco de dados');
+    if (error.response) {
+      console.error('[CARTEIRA] Erro API Pagar.me Balance:', error.response.data);
+    }
+    console.error('[CARTEIRA] Exception in getPagarmeRecipientBalance via API:', error.message);
+    
+    // Retorna saldo zerado em caso de erro para não quebrar a UI
+    return {
+      available: 0,
+      waiting_funds: 0,
+      transferred: 0,
+      total_sales: 0
+    };
   }
 };
 
