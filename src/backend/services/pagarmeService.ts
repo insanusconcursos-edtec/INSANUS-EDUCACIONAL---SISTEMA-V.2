@@ -329,13 +329,15 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
                 state: orderData.billingAddress.state,
                 country: "BR"
               } : undefined
-            }
+            },
+            split: splitArray.length > 0 ? splitArray : undefined
         } : (orderData.payment_method === 'pix' ? {
-            expires_in: 1800 // 30 minutes
+            expires_in: 1800, // 30 minutes
+            split: splitArray.length > 0 ? splitArray : undefined
         } : {
-            expires_in: 86400 * 3 // 3 days
-        }),
-        split: splitArray.length > 0 ? splitArray : undefined
+            expires_in: 86400 * 3, // 3 days
+            split: splitArray.length > 0 ? splitArray : undefined
+        })
       }
     ],
     metadata: orderData.metadata
@@ -343,6 +345,22 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
   // Log payload for auditing
   process.stderr.write(`>>>> [AUDITORIA] Payload final de Split: ${JSON.stringify(splitArray)}\n`);
+
+  // TAREFA: Salvar log no banco (audit_splits) para depuração na Vercel
+  try {
+    const productId = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.productId;
+    await dbAdmin.collection('audit_splits').add({
+      productId: productId || 'unknown',
+      orderDescription: orderData.description || 'N/A',
+      rawPayload: JSON.parse(JSON.stringify(payload)), 
+      splitCount: splitArray.length,
+      debug_split_sent: splitArray,
+      timestamp: new Date().toISOString()
+    });
+    process.stderr.write(`>>>> [AUDITORIA-DB] Log de split salvo no Firestore para o produto ${productId} <<<<\n`);
+  } catch (dbLogErr) {
+    process.stderr.write(`>>>> [AUDITORIA-DB-ERRO] Falha ao salvar log de split: ${dbLogErr instanceof Error ? dbLogErr.message : String(dbLogErr)} <<<<\n`);
+  }
 
   // Critical Log for Auditing as requested
   const safePayload = JSON.parse(JSON.stringify(payload));
