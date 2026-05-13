@@ -85,6 +85,7 @@ const getHeaders = () => {
 };
 
 export const createPagarmeOrder = async (orderData: any, initialCoproducers: any[] = []) => {
+  process.stderr.write(">>>> [AUDITORIA] INICIANDO PROCESSO DE SPLIT <<<<\n");
   console.log('[INTEGRIDADE] Sistema operando em modo estável');
   console.log('[Pagarme] 🛒 Iniciando criação de pedido para:', orderData.description);
   const { dbAdmin } = getAdminConfig();
@@ -168,8 +169,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       }
     }
     
-    const rulesLog = `[AUDITORIA-REGRAS] SplitRules do Firestore: ${JSON.stringify({ affiliateDataFromDB, coproducers })}\n`;
-    process.stdout.write(rulesLog);
+    const rulesLog = `>>>> [AUDITORIA] Regras do Firestore: ${JSON.stringify({ affiliateDataFromDB, coproducers })}\n`;
+    process.stderr.write(rulesLog);
   } catch (error) {
     process.stdout.write(`[AUDITORIA-ERRO-FIREBASE] Erro ao buscar dados de split: ${error instanceof Error ? error.message : String(error)}\n`);
   }
@@ -259,17 +260,17 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     });
     
     // LOG DETALHADO DO SPLIT SOLICITADO
-    console.log(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY <<<<");
+    process.stderr.write(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY <<<<\n");
     splitArray.forEach((s, idx) => {
-      console.log(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor: ${s.amount} | Liable: ${s.options.liable}`);
+      process.stderr.write(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor: ${s.amount} | Liable: ${s.options.liable} | Rules: ${JSON.stringify(s.options)}\n`);
     });
     
     // LOG 3: Auditoria de cálculo final
     const calcLog = `[AUDITORIA-CALCULO] Valor Bruto: ${grossAmount} | Taxa Pagar.me Est.: ${pagarmeFees} | Montante Final Split: ${totalDeductionsAfterFees + masterAmount}\n`;
-    process.stdout.write(calcLog);
+    process.stderr.write(calcLog);
     
     const auditMsg = `[AUDITORIA-DETALHE-VALORES] Valor Líquido Master: ${masterAmount} | Vendedor: ${affiliateAmount} | Total Coprodutores: ${totalDeductionsAfterFees - affiliateAmount}\n`;
-    process.stdout.write(auditMsg);
+    process.stderr.write(auditMsg);
   } else {
     console.error("❌ [ERRO CRÍTICO] PAGARME_MASTER_RECIPIENT_ID não configurado!");
   }
@@ -334,12 +335,14 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         } : {
             expires_in: 86400 * 3 // 3 days
         }),
-        split: splitArray.length > 0 ? splitArray : undefined,
-        splits: splitArray.length > 0 ? splitArray : undefined
+        split: splitArray.length > 0 ? splitArray : undefined
       }
     ],
     metadata: orderData.metadata
   };
+
+  // Log payload for auditing
+  process.stderr.write(`>>>> [AUDITORIA] Payload final de Split: ${JSON.stringify(splitArray)}\n`);
 
   // Critical Log for Auditing as requested
   const safePayload = JSON.parse(JSON.stringify(payload));
@@ -351,10 +354,10 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   
   // LOG 4: Verificação dos recebedores no payload final
   const recIdsLog = `[AUDITORIA-IDS] Recebedores no Payload: ${splitArray.map((s: any) => s.recipient_id).join(', ')}\n`;
-  process.stdout.write(recIdsLog);
+  process.stderr.write(recIdsLog);
 
-  const splitAuditMsg = `[AUDITORIA-PAYLOAD-SPLIT] Payload de Split enviado à Pagar.me: ${JSON.stringify(payload.payments[0].splits || payload.payments[0].split)}\n`;
-  process.stdout.write(splitAuditMsg);
+  const splitAuditMsg = `[AUDITORIA-PAYLOAD-SPLIT] Payload de Split enviado à Pagar.me: ${JSON.stringify(payload.payments[0].split)}\n`;
+  process.stderr.write(splitAuditMsg);
 
   try {
     console.log("[CHECKOUT] Iniciando criação de pedido via Axios padrão");
