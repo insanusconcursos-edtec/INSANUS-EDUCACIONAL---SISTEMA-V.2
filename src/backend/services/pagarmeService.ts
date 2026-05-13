@@ -106,17 +106,17 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       }
       const startLog = `[AUDITORIA-INICIO] Processando ${orderData.payment_method || 'PEDIDO'} para Produto ID: ${productId}\n`;
       process.stdout.write(startLog);
-      const productDoc = await dbAdmin.collection('products').doc(productId).get();
+      const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
       
       if (productDoc.exists) {
         const courseData = productDoc.data();
         
-        // 1. Encontra a oferta exata dentro do array do produto
+        // 1. Encontra a oferta exata dentro do array do produto (se existir)
         const offersArray = courseData?.offers || [];
         const currentOffer = offersArray.find((offer: any) => String(offer.id) === String(offerId));
 
         // 2. Aplicação de Descontos Dinâmicos (PIX/Boleto) antes de prosseguir
-        let basePrice = currentOffer?.price || Number(orderData.transaction_amount);
+        let basePrice = currentOffer?.price || courseData?.price || Number(orderData.transaction_amount);
         const method = orderData.payment_method;
         
         if (method === 'pix' && currentOffer?.pixDiscount > 0) {
@@ -138,16 +138,19 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
         console.log(`✅ [DEBUG AFILIADO] Oferta ID: ${offerId} | Comissão Extraída: ${percentualVendedor}%`);
 
-        // Extrair coprodutores da oferta (priorizando o que está no array da oferta)
-        if (currentOffer?.coproducers && Array.isArray(currentOffer.coproducers) && currentOffer.coproducers.length > 0) {
+        // Extrair coprodutores do documento (priorizando ticto_products structure)
+        if (courseData?.coproduction && Array.isArray(courseData.coproduction)) {
+          coproducers = courseData.coproduction.map((item: any) => ({
+            recipientId: item.pagarmeRecipientId,
+            percentage: Number(item.percentage) || 0
+          })).filter(c => c.recipientId && c.percentage > 0);
+          console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores mapeados do Produto (ticto_products.coproduction).`);
+        } else if (currentOffer?.coproducers && Array.isArray(currentOffer.coproducers)) {
           coproducers = currentOffer.coproducers;
-          console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores encontrados na Oferta (array).`);
-        } else if (courseData?.coproduction && Array.isArray(courseData.coproduction)) {
-          coproducers = courseData.coproduction;
-          console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores encontrados no Produto (coproduction).`);
+          console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores encontrados na Oferta.`);
         }
       } else {
-        console.error(`❌ [ERRO CRÍTICO] O ID ${productId} não existe na coleção products!`);
+        console.error(`❌ [ERRO CRÍTICO] O ID ${productId} não existe na coleção ticto_products!`);
       }
     }
         
@@ -739,9 +742,9 @@ async function recordAffiliateCommission(orderData: any) {
 
   try {
     // 1. Busca as regras do produto para garantir que estamos aplicando o percentual correto
-    const productDoc = await dbAdmin.collection('products').doc(courseId).get();
+    const productDoc = await dbAdmin.collection('ticto_products').doc(courseId).get();
     if (!productDoc.exists) {
-      console.error(`[Commission] Produto ${courseId} não encontrado.`);
+      console.error(`[Commission] Produto ${courseId} não encontrado em ticto_products.`);
       return;
     }
 
@@ -824,7 +827,7 @@ async function recordAdminSalesReport(orderData: any) {
 
   try {
     // 1. Busca as regras do produto para cálculos precisos
-    const productDoc = await dbAdmin.collection('products').doc(courseId).get();
+    const productDoc = await dbAdmin.collection('ticto_products').doc(courseId).get();
     if (!productDoc.exists) return;
 
     const courseData = productDoc.data();
@@ -939,7 +942,7 @@ async function recordCoproductionCommissions(orderData: any) {
 
   try {
     // 1. Busca as regras do produto para cálculos precisos
-    const productDoc = await dbAdmin.collection('products').doc(courseId).get();
+    const productDoc = await dbAdmin.collection('ticto_products').doc(courseId).get();
     if (!productDoc.exists) return;
 
     const courseData = productDoc.data();
