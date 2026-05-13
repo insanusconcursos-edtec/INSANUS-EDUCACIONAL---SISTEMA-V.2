@@ -970,15 +970,25 @@ app.use((err: any, req: any, res: any, next: any) => {
 
 async function startServer() {
   try {
+    process.stdout.write(">>>> [BOOT] SINAL DE VIDA RECEBIDO <<<<\n");
+    process.stdout.write(`>>>> [BOOT] NODE_ENV: ${process.env.NODE_ENV}\n`);
+    process.stdout.write(`>>>> [BOOT] Pagarme API Key presente: ${!!(process.env.PAGARME_API_KEY || process.env.PAGARME_SECRET_KEY)}\n`);
+    process.stdout.write(`>>>> [BOOT] Frontend URL: ${process.env.FRONTEND_URL || 'NÃO DEFINIDA'}\n`);
+
     await setupVite(app);
 
     if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
       app.listen(PORT, '0.0.0.0', () => {
+        process.stdout.write(`>>>> [SISTEMA] SERVIDOR RODANDO NA PORTA ${PORT} <<<<\n`);
         console.log(`Server running on http://localhost:${PORT}`);
       });
+    } else if (process.env.VERCEL) {
+        process.stdout.write(">>>> [SISTEMA] SERVIDOR RODANDO EM MODO VERCEL (SERVERLESS) <<<<\n");
     }
   } catch (error) {
-    console.error(`>>>> [FATAL-ERROR] FALHA NA INICIALIZAÇÃO DO SERVIDOR: ${error instanceof Error ? error.message : String(error)} <<<<`);
+    const errorMsg = `>>>> [FATAL-ERROR] FALHA CRÍTICA NA INICIALIZAÇÃO: ${error instanceof Error ? error.stack : String(error)} <<<<\n`;
+    process.stderr.write(errorMsg);
+    // Não terminamos o processo para permitir que a Vercel/Ambiente tente reportar o erro
   }
 }
 

@@ -42,14 +42,23 @@ const calculatePagarmeFees = (amountCents: number, method: string, installments:
 const getMasterRecipientId = async (): Promise<string> => {
   try {
     const { dbAdmin } = getAdminConfig();
-    const settingsDoc = await dbAdmin.collection('settings').doc('payment').get();
-    if (settingsDoc.exists && settingsDoc.data()?.pagarmeMasterId) {
+    // Adicionamos um timeout manual para não travar o boot ou o checkout se o Firestore estiver lento
+    const getWithTimeout = async () => {
+      const docPromise = dbAdmin.collection('settings').doc('payment').get();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Firestore timeout')), 3000)
+      );
+      return Promise.race([docPromise, timeoutPromise]) as Promise<any>;
+    };
+
+    const settingsDoc = await getWithTimeout();
+    if (settingsDoc && settingsDoc.exists && settingsDoc.data()?.pagarmeMasterId) {
       const id = settingsDoc.data()?.pagarmeMasterId;
       console.log(`[Pagarme] ✅ ID Master recuperado do Firestore: ${id}`);
       return id;
     }
   } catch (err) {
-    console.error('[Pagarme] Erro ao buscar ID Master no Firestore:', err);
+    console.warn('[Pagarme] ⚠️ Aviso: Falha ao buscar ID Master no Firestore (usando fallback):', err instanceof Error ? err.message : String(err));
   }
   
   const envId = process.env.PAGARME_MASTER_RECIPIENT_ID || process.env.PAGARME_RECIPIENT_ID || 're_cmouicmz204gz0l9tyr4jkmut';
