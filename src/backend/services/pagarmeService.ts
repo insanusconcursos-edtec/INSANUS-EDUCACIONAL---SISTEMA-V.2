@@ -167,14 +167,14 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     },
     payments: [{
       payment_method: paymentMethod,
-      split: splitArray, // Raiz do pagamento (PADRÃO V5)
       pix: paymentMethod === 'pix' ? {
         expires_in: 1800,
-        splits: splitArray // Redundância PIX (PLURAL)
+        split: splitArray 
       } : undefined,
       credit_card: paymentMethod === 'credit_card' ? {
         installments: orderData.installments || 1,
         statement_descriptor: 'VIBECODE',
+        split: splitArray,
         card: {
           token: orderData.card_token || undefined,
           number: orderData.card_number || undefined,
