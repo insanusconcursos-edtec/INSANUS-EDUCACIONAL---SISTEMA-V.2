@@ -119,37 +119,35 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
       return isNaN(d.getTime()) ? null : d;
     }
     
-    // 4. Plain object with seconds (from JSON or similar)
-    if (typeof val === 'object' && val.seconds !== undefined) {
-      return new Date(val.seconds * 1000);
+    // 4. Plain object with seconds or _seconds (from JSON or Admin SDK)
+    if (typeof val === 'object') {
+      if (val.seconds !== undefined) return new Date(val.seconds * 1000);
+      if (val._seconds !== undefined) return new Date(val._seconds * 1000);
     }
 
     return null;
   };
 
-  const getDaysRemaining = (diaFim: any) => {
-    const end = ensureDate(diaFim);
+  const getDaysRemaining = (diaFim: any, altEnd?: any) => {
+    const end = ensureDate(diaFim) || ensureDate(altEnd);
     if (!end) return 0;
     
     const now = new Date();
-    // Use 00:00:00 for both if we want "calendar days" or precise time?
-    // User logic says "currentDate > diaFim", usually implies calendar comparison or precise.
-    // We stay with precise for now but allow for full day.
     const diffTime = end.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays > 0 ? diffDays : 0;
   };
 
-  const calculateProgress = (start: any, end: any) => {
-    const sDate = ensureDate(start);
-    const eDate = ensureDate(end);
+  const calculateProgress = (start: any, end: any, altStart?: any, altEnd?: any) => {
+    const sDate = ensureDate(start) || ensureDate(altStart);
+    const eDate = ensureDate(end) || ensureDate(altEnd);
     if (!sDate || !eDate) return 0;
     
     const s = sDate.getTime();
     const e = eDate.getTime();
     const now = new Date().getTime();
     
-    if (e <= s) return 100; // Zero length duration is "complete" if reached
+    if (e <= s) return 100;
     
     const total = e - s;
     const elapsed = now - s;
@@ -159,15 +157,12 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
     return (elapsed / total) * 100;
   };
 
-  const getAccessStatus = (diaInicio: any, diaFim: any) => {
-    const start = ensureDate(diaInicio);
-    const end = ensureDate(diaFim);
+  const getAccessStatus = (diaInicio: any, diaFim: any, altStart?: any, altEnd?: any) => {
+    const start = ensureDate(diaInicio) || ensureDate(altStart);
+    const end = ensureDate(diaFim) || ensureDate(altEnd);
     
     if (!start || !end) return 'EXPIRADO';
     
-    // Use precise comparison following user instructions:
-    // "EXPIRADO" só se currentDate > diaFim
-    // "ATIVO" se currentDate estiver entre diaInicio e diaFim
     const now = new Date();
 
     if (now > end) return 'EXPIRADO';
@@ -177,8 +172,8 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
     return 'EXPIRADO';
   };
 
-  const formatDate = (val: any) => {
-    const date = ensureDate(val);
+  const formatDate = (val: any, altVal?: any) => {
+    const date = ensureDate(val) || ensureDate(altVal);
     if (!date) return '---';
     return date.toLocaleDateString('pt-BR');
   };
@@ -777,25 +772,29 @@ const EmptyState = ({ text, icon: Icon }: { text: string; icon: React.ElementTyp
     </div>
 );
 
+interface AccessItemExtended extends AccessItem {
+    [key: string]: any;
+}
+
 interface AccessCardProps {
-    access: AccessItem;
+    access: AccessItemExtended;
     colorClass: string;
     onRevoke: () => void;
     onExtend: () => void;
-    getDaysRemaining: (diaFim: Timestamp) => number;
-    calculateProgress: (start: Timestamp, end: Timestamp) => number;
-    getAccessStatus: (start: Timestamp, end: Timestamp) => string;
-    formatDate: (timestamp: Timestamp) => string;
+    getDaysRemaining: (diaFim: any, altEnd?: any) => number;
+    calculateProgress: (start: any, end: any, altStart?: any, altEnd?: any) => number;
+    getAccessStatus: (start: any, end: any, altStart?: any, altEnd?: any) => string;
+    formatDate: (val: any, altVal?: any) => string;
 }
 
 const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, calculateProgress, getAccessStatus, formatDate }: AccessCardProps) => {
-    // Check both names for compatibility
-    const diaInicio = access.diaInicio;
-    const diaFim = access.diaFim;
+    // Check multiple names for compatibility
+    const diaInicio = access.diaInicio || access.startDate || access.grantedAt || access.createdAt || (access as any).starts_at;
+    const diaFim = access.diaFim || access.endDate || access.expiresAt || (access as any).expires_at || (access as any).finishedAt;
 
-    const daysLeft = getDaysRemaining(diaFim);
-    const progress = calculateProgress(diaInicio, diaFim);
-    const status = getAccessStatus(diaInicio, diaFim);
+    const daysLeft = getDaysRemaining(access.diaFim, diaFim);
+    const progress = calculateProgress(access.diaInicio, access.diaFim, diaInicio, diaFim);
+    const status = getAccessStatus(access.diaInicio, access.diaFim, diaInicio, diaFim);
     
     // Color setup
     let colors = {
@@ -841,11 +840,11 @@ const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, 
             <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-500 font-mono uppercase tracking-wide mb-3">
                 <div>
                     <span className="block text-zinc-600 font-bold mb-0.5">Dia Início</span>
-                    {formatDate(diaInicio)}
+                    {formatDate(access.diaInicio, diaInicio)}
                 </div>
                 <div className="text-right">
                     <span className="block text-zinc-600 font-bold mb-0.5">Dia Fim</span>
-                    {formatDate(diaFim)}
+                    {formatDate(access.diaFim, diaFim)}
                 </div>
             </div>
 

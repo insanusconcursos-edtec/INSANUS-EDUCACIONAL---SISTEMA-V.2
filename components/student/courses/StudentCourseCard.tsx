@@ -1,5 +1,6 @@
 import React from 'react';
 import { OnlineCourse } from '../../../types/course';
+import { Calendar } from 'lucide-react';
 
 interface StudentCourseCardProps {
   course: any; // Using any for flexibility with product data
@@ -11,6 +12,26 @@ interface StudentCourseCardProps {
 export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, onClick, isLocked, price }) => {
   const isScholarship = course.isScholarship;
 
+  const formatDate = (date: any) => {
+    if (!date) return 'N/A';
+    // Handle Firebase Timestamp or JS Date or String
+    let d: Date;
+    
+    // Improved date parsing (similar to StudentAccessManager)
+    if (date.seconds || date._seconds) {
+      const s = date.seconds || date._seconds;
+      const n = date.nanoseconds || date._nanoseconds || 0;
+      d = new Date(s * 1000 + n / 1000000);
+    } else if (date.toDate && typeof date.toDate === 'function') {
+      d = date.toDate();
+    } else {
+      d = new Date(date);
+    }
+    
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('pt-BR');
+  };
+
   return (
     <div 
       onClick={() => onClick && onClick(course)}
@@ -20,6 +41,8 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
           : 'border-gray-800 hover:shadow-red-900/20 hover:border-red-600/30'
       }`}
     >
+      {/* ... rest of the component remains the same until title section ... */}
+      
       {/* --- BADGE BOLSISTA --- */}
       {isScholarship && (
         <div className="absolute top-2 left-2 z-10">
@@ -53,6 +76,22 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
         loading="lazy"
       />
 
+      {/* --- DATAS DE ACESSO (Se liberado) --- */}
+      {!isLocked && (course.startDate || course.endDate) && (
+        <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end">
+          <div className="bg-black/70 backdrop-blur-md border border-white/10 p-2 rounded-lg flex flex-col gap-1 items-end shadow-2xl">
+              <div className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-zinc-400">
+                <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                Acesso Ativo
+              </div>
+              <div className="flex flex-col items-end opacity-80">
+                <span className="text-[7px] font-bold text-zinc-500 uppercase">Expira em:</span>
+                <span className="text-[9px] font-black text-white">{formatDate(course.endDate)}</span>
+              </div>
+          </div>
+        </div>
+      )}
+
       {/* --- OVERLAY DE INTERAÇÃO (Aparece no Hover) --- */}
       <div className={`absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-[2px] ${isLocked ? 'bg-black/60' : ''}`}>
         
@@ -73,17 +112,29 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
 
       </div>
 
-      {/* Gradiente sutil na base (opcional, para dar acabamento) */}
-      <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/80 to-transparent opacity-60 pointer-events-none" />
+      {/* Gradiente sutil na base */}
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90 pointer-events-none" />
       
-      {/* Título Visível se estiver Trancado (já que a capa pode estar escura) */}
-      {isLocked && (
-        <div className="absolute bottom-4 left-4 right-4 z-10">
-           <h4 className="text-xs font-black text-white uppercase leading-tight line-clamp-2 drop-shadow-lg">
-              {course.name || course.title}
-           </h4>
-        </div>
-      )}
+      {/* Título e Datas na base */}
+      <div className="absolute bottom-4 left-4 right-4 z-10 space-y-2">
+         <h4 className="text-xs font-black text-white uppercase leading-tight line-clamp-2 drop-shadow-lg">
+            {course.name || course.title}
+         </h4>
+         
+         {!isLocked && (course.startDate || course.endDate) && (
+           <div className="flex items-center gap-3 border-t border-white/10 pt-2 opacity-60">
+              <div className="flex flex-col">
+                <span className="text-[6px] font-bold text-zinc-500 uppercase tracking-tighter">Início</span>
+                <span className="text-[8px] font-black text-zinc-300">{formatDate(course.startDate)}</span>
+              </div>
+              <div className="h-4 w-[1px] bg-white/10"></div>
+              <div className="flex flex-col">
+                <span className="text-[6px] font-bold text-zinc-500 uppercase tracking-tighter">Término</span>
+                <span className="text-[8px] font-black text-zinc-300">{formatDate(course.endDate)}</span>
+              </div>
+           </div>
+         )}
+      </div>
     </div>
   );
 };

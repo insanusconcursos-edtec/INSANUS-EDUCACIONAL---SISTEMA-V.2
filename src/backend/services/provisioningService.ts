@@ -80,7 +80,7 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
     let productDocId = '';
 
     if (origin === 'ticto' || origin === 'mp' || origin === 'pagarme') {
-      // Tentar encontrar na coleção unificada de produtos primeiro
+      // 1. Tentar na coleção unificada 'products'
       const productsSnapshot = await dbAdmin.collection('products')
         .where('externalId', '==', safeTargetId)
         .limit(1)
@@ -93,31 +93,41 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
         productName = productData.name;
         accessDays = productData.accessDays || 365;
         linkedResources = productData.linkedResources || linkedResources;
-        
-        if (productData.liveEventIds && Array.isArray(productData.liveEventIds)) {
-          if (!linkedResources.liveEvents) linkedResources.liveEvents = [];
-          productData.liveEventIds.forEach((id: string) => {
-            if (!linkedResources.liveEvents.includes(id)) linkedResources.liveEvents.push(id);
-          });
-        }
       } else {
-        // Fallback para coleções diretas se não for um "Produto" (Combo)
-        const courseSnap = await dbAdmin.collection('online_courses').doc(safeTargetId).get();
-        if (courseSnap.exists) {
-          const courseData = courseSnap.data();
-          productName = courseData?.title || 'Curso Online';
-          linkedResources.onlineCourses.push(safeTargetId);
-        } else {
-          // Tentar buscar por ID direto na coleção products
-          const directProductSnap = await dbAdmin.collection('products').doc(safeTargetId).get();
-          if (directProductSnap.exists) {
-            const productData = directProductSnap.data();
-            productDocId = directProductSnap.id;
-            productName = productData?.name || 'Produto';
-            accessDays = productData?.accessDays || 365;
-            linkedResources = productData?.linkedResources || linkedResources;
+        // 2. Tentar na coleção 'ticto_products' (Principal)
+        const tictoProductSnap = await dbAdmin.collection('ticto_products').doc(safeTargetId).get();
+        if (tictoProductSnap.exists) {
+          const productData = tictoProductSnap.data();
+          productDocId = tictoProductSnap.id;
+          productName = productData?.name || 'Produto';
+          accessDays = productData?.accessDays || productData?.validity || 365;
+          
+          // Se for um curso direto ou tiver linkedResources
+          if (productData?.linkedResources) {
+            linkedResources = productData.linkedResources;
           } else {
-            console.warn(`Aviso: Alvo de provisionamento ${safeTargetId} não encontrado em coleções conhecidas.`);
+            // Se o produto for o próprio curso
+            linkedResources.onlineCourses.push(safeTargetId);
+          }
+        } else {
+          // 3. Fallback para coleções diretas
+          const courseSnap = await dbAdmin.collection('online_courses').doc(safeTargetId).get();
+          if (courseSnap.exists) {
+            const courseData = courseSnap.data();
+            productName = courseData?.title || 'Curso Online';
+            linkedResources.onlineCourses.push(safeTargetId);
+          } else {
+            // Tentar buscar por ID direto na coleção products
+            const directProductSnap = await dbAdmin.collection('products').doc(safeTargetId).get();
+            if (directProductSnap.exists) {
+              const productData = directProductSnap.data();
+              productDocId = directProductSnap.id;
+              productName = productData?.name || 'Produto';
+              accessDays = productData?.accessDays || 365;
+              linkedResources = productData?.linkedResources || linkedResources;
+            } else {
+              console.warn(`Aviso: Alvo de provisionamento ${safeTargetId} não encontrado em coleções conhecidas.`);
+            }
           }
         }
       }
@@ -270,6 +280,46 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
       console.log(`[PROVISIONING] ✅ Acesso atualizado para aluno antigo: ${customerData.email}`);
       await sendAccessNotificationEmail(userData.name || customerData.name, customerData.email, productName);
       console.log(`[PROVISIONING] ✅ E-mail de Nova Compra enviado para: ${customerData.email}`);
+    }
+
+    // 4. CRIAR REGISTRO NA COLEÇÃO 'enrollments' (HISTÓRICO DE LIBERAÇÃO)
+    try {
+      const enrollmentData = {
+        userId: userRecord.uid,
+        userName: customerData.name,
+        userEmail: customerData.email,
+        productId: productDocId || safeTargetId,
+        productName: productName,
+        origin: origin,
+        startDate: Timestamp.now(),
+        endDate: Timestamp.fromDate(expirationDate),
+        status: 'active',
+        createdAt: FieldValue.serverTimestamp(),
+        accessDetails: accessesToGrant // Cópia dos acessos específicos liberados
+      };
+
+      await dbAdmin.collection('enrollments').add(enrollmentData);
+      console.log(`[PROVISIONING] ✅ Registro criado na coleção 'enrollments' para ${customerData.email}`);
+
+      // Também criar na coleção 'user_courses' para compatibilidade direta se for um curso
+      const courseAccesses = accessesToGrant.filter(a => a.type === 'course');
+      for (const courseAcc of courseAccesses) {
+        await dbAdmin.collection('user_courses').add({
+          userId: userRecord.uid,
+          userEmail: customerData.email,
+          courseId: courseAcc.targetId,
+          courseName: courseAcc.title,
+          startDate: courseAcc.diaInicio,
+          endDate: courseAcc.diaFim,
+          isActive: true,
+          enrolledAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (courseAccesses.length > 0) {
+        console.log(`[PROVISIONING] ✅ Registros criados na coleção 'user_courses' (${courseAccesses.length})`);
+      }
+    } catch (enrollErr) {
+      console.error('[PROVISIONING] ⚠️ Erro ao criar registros extras (enrollments/user_courses):', enrollErr);
     }
 
     return { success: true };

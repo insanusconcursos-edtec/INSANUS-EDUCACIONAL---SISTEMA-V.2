@@ -62,9 +62,16 @@ export function StudentCoursesTab() {
                     );
                     const access = userData.access[accessIndex];
                     
+                    // Fallback logic for dates
+                    const startDate = access?.diaInicio || access?.startDate || access?.grantedAt || access?.createdAt || access?.starts_at || access?.startsAt;
+                    const endDate = access?.diaFim || access?.endDate || access?.expiresAt || access?.expires_at || access?.finishedAt;
+                    const grantedAt = access?.createdAt || access?.grantedAt || access?.diaInicio || access?.startsAt;
+
                     return { 
                         ...course, 
-                        grantedAt: access?.createdAt || access?.grantedAt,
+                        grantedAt,
+                        startDate,
+                        endDate,
                         orderIndex: access?.orderIndex || 0,
                         accessIndex: accessIndex !== -1 ? accessIndex : 999,
                         isScholarship: access?.isScholarship || false

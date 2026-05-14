@@ -203,18 +203,24 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   const splitArray: any[] = [];
   let totalNetDistributed = 0;
 
+  // Helper para criar item de split com a estrutura exata exigida pela V5
+  const createSplitItem = (recipientId: string, amount: number) => ({
+    amount: Math.round(amount),
+    recipient_id: recipientId,
+    type: 'flat',
+    options: { 
+      liable: false, 
+      charge_processing_fee: false 
+    }
+  });
+
   // 4. Saldo A -> Dedução Vendedor/Afiliado (Comissão sobre Saldo Líquido A)
   let affiliateAmount = 0;
   if (affiliateDataFromDB && affiliateDataFromDB.recipientId && affiliateDataFromDB.percentage > 0) {
     affiliateAmount = Math.floor(saldoA * (affiliateDataFromDB.percentage / 100));
     if (affiliateAmount > 0) {
       console.log(`[SPLIT] Processando regras para o recebedor ${affiliateDataFromDB.recipientId} (Afiliado) no valor líquido de ${affiliateAmount}`);
-      splitArray.push({
-        amount: affiliateAmount,
-        recipient_id: affiliateDataFromDB.recipientId,
-        type: 'flat',
-        options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Taxas já rateadas no cálculo
-      });
+      splitArray.push(createSplitItem(affiliateDataFromDB.recipientId, affiliateAmount));
       totalNetDistributed += affiliateAmount;
       console.log(`✅ [Pagarme Split] Vendedor ${affiliateDataFromDB.recipientId} recebe ${affiliateAmount} (${affiliateDataFromDB.percentage}% do Saldo A)`);
     }
@@ -235,12 +241,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         const coproAmount = Math.floor(saldoB * (percentage / 100));
         if (coproAmount > 0) {
           console.log(`[SPLIT] Processando regras para o recebedor ${recipientId} no valor líquido de ${coproAmount}`);
-          splitArray.push({
-            amount: coproAmount,
-            recipient_id: recipientId,
-            type: 'flat',
-            options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Taxas já rateadas no cálculo
-          });
+          splitArray.push(createSplitItem(recipientId, coproAmount));
           totalNetDistributed += coproAmount;
           console.log(`✅ [Pagarme Split] Coprodutor ${recipientId} recebe ${coproAmount} (${percentage}% do Saldo B)`);
         }
@@ -250,30 +251,23 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     });
   }
 
-  // 7. Conta Master NET (Líquido após todos os repasses e taxas)
-  const masterNetAmount = saldoA - totalNetDistributed;
+  // 7. Conta Master Recipient (Recebe o RESTO para totalizar o grossAmount)
+  // IMPORTANTE: Para o split V5 ser válido, a soma dos itens deve ser o total bruto
+  const masterAmount = grossAmount - totalNetDistributed;
   const masterRecipientId = await getMasterRecipientId();
 
   if (masterRecipientId) {
-    splitArray.push({
-      amount: masterNetAmount,
-      recipient_id: masterRecipientId,
-      type: 'flat',
-      options: { charge_processing_fee: false, charge_remainder_fee: false, liable: false } // Master já recebe valor líquido
-    });
+    splitArray.push(createSplitItem(masterRecipientId, masterAmount));
     
     // LOG DETALHADO DO SPLIT SOLICITADO
-    process.stderr.write(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY (LÍQUIDO) <<<<\n");
+    process.stderr.write(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY <<<<\n");
     splitArray.forEach((s, idx) => {
-      process.stderr.write(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor Líquido: ${s.amount} | Liable: ${s.options.liable}\n`);
+      process.stderr.write(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor: ${s.amount} | Liable: ${s.options.liable}\n`);
     });
     
-    // LOG 3: Auditoria de cálculo final
-    const calcLog = `[AUDITORIA-CALCULO] Valor Bruto: ${grossAmount} | Taxa Pagar.me Paga: ${pagarmeFees} | Total Distribuído Líquido: ${totalNetDistributed + masterNetAmount}\n`;
-    process.stderr.write(calcLog);
-    
-    const auditMsg = `[AUDITORIA-DETALHE-VALORES] Valor Líquido Master: ${masterNetAmount} | Vendedor: ${affiliateAmount} | Total Coprodutores: ${totalNetDistributed - affiliateAmount}\n`;
-    process.stderr.write(auditMsg);
+    // Verificação de soma
+    const sum = splitArray.reduce((acc, curr) => acc + curr.amount, 0);
+    process.stderr.write(`[AUDITORIA-SOMA] Soma Split: ${sum} | Gross: ${grossAmount} | Match: ${sum === grossAmount}\n`);
   } else {
     console.error("❌ [ERRO CRÍTICO] PAGARME_MASTER_RECIPIENT_ID não configurado!");
   }
@@ -307,7 +301,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     payments: [
       {
         payment_method: orderData.payment_method,
-        [orderData.payment_method]: orderData.payment_method === 'credit_card' ? {
+        // Configuração de Cartão de Crédito
+        credit_card: orderData.payment_method === 'credit_card' ? {
             installments: orderData.installments || 1,
             statement_descriptor: 'VIBECODE',
             card: orderData.card_token ? {
@@ -334,13 +329,17 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
               } : undefined
             },
             split: splitArray.length > 0 ? splitArray : undefined
-        } : (orderData.payment_method === 'pix' ? {
+        } : undefined,
+        // Configuração de PIX
+        pix: orderData.payment_method === 'pix' ? {
             expires_in: 1800, // 30 minutes
             split: splitArray.length > 0 ? splitArray : undefined
-        } : {
+        } : undefined,
+        // Configuração de Boleto (Ticker)
+        boleto: (orderData.payment_method === 'boleto' || orderData.payment_method === 'ticket') ? {
             expires_in: 86400 * 3, // 3 days
             split: splitArray.length > 0 ? splitArray : undefined
-        })
+        } : undefined
       }
     ],
     metadata: orderData.metadata
@@ -377,7 +376,9 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   const recIdsLog = `[AUDITORIA-IDS] Recebedores no Payload: ${splitArray.map((s: any) => s.recipient_id).join(', ')}\n`;
   process.stderr.write(recIdsLog);
 
-  const splitAuditMsg = `[AUDITORIA-PAYLOAD-SPLIT] Payload de Split enviado à Pagar.me: ${JSON.stringify(payload.payments[0].split)}\n`;
+  const currentMethod = orderData.payment_method;
+  const splitSentInPayload = payload.payments[0][currentMethod === 'ticket' ? 'boleto' : currentMethod]?.split;
+  const splitAuditMsg = `[AUDITORIA-PAYLOAD-SPLIT] Payload de Split enviado à Pagar.me em (${currentMethod}): ${JSON.stringify(splitSentInPayload)}\n`;
   process.stderr.write(splitAuditMsg);
 
   try {
