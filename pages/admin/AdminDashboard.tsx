@@ -10,7 +10,12 @@ import {
   ChevronDown,
   ArrowUpRight,
   X,
-  CreditCard
+  CreditCard,
+  Wallet,
+  ArrowRightCircle,
+  Clock,
+  RefreshCw,
+  Lock
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -23,13 +28,15 @@ import {
   Cell
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { getProducts } from '../../services/productService';
 import { toPlainObject } from '../../services/firestoreUtils';
 import { TictoProduct } from '../../types/product';
 import { format, subDays, startOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+const MASTER_RECIPIENT_ID = 're_cmouicmz204gz0l9tyr4jkmut';
 
 interface SalesReport {
   id: string;
@@ -55,29 +62,59 @@ const AdminDashboard: React.FC = () => {
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState<{ available: number; waiting_funds: number; transferred?: number; recipient_name?: string } | null>(null);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [productsData, reportsSnapshot] = await Promise.all([
+        getProducts(),
+        getDocs(query(collection(db, 'admin_sales_report'), orderBy('createdAt', 'desc')))
+      ]);
+
+      setProducts(productsData);
+      setReports(reportsSnapshot.docs.map(doc => toPlainObject({
+        id: doc.id,
+        ...doc.data()
+      }) as SalesReport));
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBalance = async () => {
+    setLoadingBalance(true);
+    try {
+      const response = await fetch(`/api/payments/pagarme/balance?recipientId=${MASTER_RECIPIENT_ID}`);
+      if (!response.ok) throw new Error('Falha ao buscar saldo');
+      const data = await response.json();
+      
+      if (data.success && data.balance) {
+        setBalance(data.balance);
+      }
+    } catch (err) {
+      console.error('Error fetching master balance:', err);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [productsData, reportsSnapshot] = await Promise.all([
-          getProducts(),
-          getDocs(query(collection(db, 'admin_sales_report'), orderBy('createdAt', 'desc')))
-        ]);
-
-        setProducts(productsData);
-        setReports(reportsSnapshot.docs.map(doc => toPlainObject({
-          id: doc.id,
-          ...doc.data()
-        }) as SalesReport));
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
+    fetchBalance();
+
+    // Listen to changes in reports for real-time updates
+    const unsubscribe = onSnapshot(query(collection(db, 'admin_sales_report'), orderBy('createdAt', 'desc')), (snap) => {
+      setReports(snap.docs.map(doc => toPlainObject({
+        id: doc.id,
+        ...doc.data()
+      }) as SalesReport));
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Filtered reports based on selection
@@ -189,6 +226,74 @@ const AdminDashboard: React.FC = () => {
           </h1>
           <p className="text-gray-400 mt-2 font-medium">Análise de lucratividade real da Insanus Concursos</p>
         </div>
+        
+        <button 
+          onClick={() => { fetchData(); fetchBalance(); }}
+          className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-gray-300 font-bold uppercase text-[10px] tracking-widest transition-all"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Atualizar Dados
+        </button>
+      </div>
+
+      {/* Wallet / Master Balance Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-brand-black border-2 border-emerald-500/30 rounded-3xl p-8 relative overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.1)] group"
+        >
+          <div className="absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent shadow-[0_0_15px_#10b981] opacity-50"></div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                <Wallet className="w-6 h-6 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">
+                  {balance?.recipient_name ? `CARTEIRA: ${balance.recipient_name.toUpperCase()}` : 'Disponível Empresa (Master)'}
+                </p>
+                <h2 className="text-3xl font-black text-emerald-500 tracking-tighter mt-1">
+                  {loadingBalance ? (
+                    <span className="inline-block w-32 h-8 bg-brand-white/5 animate-pulse rounded-lg"></span>
+                  ) : (
+                    formatCurrency(balance?.available || 0)
+                  )}
+                </h2>
+              </div>
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-[60px] -mr-16 -mt-16"></div>
+          <div className="mt-4 flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Sincronizado com Pagar.me</span>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-brand-black border-2 border-amber-500/30 rounded-3xl p-8 relative overflow-hidden shadow-[0_0_50px_rgba(245,158,11,0.1)] group"
+        >
+          <div className="absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-amber-500 to-transparent shadow-[0_0_15px_#f59e0b] opacity-50"></div>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30">
+              <Lock className="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">A Receber (Lançamentos Futuros)</p>
+              <h2 className="text-3xl font-black text-amber-500 tracking-tighter mt-1">
+                {loadingBalance ? (
+                  <span className="inline-block w-32 h-8 bg-brand-white/5 animate-pulse rounded-lg"></span>
+                ) : (
+                  formatCurrency(balance?.waiting_funds || 0)
+                )}
+              </h2>
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-[60px] -mr-16 -mt-16"></div>
+        </motion.div>
       </div>
 
       {/* Filter Toolbar */}

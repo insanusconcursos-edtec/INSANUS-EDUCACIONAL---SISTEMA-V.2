@@ -90,6 +90,35 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name", "email"]
+    },
+    "AdminSalesReport": {
+      "title": "AdminSalesReport",
+      "description": "Detailed report of sales for admin analysis.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseName": { "type": "string" },
+        "grossValue": { "type": "number" },
+        "gatewayFee": { "type": "number" },
+        "affiliatePart": { "type": "number" },
+        "coproductionPart": { "type": "number" },
+        "netCompanyValue": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "CoproductionCommission": {
+      "title": "CoproductionCommission",
+      "description": "Commission record for a coproducer.",
+      "type": "object",
+      "properties": {
+        "coproducerId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "courseName": { "type": "string" },
+        "commissionValue": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -104,6 +133,14 @@
     "coproducers/{coproducerId}": {
       "schema": "Coproducer",
       "description": "Collection of coproducers for split payments."
+    },
+    "admin_sales_report/{reportId}": {
+      "schema": "AdminSalesReport",
+      "description": "Financial reports for the master account."
+    },
+    "coproduction_commissions/{commissionId}": {
+      "schema": "CoproductionCommission",
+      "description": "Individual commission records for partners."
     }
   }
 }

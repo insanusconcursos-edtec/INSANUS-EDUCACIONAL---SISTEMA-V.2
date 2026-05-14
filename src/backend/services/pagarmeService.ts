@@ -326,9 +326,11 @@ export const handlePagarmeWebhook = async (payload: any) => {
       }, String(productId), 'pagarme');
 
       // Registrar relatórios financeiros
+      console.log(`[PAGARME WEBHOOK] Iniciando registros financeiros para Ordem: ${orderData.id}`);
       await recordAffiliateCommission(orderData);
       await recordAdminSalesReport(orderData);
       await recordCoproductionCommissions(orderData);
+      console.log(`[PAGARME WEBHOOK] Registros finalizados com sucesso.`);
     }
   }
 

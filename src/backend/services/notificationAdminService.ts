@@ -1,23 +1,35 @@
 import { getAdminConfig } from './firebaseAdmin.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export const sendPushNotification = async (userId: string, title: string, body: string, url: string = '/') => {
   const { dbAdmin, messagingAdmin } = getAdminConfig();
+  let matchedDocRef: any = null;
+  let token: string | null = null;
 
   try {
     // 1. Buscar o FCM Token (Tentar na coleção 'users' e 'coproducers')
-    let token: string | null = null;
     
     // Tentar na coleção users
-    const userDoc = await dbAdmin.collection('users').doc(userId).get();
+    const userDocRef = dbAdmin.collection('users').doc(userId);
+    const userDoc = await userDocRef.get();
     if (userDoc.exists) {
-      token = userDoc.data()?.fcmToken;
+      const data = userDoc.data();
+      if (data?.fcmToken) {
+        token = data.fcmToken;
+        matchedDocRef = userDocRef;
+      }
     }
 
     // Se não encontrou, talvez o userId seja um email ou esteja na coleção coproducers
     if (!token) {
-      const coproDoc = await dbAdmin.collection('coproducers').doc(userId).get();
+      const coproDocRef = dbAdmin.collection('coproducers').doc(userId);
+      const coproDoc = await coproDocRef.get();
       if (coproDoc.exists) {
-        token = coproDoc.data()?.fcmToken;
+        const data = coproDoc.data();
+        if (data?.fcmToken) {
+          token = data.fcmToken;
+          matchedDocRef = coproDocRef;
+        }
       }
     }
 
@@ -25,7 +37,11 @@ export const sendPushNotification = async (userId: string, title: string, body: 
     if (!token && userId.includes('@')) {
       const userByEmail = await dbAdmin.collection('users').where('email', '==', userId).limit(1).get();
       if (!userByEmail.empty) {
-        token = userByEmail.docs[0].data()?.fcmToken;
+        const doc = userByEmail.docs[0];
+        if (doc.data()?.fcmToken) {
+          token = doc.data().fcmToken;
+          matchedDocRef = doc.ref;
+        }
       }
     }
 
@@ -33,7 +49,11 @@ export const sendPushNotification = async (userId: string, title: string, body: 
     if (!token) {
       const coproByRecipient = await dbAdmin.collection('coproducers').where('pagarmeRecipientId', '==', userId).limit(1).get();
       if (!coproByRecipient.empty) {
-        token = coproByRecipient.docs[0].data()?.fcmToken;
+        const doc = coproByRecipient.docs[0];
+        if (doc.data()?.fcmToken) {
+          token = doc.data().fcmToken;
+          matchedDocRef = doc.ref;
+        }
       }
     }
 
@@ -75,7 +95,23 @@ export const sendPushNotification = async (userId: string, title: string, body: 
     const response = await messagingAdmin.send(message as any);
     console.log(`[Push] Notificação enviada com sucesso para o usuário ${userId}:`, response);
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[Push] Erro ao enviar notificação para o usuário ${userId}:`, error);
+
+    // Tratamento de token inválido ou não registrado
+    const isInvalidToken = 
+      error.code === 'messaging/registration-token-not-registered' || 
+      (error.message && error.message.includes('Requested entity was not found'));
+
+    if (isInvalidToken && matchedDocRef) {
+      try {
+        console.log(`[Push] Token inválido para o usuário ${userId}. Removendo do banco de dados para evitar novos erros.`);
+        await matchedDocRef.update({
+          fcmToken: FieldValue.delete()
+        });
+      } catch (cleanupErr) {
+        console.error(`[Push] Erro ao limpar token inválido de ${userId}:`, cleanupErr);
+      }
+    }
   }
 };
