@@ -211,7 +211,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   let totalNetDistributed = 0;
 
   // Helper para criar item de split com a estrutura exata exigida pela V5
-  const createSplitItem = (recipientId: string, amount: number, label: string = 'Split') => {
+  const createSplitItem = (recipientId: string, amount: number, label: string = 'Splits') => {
     const roundedAmount = Math.round(amount);
     console.log(`[SPLIT-ITEM] Adicionando item (${label}): ID=${recipientId} | Valor=${roundedAmount}`);
     
@@ -392,9 +392,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   const recIdsLog = `[AUDITORIA-IDS] Recebedores no Payload: ${splitArray.map((s: any) => s.recipient_id).join(', ')}\n`;
   process.stderr.write(recIdsLog);
 
-  const currentMethod = orderData.payment_method;
-  const splitSentInPayload = payload.payments[0][currentMethod === 'ticket' ? 'boleto' : currentMethod]?.split;
-  const splitAuditMsg = `[AUDITORIA-PAYLOAD-SPLIT] Payload de Split enviado à Pagar.me em (${currentMethod}): ${JSON.stringify(splitSentInPayload)}\n`;
+  const splitSentInPayload = payload.payments[0][paymentMethod]?.splits;
+  const splitAuditMsg = `[AUDITORIA-PAYLOAD-SPLITS] Payload de Splits enviado à Pagar.me em (${paymentMethod}): ${JSON.stringify(splitSentInPayload)}\n`;
   process.stderr.write(splitAuditMsg);
 
   try {
@@ -409,17 +408,13 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       // LOG DE RESPOSTA DA PAGAR.ME NO FIRESTORE (Após o envio)
       try {
         const fullAudit = {
-          ...auditData,
-          pagarme_response_raw: result,
-          pagarme_debug_full_response: result, // Forçando campo solicitado
           status: 'success',
-          finalPayload: JSON.parse(JSON.stringify(payload))
+          productId: productIdLog,
+          paymentMethod: paymentMethod,
+          timestamp: new Date().toISOString(),
+          finalPayload: safePayload,
+          pagarme_response: result
         };
-        // Mascarar dados do payload fial no log
-        if (fullAudit.finalPayload.payments?.[0]?.credit_card?.card) {
-          fullAudit.finalPayload.payments[0].credit_card.card.number = '***';
-          fullAudit.finalPayload.payments[0].credit_card.card.cvv = '***';
-        }
         await dbAdmin.collection('audit_splits').add(fullAudit);
         process.stdout.write(`>>>> [AUDITORIA-DB] Log de split (Sucesso) salvo para ${productIdLog} <<<<\n`);
       } catch (e) {
@@ -435,18 +430,14 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       // LOG DE RESPOSTA DE ERRO DA PAGAR.ME NO FIRESTORE
       try {
         const fullAudit = {
-          ...auditData,
-          pagarme_response_raw: errorResponse,
-          pagarme_debug_full_response: errorResponse, // Forçando campo solicitado
           status: 'error',
           errorMessage: reqError.message,
-          finalPayload: JSON.parse(JSON.stringify(payload))
+          productId: productIdLog,
+          paymentMethod: paymentMethod,
+          timestamp: new Date().toISOString(),
+          finalPayload: safePayload,
+          pagarme_response: errorResponse
         };
-        // Mascarar dados do payload final no log
-        if (fullAudit.finalPayload.payments?.[0]?.credit_card?.card) {
-          fullAudit.finalPayload.payments[0].credit_card.card.number = '***';
-          fullAudit.finalPayload.payments[0].credit_card.card.cvv = '***';
-        }
         await dbAdmin.collection('audit_splits').add(fullAudit);
         process.stdout.write(`>>>> [AUDITORIA-DB] Log de split (Erro) salvo para ${productIdLog} <<<<\n`);
       } catch (e) {
