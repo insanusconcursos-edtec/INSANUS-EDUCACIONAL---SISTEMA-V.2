@@ -29,10 +29,20 @@ export const sendPushNotification = async (userId: string, title: string, body: 
       }
     }
 
+    // Se ainda não encontrou, tentar buscar na coleção coproducers pelo pagarmeRecipientId
+    if (!token) {
+      const coproByRecipient = await dbAdmin.collection('coproducers').where('pagarmeRecipientId', '==', userId).limit(1).get();
+      if (!coproByRecipient.empty) {
+        token = coproByRecipient.docs[0].data()?.fcmToken;
+      }
+    }
+
     if (!token) {
       console.log(`[Push] Token não encontrado para identificador: ${userId}`);
       return;
     }
+
+    console.log(`[Push] Enviando notificação para o token: ${token}`);
 
     // 2. Enviar a mensagem via Firebase Admin
     const message = {

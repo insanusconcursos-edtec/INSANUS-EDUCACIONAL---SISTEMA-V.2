@@ -224,8 +224,10 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
       // Notificar Coprodutores
       for (const c of coproducers) {
-        if (c.userId) {
-          await sendPushNotification(c.userId, title, body);
+        const identifier = c.userId || c.recipientId;
+        if (identifier) {
+          console.log(`[Push] Iniciando envio de PIX EMITIDO para: ${identifier}`);
+          await sendPushNotification(identifier, title, body);
         }
       }
 
@@ -437,14 +439,14 @@ async function recordCoproductionCommissions(orderData: any) {
     const poolForCopro = pool - distributedAffiliate;
 
     for (const copro of coproducers) {
-      const userId = copro.userId || copro.id || copro.coproducerId;
+      const identifier = copro.userId || copro.id || copro.coproducerId || copro.recipientId || copro.pagarmeRecipientId;
       const percentage = Number(copro.percentage) || 0;
       
-      if (userId && percentage > 0) {
+      if (identifier && percentage > 0) {
         const commissionValue = Math.floor(poolForCopro * (percentage / 100));
         
         await dbAdmin.collection('coproduction_commissions').add({
-          coproducerId: userId,
+          coproducerId: identifier,
           orderId: orderData.id,
           courseId: productId,
           courseName: pData.name || 'Produto',
@@ -456,9 +458,10 @@ async function recordCoproductionCommissions(orderData: any) {
         
         // Notificação de Venda Realizada
         const amountFormatted = (commissionValue / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        await sendPushNotification(userId, "VENDA REALIZADA! 🚀", `Sua comissão de ${amountFormatted} foi confirmada!`);
+        console.log(`[Push] Iniciando envio de VENDA REALIZADA para: ${identifier}`);
+        await sendPushNotification(identifier, "VENDA REALIZADA! 🚀", `Sua comissão de ${amountFormatted} foi confirmada!`);
         
-        console.log(`[SPLIT LOG] Comissão gravada para ${userId}: R$ ${commissionValue/100}`);
+        console.log(`[SPLIT LOG] Comissão gravada para ${identifier}: R$ ${commissionValue/100}`);
       }
     }
   } catch (e) {
