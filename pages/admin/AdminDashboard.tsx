@@ -41,7 +41,7 @@ interface SalesReport {
   affiliatePart: number;
   coproductionPart: number;
   netCompanyValue: number;
-  customerData: {
+  customerData?: {
     name: string;
     email: string;
     phone: string;
@@ -243,7 +243,7 @@ const AdminDashboard: React.FC = () => {
                             }`}
                           >
                             <span className={`text-sm truncate pr-4 ${selectedProductIds.includes(product.id!) ? 'text-emerald-500 font-bold' : 'text-gray-400 font-medium'}`}>
-                              {product.name}
+                              {product?.name || 'Sem Nome'}
                             </span>
                             {selectedProductIds.includes(product.id!) && (
                               <Check className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -399,7 +399,7 @@ const AdminDashboard: React.FC = () => {
                 <div key={idx} className="group cursor-default">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-bold text-gray-300 truncate max-w-[180px] group-hover:text-emerald-500 transition-colors">
-                      {item.name}
+                      {item?.name || 'N/A'}
                     </span>
                     <span className="text-sm font-black text-white font-mono">{formatCurrency(item.net)}</span>
                   </div>
@@ -460,8 +460,8 @@ const AdminDashboard: React.FC = () => {
                       <p className="text-[10px] font-mono text-gray-600">ID: {r.orderId}</p>
                     </td>
                     <td className="px-8 py-5">
-                      <p className="text-sm font-medium text-gray-300">{r.customerData.name}</p>
-                      <p className="text-xs text-gray-500">{r.customerData.email}</p>
+                      <p className="text-sm font-medium text-gray-300">{r.customerData?.name || (r as any).customer?.name || 'N/A'}</p>
+                      <p className="text-xs text-gray-500">{r.customerData?.email || (r as any).customer?.email || 'N/A'}</p>
                     </td>
                     <td className="px-8 py-5 font-mono text-sm text-gray-400">
                       {formatCurrency(r.grossValue)}

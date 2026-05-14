@@ -349,6 +349,7 @@ async function recordAdminSalesReport(orderData: any) {
       grossValue: orderData.amount,
       status: 'paid',
       customer: orderData.customer,
+      customerData: orderData.customer, // Added for frontend compatibility
       metadata: orderData.metadata,
       createdAt: new Date().toISOString()
     });

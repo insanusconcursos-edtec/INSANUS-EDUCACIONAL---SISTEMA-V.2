@@ -722,7 +722,7 @@ const CoproductionDashboard: React.FC = () => {
                 >
                   <option value="all">📊 TODOS OS PRODUTOS</option>
                   {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>
+                    <option key={p.id} value={p.id}>{(p.name || 'Sem Nome').toUpperCase()}</option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4 pointer-events-none" />
