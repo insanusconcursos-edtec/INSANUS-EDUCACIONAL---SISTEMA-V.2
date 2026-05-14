@@ -73,8 +73,8 @@ const INSTALLMENT_MULTIPLIERS: Record<number, number> = {
 };
 
 const getHeaders = () => {
-  const secretKey = (process.env.PAGARME_API_KEY || process.env.PAGARME_SECRET_KEY || '').trim();
-  if (!secretKey) throw new Error('PAGARME_SECRET_KEY/PAGARME_API_KEY not found in environment');
+  const secretKey = (process.env.PAGARME_SECRET_KEY || '').trim();
+  if (!secretKey) throw new Error('PAGARME_SECRET_KEY not found in environment');
   
   const auth = Buffer.from(`${secretKey}:`).toString('base64');
   return {
@@ -207,6 +207,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   const saldoA = grossAmount - pagarmeFees;
   console.log(`[Pagarme Cascade] Bruto: ${grossAmount} | Taxas Pagar.me: ${pagarmeFees} | Saldo A (Líquido Base): ${saldoA}`);
 
+  const masterRecipientId = await getMasterRecipientId();
   const splitArray: any[] = [];
   let totalNetDistributed = 0;
 
@@ -216,8 +217,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     console.log(`[SPLIT-ITEM] Adicionando item (${label}): ID=${recipientId} | Valor=${roundedAmount}`);
     
     // STRICT V5: Apenas o recebedor Master paga a taxa de processamento
-    // ID Master fornecido pelo usuário: re_cmouicmz204gz0l9tyr4jkmut
-    const isMaster = recipientId.trim() === 're_cmouicmz204gz0l9tyr4jkmut';
+    const isMaster = recipientId.trim() === masterRecipientId.trim();
     
     return {
       amount: roundedAmount,
@@ -274,7 +274,6 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   // 7. Conta Master Recipient (Recebe o RESTO para totalizar o grossAmount)
   // IMPORTANTE: Para o split V5 ser válido, a soma dos itens deve ser o total bruto
   const masterAmount = grossAmount - totalNetDistributed;
-  const masterRecipientId = await getMasterRecipientId();
 
   if (masterRecipientId) {
     splitArray.push(createSplitItem(masterRecipientId, masterAmount, 'Master'));
@@ -352,12 +351,13 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         // Configuração de PIX (STRICT V5 plural 'splits')
         pix: paymentMethod === 'pix' ? {
             expires_in: 1800, // 30 minutes
-            splits: splitArray.length > 0 ? splitArray : undefined // Nível 3: Pix level (STRICT PLURAL)
+            splits: splitArray.length > 0 ? splitArray : undefined
         } : undefined,
         // Configuração de Boleto (Ticker)
         boleto: paymentMethod === 'boleto' ? {
             expires_in: 86400 * 3, // 3 days
-        } : undefined
+            splits: splitArray.length > 0 ? splitArray : undefined
+        } : undefined,
       }
     ],
     metadata: orderData.metadata
@@ -404,6 +404,11 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       const pagarme = await getPagarmeClient();
       const response = await pagarme.post('/orders', payload);
       result = response.data;
+      
+      // LOG EXTRA SOLICITADO: Capturar confirmação de split na resposta
+      const chargeInside = result.charges?.[0];
+      const splitConfirmed = chargeInside?.split || chargeInside?.splits;
+      process.stdout.write(`>>>> [PAGARME-RES-SPLIT] Split na resposta: ${JSON.stringify(splitConfirmed)} <<<<\n`);
       
       // LOG DE RESPOSTA DA PAGAR.ME NO FIRESTORE (Após o envio)
       try {

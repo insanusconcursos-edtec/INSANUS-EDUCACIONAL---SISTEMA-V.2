@@ -971,7 +971,7 @@ async function startServer() {
   try {
     process.stdout.write(">>>> [BOOT] SINAL DE VIDA RECEBIDO <<<<\n");
     process.stdout.write(`>>>> [BOOT] NODE_ENV: ${process.env.NODE_ENV}\n`);
-    process.stdout.write(`>>>> [BOOT] Pagarme API Key presente: ${!!(process.env.PAGARME_API_KEY || process.env.PAGARME_SECRET_KEY)}\n`);
+    process.stdout.write(`>>>> [BOOT] Pagarme API Key presente: ${!!process.env.PAGARME_SECRET_KEY}\n`);
     process.stdout.write(`>>>> [BOOT] Frontend URL: ${process.env.FRONTEND_URL || 'NÃO DEFINIDA'}\n`);
 
     await setupVite(app);
