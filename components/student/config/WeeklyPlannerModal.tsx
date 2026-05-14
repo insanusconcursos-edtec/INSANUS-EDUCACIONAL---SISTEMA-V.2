@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2, Clock, BookOpen, Check, ChevronLeft, Pencil, Plus, Save, Trophy } from 'lucide-react';
+import { X, Trash2, Clock, BookOpen, Check, ChevronLeft, Pencil, Plus, Save, Trophy, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -16,6 +16,8 @@ interface PlannerEvent {
   isStudy: boolean;
   isFreeStudy?: boolean;
   days: number[];
+  notificationEnabled?: boolean;
+  reminderMinutes?: number;
 }
 
 export interface RoutineTemplate {
@@ -109,6 +111,8 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
   const [formIsStudy, setFormIsStudy] = useState(false);
   const [formIsFreeStudy, setFormIsFreeStudy] = useState(false);
   const [formDays, setFormDays] = useState<number[]>([]);
+  const [formNotificationEnabled, setFormNotificationEnabled] = useState(false);
+  const [formReminderMinutes, setFormReminderMinutes] = useState(5);
 
   const handleAddRoutine = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -273,6 +277,8 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
     setFormIsStudy(false);
     setFormIsFreeStudy(false);
     setFormDays([dayId]);
+    setFormNotificationEnabled(false);
+    setFormReminderMinutes(5);
     setShowForm(true);
   };
 
@@ -286,6 +292,8 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
     setFormIsStudy(event.isStudy);
     setFormIsFreeStudy(!!event.isFreeStudy);
     setFormDays(event.days);
+    setFormNotificationEnabled(!!event.notificationEnabled);
+    setFormReminderMinutes(event.reminderMinutes || 5);
     setShowForm(true);
   };
 
@@ -302,7 +310,9 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
       endTime: formEnd,
       isStudy: formIsStudy,
       isFreeStudy: formIsFreeStudy,
-      days: formDays
+      days: formDays,
+      notificationEnabled: formNotificationEnabled,
+      reminderMinutes: formReminderMinutes
     };
 
     const newEvents = editingEvent 
@@ -652,6 +662,44 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
                         />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Notification Toggle */}
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${formNotificationEnabled ? 'bg-brand-red/20 text-brand-red' : 'bg-zinc-800 text-zinc-500'}`}>
+                          <Bell size={16} className={formNotificationEnabled ? 'animate-pulse' : ''} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-white uppercase tracking-widest block">Ativar Notificação</span>
+                          <span className="text-[10px] text-zinc-500">Lembrete push antes do início</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setFormNotificationEnabled(!formNotificationEnabled)}
+                        className={`w-10 h-5 rounded-full relative transition-colors ${formNotificationEnabled ? 'bg-brand-red' : 'bg-zinc-700'}`}
+                      >
+                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formNotificationEnabled ? 'left-6' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    {formNotificationEnabled && (
+                      <div className="space-y-2 animate-in slide-in-from-top-2">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Tempo de Antecedência</label>
+                        <select 
+                          value={formReminderMinutes}
+                          onChange={e => setFormReminderMinutes(Number(e.target.value))}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-sm text-white focus:border-brand-red outline-none font-bold uppercase"
+                        >
+                          <option value={0}>No horário</option>
+                          <option value={5}>5 min antes</option>
+                          <option value={15}>15 min antes</option>
+                          <option value={30}>30 min antes</option>
+                          <option value={60}>1 hora antes</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Color Picker */}

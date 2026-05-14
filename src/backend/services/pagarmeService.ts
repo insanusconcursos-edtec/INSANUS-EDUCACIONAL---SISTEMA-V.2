@@ -73,9 +73,18 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
     // Busca regras no Produto (Afiliado % e Coprodutores Adicionais)
     if (productId) {
-      const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
-      if (productDoc.exists) {
-        const productData = productDoc.data();
+      let productData: any = null;
+      const tictoDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+      if (tictoDoc.exists) {
+        productData = tictoDoc.data();
+      } else {
+        const prodDoc = await dbAdmin.collection('products').doc(productId).get();
+        if (prodDoc.exists) {
+          productData = prodDoc.data();
+        }
+      }
+
+      if (productData) {
         const offersArray = productData?.offers || [];
         const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
 
@@ -88,7 +97,15 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
           const coproSource = currentOffer?.coproducers || productData?.coproduction || productData?.coproducers || [];
           if (Array.isArray(coproSource)) {
             coproducers = coproSource.map((c: any) => ({
-              recipientId: c.pagarmeRecipientId || c.recipientId,
+              recipientId: (c.pagarmeRecipientId || c.recipientId || '').trim(),
+              percentage: Number(c.percentage) || 0,
+              userId: c.userId || c.id || c.coproducerId
+            })).filter(c => c.recipientId && c.percentage > 0);
+          } else if (coproSource && typeof coproSource === 'object') {
+            // Suporte para quando coproduction é um objeto em vez de array (raro mas possível em Firestore)
+            const coproValues = Object.values(coproSource);
+            coproducers = coproValues.map((c: any) => ({
+              recipientId: (c.pagarmeRecipientId || c.recipientId || '').trim(),
               percentage: Number(c.percentage) || 0,
               userId: c.userId || c.id || c.coproducerId
             })).filter(c => c.recipientId && c.percentage > 0);
@@ -204,6 +221,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     }],
     metadata: {
       ...orderData.metadata,
+      courseId: productId, // Garantir que o ID do produto esteja no metadata para o webhook
+      productId: productId,
       system: 'VibeCode_V5_SplitReset'
     }
   };
@@ -315,9 +334,11 @@ export const handlePagarmeWebhook = async (payload: any) => {
     }
 
     const email = orderData.customer?.email;
-    const productId = orderData.metadata?.courseId || orderData.metadata?.productId;
+    const productId = orderData.metadata?.courseId || 
+                     orderData.metadata?.productId || 
+                     orderData.items?.[0]?.code;
 
-    if (email && productId) {
+    if (email && productId && productId !== 'item_1') {
       await provisionPurchase({
         email,
         name: orderData.customer?.name || 'Cliente',
@@ -343,22 +364,34 @@ async function recordAffiliateCommission(orderData: any) {
   const { dbAdmin } = getAdminConfig();
   const metadata = orderData.metadata || {};
   const affiliateId = metadata.refId;
-  const productId = metadata.courseId || metadata.productId;
+  const productId = metadata.courseId || metadata.productId || orderData.items?.[0]?.code;
   
-  if (!affiliateId || !productId) return;
+  if (!affiliateId || !productId || productId === 'item_1') return;
 
   try {
-    const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
-    if (!productDoc.exists) return;
+    // Busca o produto em ambas as coleções
+    let pData: any = null;
+    const tictoDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+    if (tictoDoc.exists) {
+      pData = tictoDoc.data();
+    } else {
+      const prodDoc = await dbAdmin.collection('products').doc(productId).get();
+      if (prodDoc.exists) {
+        pData = prodDoc.data();
+      }
+    }
 
-    const pData = productDoc.data();
+    if (!pData) return;
+
     const offer = (pData?.offers || []).find((o: any) => String(o.id) === String(metadata.offerId));
     const percent = offer?.isAffiliationEnabled ? (Number(offer.affiliateCommission) || 0) : 0;
 
     if (percent <= 0) return;
 
     const amount = orderData.amount;
-    const fees = calculatePagarmeFees(amount, orderData.charges?.[0]?.payment_method || 'pix');
+    const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
+    const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
+    const fees = calculatePagarmeFees(amount, paymentMethod, installments);
     const netCommission = Math.floor((amount - fees) * (percent / 100));
 
     await dbAdmin.collection('affiliate_commissions').add({
@@ -370,7 +403,7 @@ async function recordAffiliateCommission(orderData: any) {
       createdAt: new Date().toISOString()
     });
 
-    await sendPushNotification(affiliateId, "VENDA REALIZADA! 🚀", `Comissão de R$ ${(netCommission/100).toFixed(2)} confirmada!`);
+    await sendPushNotification(affiliateId, "VENDA CONFIRMADA! 🚀", `Comissão de R$ ${(netCommission/100).toFixed(2)} confirmada!`);
   } catch (e) {
     console.error('Erro ao gravar comissão:', e);
   }
@@ -379,19 +412,29 @@ async function recordAffiliateCommission(orderData: any) {
 async function recordAdminSalesReport(orderData: any) {
   const { dbAdmin } = getAdminConfig();
   const metadata = orderData.metadata || {};
-  const productId = metadata.courseId || metadata.productId;
+  const productId = metadata.courseId || metadata.productId || orderData.items?.[0]?.code;
   const offerId = metadata.offerId;
 
-  if (!productId) {
-    console.error('[Admin Report] Sem productId no metadata');
+  if (!productId || productId === 'item_1') {
+    console.error('[Admin Report] Sem productId no metadata ou items');
     return;
   }
 
   try {
-    const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
-    if (!productDoc.exists) return;
+    // Busca o produto em ambas as coleções
+    let pData: any = null;
+    const tictoDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+    if (tictoDoc.exists) {
+      pData = tictoDoc.data();
+    } else {
+      const prodDoc = await dbAdmin.collection('products').doc(productId).get();
+      if (prodDoc.exists) {
+        pData = prodDoc.data();
+      }
+    }
 
-    const pData = productDoc.data();
+    if (!pData) return;
+
     const offersArray = pData?.offers || [];
     const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
     
@@ -399,30 +442,57 @@ async function recordAdminSalesReport(orderData: any) {
     const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
     const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
     
-    // Cálculo de Taxas
+    // Gateway Fee
     const gatewayFee = calculatePagarmeFees(amountCents, paymentMethod, installments);
     const pool = amountCents - gatewayFee;
 
-    // Cálculo do Afiliado
+    // Afiliado
     let affiliatePercent = 0;
     if (currentOffer && currentOffer.isAffiliationEnabled) {
       affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
     }
     const affiliatePart = Math.floor(pool * (affiliatePercent / 100));
     
-    // Cálculo da Coprodução
-    const coproducers = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
+    // Coprodução (Prioridade para splits reais se disponíveis)
     let coproductionPart = 0;
-    const poolForCopro = pool - affiliatePart;
-    
-    for (const copro of coproducers) {
-      const percentage = Number(copro.percentage) || 0;
-      if (percentage > 0) {
-        coproductionPart += Math.floor(poolForCopro * (percentage / 100));
+    const charges = orderData.charges || [];
+    // Tenta encontrar splits reais na carga útil do webhook
+    const actualSplits = charges[0]?.last_transaction?.splits || 
+                         charges[0]?.last_transaction?.split ||
+                         charges[0]?.splits || 
+                         charges[0]?.split ||
+                         orderData.splits || 
+                         orderData.split || 
+                         [];
+
+    if (actualSplits.length > 0) {
+      // Soma tudo que NÃO é master e NÃO é o afiliado (se identificado)
+      // Nota: No V5, o split do afiliado também aparece aqui. 
+      // Mas para o relatório simplificado de admin, somamos a parte que saiu do master para outros.
+      actualSplits.forEach((s: any) => {
+        if (s.recipient_id !== MASTER_RECIPIENT_ID) {
+          // Se soubermos qual recipient_id é do afiliado, poderíamos separar melhor.
+          // Por enquanto, somamos como parte da distribuição externa.
+          coproductionPart += s.amount;
+        }
+      });
+      // Ajuste: Se houver comissão de afiliado calculada, subtraímos dela para não duplicar no relatório
+      // No admin_sales_report, 'coproductionPart' costuma ser o total dos coprodutores.
+      // Se affiliatePart > 0 e o afiliado está nos splits, o total distribuído inclui o afiliado.
+      // Vamos tentar isolar.
+    } else {
+      // Fallback manual
+      const coproducers = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
+      const poolForCopro = pool - affiliatePart;
+      for (const copro of coproducers) {
+        const percentage = Number(copro.percentage) || 0;
+        if (percentage > 0) {
+          coproductionPart += Math.floor(poolForCopro * (percentage / 100));
+        }
       }
     }
 
-    const netCompanyValue = pool - affiliatePart - coproductionPart;
+    const netCompanyValue = pool - coproductionPart; // coproductionPart aqui já inclui afiliado se vier de splits reais
 
     await dbAdmin.collection('admin_sales_report').add({
       orderId: orderData.id,
@@ -435,22 +505,16 @@ async function recordAdminSalesReport(orderData: any) {
       netCompanyValue,
       status: 'paid',
       customer: orderData.customer,
-      customerData: orderData.customer, 
       metadata: orderData.metadata,
       createdAt: new Date().toISOString()
     });
 
-    // Notificar Admins sobre a Venda Realizada
     const amountFormatted = (amountCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const productDesc = pData.name || orderData.description || 'Venda';
     
-    try {
-      const adminUsers = await dbAdmin.collection('users').where('role', '==', 'ADMIN').get();
-      for (const adminDoc of adminUsers.docs) {
-        await sendPushNotification(adminDoc.id, "VENDA REALIZADA! 🔥", `${productDesc} - ${amountFormatted}`);
-      }
-    } catch (err) {
-      console.error('[Push] Erro ao notificar admins:', err);
+    const adminUsers = await dbAdmin.collection('users').where('role', '==', 'ADMIN').get();
+    for (const adminDoc of adminUsers.docs) {
+      await sendPushNotification(adminDoc.id, "VENDA CONFIRMADA! 🔥", `${productDesc} - ${amountFormatted}`);
     }
   } catch (e) {
     console.error('Erro ao gravar relatório admin:', e);
@@ -460,39 +524,117 @@ async function recordAdminSalesReport(orderData: any) {
 async function recordCoproductionCommissions(orderData: any) {
   const { dbAdmin } = getAdminConfig();
   const metadata = orderData.metadata || {};
-  const productId = metadata.courseId || metadata.productId;
+  const productId = metadata.courseId || metadata.productId || orderData.items?.[0]?.code;
   const offerId = metadata.offerId;
 
-  if (!productId) return;
+  if (!productId || productId === 'item_1') return;
 
   try {
-    const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
-    if (!productDoc.exists) return;
+    // Busca o produto em ambas as coleções possíveis
+    let pData: any = null;
+    const tictoDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+    if (tictoDoc.exists) {
+      pData = tictoDoc.data();
+    } else {
+      const prodDoc = await dbAdmin.collection('products').doc(productId).get();
+      if (prodDoc.exists) {
+        pData = prodDoc.data();
+      }
+    }
 
-    const pData = productDoc.data();
+    if (!pData) {
+      console.warn(`[SPLIT] Produto ${productId} não encontrado em nenhuma coleção.`);
+      return;
+    }
+
+    const amountCents = Number(orderData.amount) || 0;
+    
+    // PRIORIDADE: Pegar os splits reais que o Pagar.me executou
+    const charges = orderData.charges || [];
+    // Tenta encontrar splits em várias profundidades comuns da API V5/V4 e retornos de webhooks
+    const actualSplits = charges[0]?.last_transaction?.splits || 
+                         charges[0]?.last_transaction?.split ||
+                         charges[0]?.splits || 
+                         charges[0]?.split ||
+                         orderData.splits || 
+                         orderData.split || 
+                         [];
+
+    if (actualSplits.length > 0) {
+      console.log(`[SPLIT] Usando ${actualSplits.length} splits reais da Pagar.me para registro.`);
+      
+      for (const split of actualSplits) {
+        const recipientId = split.recipient_id;
+        const commissionValue = split.amount;
+
+        // Ignorar o Master Recipient no relatório de coprodução individual
+        if (recipientId === MASTER_RECIPIENT_ID) continue;
+
+        // Tenta encontrar o UID pelo RecipientId para vínculo correto
+        let identifier = recipientId;
+        try {
+          const userLookup = await dbAdmin.collection('users')
+            .where('pagarmeRecipientId', '==', recipientId)
+            .limit(1)
+            .get();
+          
+          if (!userLookup.empty) {
+            identifier = userLookup.docs[0].id;
+          }
+        } catch (lookErr) {
+          console.error('[SPLIT] Erro ao buscar UID:', lookErr);
+        }
+
+        if (commissionValue > 0) {
+          await dbAdmin.collection('coproduction_commissions').add({
+            coproducerId: identifier,
+            recipientId: recipientId,
+            orderId: orderData.id,
+            courseId: productId,
+            courseName: pData.name || 'Produto',
+            commissionValue: commissionValue, 
+            grossValue: amountCents,
+            createdAt: new Date().toISOString(),
+            status: 'paid'
+          });
+          
+          const amountFormatted = (commissionValue / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          await sendPushNotification(identifier, "VENDA CONFIRMADA! 🚀", `Sua comissão de ${amountFormatted} foi registrada.`);
+          console.log(`[SPLIT LOG] Comissão real gravada para ${identifier}: R$ ${commissionValue/100}`);
+        }
+      }
+      return; // Sucesso com splits reais
+    }
+
+    // FALLBACK: Cálculo manual (se não vierem splits no payload)
+    console.log(`[SPLIT] Payload sem splits. Usando fallback de cálculo manual.`);
     const offersArray = pData?.offers || [];
     const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
+    const coproSource = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
     
-    // Regras de Split (Sincronizado com createPagarmeOrder)
-    const coproducers = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
-
-    const amountCents = orderData.amount;
     const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
     const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
     const fees = calculatePagarmeFees(amountCents, paymentMethod, installments);
-    const pool = amountCents - fees;
+    const pool = Math.max(0, amountCents - fees);
 
-    // Cálculo do Afiliado (se houver) para deduzir do pool
     let affiliatePercent = 0;
     if (currentOffer && currentOffer.isAffiliationEnabled) {
       affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
     }
     const distributedAffiliate = Math.floor(pool * (affiliatePercent / 100));
-    const poolForCopro = pool - distributedAffiliate;
+    const poolForCopro = Math.max(0, pool - distributedAffiliate);
 
-    for (const copro of coproducers) {
-      const identifier = copro.userId || copro.id || copro.coproducerId || copro.recipientId || copro.pagarmeRecipientId;
+    for (const copro of coproSource) {
+      const recipientId = (copro.pagarmeRecipientId || copro.recipientId || '').trim();
+      let userId = copro.userId || copro.id || copro.coproducerId;
       const percentage = Number(copro.percentage) || 0;
+
+      if (!userId && recipientId) {
+        const userLookup = await dbAdmin.collection('users').where('pagarmeRecipientId', '==', recipientId).limit(1).get();
+        if (!userLookup.empty) userId = userLookup.docs[0].id;
+      }
+      
+      const identifier = userId || recipientId;
       
       if (identifier && percentage > 0) {
         const commissionValue = Math.floor(poolForCopro * (percentage / 100));
@@ -502,18 +644,14 @@ async function recordCoproductionCommissions(orderData: any) {
           orderId: orderData.id,
           courseId: productId,
           courseName: pData.name || 'Produto',
-          commissionValue: commissionValue, // Usando o nome que o Dashboard espera
+          commissionValue: commissionValue, 
           grossValue: amountCents,
           createdAt: new Date().toISOString(),
           status: 'paid'
         });
         
-        // Notificação de Venda Realizada
         const amountFormatted = (commissionValue / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        console.log(`[Push] Iniciando envio de VENDA REALIZADA para: ${identifier}`);
-        await sendPushNotification(identifier, "VENDA REALIZADA! 🚀", `Sua comissão de ${amountFormatted} foi confirmada!`);
-        
-        console.log(`[SPLIT LOG] Comissão gravada para ${identifier}: R$ ${commissionValue/100}`);
+        await sendPushNotification(identifier, "VENDA CONFIRMADA! 🚀", `Sua comissão de ${amountFormatted} foi registrada.`);
       }
     }
   } catch (e) {

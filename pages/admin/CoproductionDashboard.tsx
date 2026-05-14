@@ -353,10 +353,15 @@ const CoproductionDashboard: React.FC = () => {
     let commissionsQuery;
     
     if (isCoprodutorRole) {
-      // For coprodutor, we can optimize the query
+      // Para coprodutores, buscamos tanto pelo UID quanto pelo RecipientId (se disponível na sessão atual)
+      const identifiers = [currentUser.uid];
+      if (userProfile?.pagarmeRecipientId) {
+        identifiers.push(userProfile.pagarmeRecipientId);
+      }
+
       commissionsQuery = query(
         commissionsCollection, 
-        where('coproducerId', '==', currentUser.uid)
+        where('coproducerId', 'in', identifiers)
       );
     } else {
       commissionsQuery = commissionsCollection;
@@ -388,7 +393,7 @@ const CoproductionDashboard: React.FC = () => {
       unsubscribeComms();
       unsubscribeWithdrawals();
     };
-  }, [currentUser, dateFilter, isCoprodutorRole]); 
+  }, [currentUser, dateFilter, isCoprodutorRole, userProfile?.pagarmeRecipientId]); 
 
   // Efeito para sincronizar saldo real da Pagar.me
   useEffect(() => {
@@ -396,11 +401,6 @@ const CoproductionDashboard: React.FC = () => {
     
     // Busca inicial do saldo real
     fetchBalance(userProfile.pagarmeRecipientId);
-
-    // Opcional: Polling a cada 5 minutos para manter o saldo atualizado sem onSnapshot (que não funciona para APIs externas)
-    const interval = setInterval(() => {
-      fetchBalance(userProfile.pagarmeRecipientId);
-    }, 300000); // 5 minutos
 
     // 1. Assinatura de Saques (Mantemos para integridade local de lançamentos)
     const wQuery = query(
@@ -414,7 +414,6 @@ const CoproductionDashboard: React.FC = () => {
     });
 
     return () => {
-      clearInterval(interval);
       unsubscribeWithdrawals();
     };
   }, [userProfile?.pagarmeRecipientId, currentUser]);
@@ -919,7 +918,7 @@ const CoproductionDashboard: React.FC = () => {
               Vendas Recentes
             </h3>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left">
               <thead className="bg-[#1a1a1a] text-gray-500 text-[10px] uppercase tracking-widest font-black">
                 <tr>
@@ -931,7 +930,8 @@ const CoproductionDashboard: React.FC = () => {
               <tbody className="divide-y divide-[#222]">
                 {commissions
                   .filter(c => selectedProductId === 'all' || c.courseId === selectedProductId)
-                  .slice(0, 20)
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .slice(0, 50)
                   .map((c, i) => (
                     <tr key={i} className="hover:bg-[#1a1a1a]/50 transition-colors">
                       <td className="px-6 py-4">

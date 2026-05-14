@@ -106,15 +106,15 @@ export const PlanVideoCallTab: React.FC<PlanVideoCallTabProps> = ({ planId }) =>
   }
 
   return (
-    <div className="flex-1 flex gap-6 overflow-hidden animate-in fade-in duration-500">
+    <div className="flex-1 flex gap-6 min-h-0 animate-in fade-in duration-500 pb-4">
       {/* Lado A: Lista de Alunos e Agendamento */}
-      <div className="flex-1 flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden">
+      <div className="flex-1 flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden min-h-0 h-full">
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/80 flex items-center gap-2">
           <Users size={18} className="text-brand-red" />
           <h3 className="text-sm font-black text-white uppercase tracking-tight">Alunos Matriculados</h3>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar min-h-0">
           {!selectedStudent && (
             <div className="relative mb-4">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
