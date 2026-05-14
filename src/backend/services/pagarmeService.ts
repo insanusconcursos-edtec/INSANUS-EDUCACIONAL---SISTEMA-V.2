@@ -225,7 +225,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       type: 'flat',
       options: { 
         liable: isMaster, 
-        charge_processing_fee: isMaster 
+        charge_processing_fee: isMaster,
+        charge_remainder_fee: isMaster
       }
     };
   };
@@ -296,7 +297,6 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   // 3. Build Payload (Update: STRICT V5 Positioning)
   const payload: any = {
     antifraud_enabled: true,
-    split: splitArray.length > 0 ? splitArray : undefined, // Nível 1: Order level
     items: [
       {
         amount: totalAmountCents,
@@ -321,7 +321,6 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     payments: [
       {
         payment_method: paymentMethod,
-        split: splitArray.length > 0 ? splitArray : undefined, // Nível 2: Payment level (irmão do pix/card)
         // Configuração de Cartão de Crédito
         credit_card: paymentMethod === 'credit_card' ? {
             installments: orderData.installments || 1,
@@ -348,8 +347,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
                 state: orderData.billingAddress.state,
                 country: "BR"
               } : undefined
-            },
-            split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Credit Card level
+            }
         } : undefined,
         // Configuração de PIX (STRICT V5 plural 'splits')
         pix: paymentMethod === 'pix' ? {
@@ -359,7 +357,6 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         // Configuração de Boleto (Ticker)
         boleto: paymentMethod === 'boleto' ? {
             expires_in: 86400 * 3, // 3 days
-            split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Boleto level
         } : undefined
       }
     ],
