@@ -377,7 +377,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         totalAmountCents,
         pagarmeFees,
         totalNetDistributed,
-        remainderMaster: remainder
+        remainderMaster: masterAmount
       }
     };
 

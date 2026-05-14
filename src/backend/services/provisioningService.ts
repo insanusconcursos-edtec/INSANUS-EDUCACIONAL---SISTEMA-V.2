@@ -28,6 +28,8 @@ interface UserAccess {
   days: number;
   diaInicio: Timestamp | FieldValue;
   diaFim: Timestamp | FieldValue;
+  startDate?: Timestamp | FieldValue;
+  endDate?: Timestamp | FieldValue;
   isActive: boolean;
   resources?: {
     plans?: string[];
