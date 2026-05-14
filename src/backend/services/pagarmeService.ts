@@ -48,43 +48,21 @@ const calculatePagarmeFees = (amountCents: number, method: string, installments:
  */
 export const createPagarmeOrder = async (orderData: any, initialCoproducers: any[] = []) => {
   const { dbAdmin } = getAdminConfig();
-  console.log(`[PAGARME V5] Iniciando pedido: ${orderData.description}`);
+  console.log(`[PAGARME V5] Injetando Split Rules para: ${orderData.description}`);
 
-  // 1. Identificação do Produto e Oferta
   const productId = orderData.metadata?.courseId || orderData.productId;
   const offerId = orderData.metadata?.offerId;
   const paymentMethod = orderData.payment_method === 'ticket' ? 'boleto' : orderData.payment_method;
-
+  
+  // ---------------------------------------------------------
+  // 1. REGRAS DE OURO DO SPLIT (PRIORIDADE TOTAL)
+  // ---------------------------------------------------------
   let coproducers = [...initialCoproducers];
   let affiliateRecipientId: string | null = null;
   let affiliatePercent = 0;
 
-  // 2. Busca de Regras de Split no Firestore (Mantendo auditoria)
   try {
-    if (productId) {
-      const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
-      if (productDoc.exists) {
-        const productData = productDoc.data();
-        const offersArray = productData?.offers || [];
-        const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
-
-        // Porcentagem de Afiliado
-        if (currentOffer && currentOffer.isAffiliationEnabled) {
-          affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
-        }
-
-        // Coprodutores
-        const coproSource = currentOffer?.coproducers || productData?.coproduction || productData?.coproducers || [];
-        if (Array.isArray(coproSource)) {
-          coproducers = coproSource.map((c: any) => ({
-            recipientId: c.pagarmeRecipientId || c.recipientId,
-            percentage: Number(c.percentage) || 0
-          })).filter(c => c.recipientId && c.percentage > 0);
-        }
-      }
-    }
-
-    // Busca ID do Afiliado no Firestore
+    // Busca id do Afiliado primeiro
     const refId = orderData.metadata?.refId;
     if (refId) {
       const affUser = await dbAdmin.collection('users').doc(refId).get();
@@ -92,74 +70,85 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         affiliateRecipientId = affUser.data()?.pagarmeRecipientId;
       }
     }
+
+    // Busca regras no Produto (Afiliado % e Coprodutores Adicionais)
+    if (productId) {
+      const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+      if (productDoc.exists) {
+        const productData = productDoc.data();
+        const offersArray = productData?.offers || [];
+        const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
+
+        if (currentOffer && currentOffer.isAffiliationEnabled) {
+          affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
+        }
+
+        // Se não vieram coprodutores do handler, pegamos do produto
+        if (coproducers.length === 0) {
+          const coproSource = currentOffer?.coproducers || productData?.coproduction || productData?.coproducers || [];
+          if (Array.isArray(coproSource)) {
+            coproducers = coproSource.map((c: any) => ({
+              recipientId: c.pagarmeRecipientId || c.recipientId,
+              percentage: Number(c.percentage) || 0
+            })).filter(c => c.recipientId && c.percentage > 0);
+          }
+        }
+      }
+    }
   } catch (err) {
-    console.error('[PAGARME V5] Erro ao buscar regras de split:', err);
+    console.error('[SPLIT] Erro ao buscar regras:', err);
   }
 
-  // 3. Cálculo de Valores para o Split (Cascata Líquida)
+  // 2. MONTAGEM DO OBJETO SPLITS (CÁLCULO LÍQUIDO)
   const amountCents = Math.round(Number(orderData.transaction_amount) * 100);
   const pagarmeFees = calculatePagarmeFees(amountCents, paymentMethod, orderData.installments || 1);
-  const saldoA = amountCents - pagarmeFees;
+  const pool = amountCents - pagarmeFees;
 
   const splitArray: any[] = [];
-  let totalDistributed = 0;
+  let distributed = 0;
 
-  // Split Afiliado
+  // Afiliado (Sobre pool)
   if (affiliateRecipientId && affiliatePercent > 0) {
-    const amount = Math.floor(saldoA * (affiliatePercent / 100));
-    if (amount > 0) {
-      splitArray.push({
-        recipient_id: affiliateRecipientId,
-        amount: amount,
-        type: 'flat',
-        options: {
-          liable: false,
-          charge_remainder_fee: false,
-          charge_processing_fee: false
-        }
-      });
-      totalDistributed += amount;
-    }
+    const val = Math.floor(pool * (affiliatePercent / 100));
+    splitArray.push({
+      recipient_id: affiliateRecipientId,
+      amount: val,
+      type: 'flat',
+      options: { liable: false, charge_remainder_fee: false, charge_processing_fee: false }
+    });
+    distributed += val;
   }
 
-  // Split Coprodutores (Sobre Saldo B)
-  const saldoB = saldoA - totalDistributed;
-  coproducers.forEach(copro => {
-    const amount = Math.floor(saldoB * (copro.percentage / 100));
-    if (amount > 0) {
+  // Coprodutores (Sobre pool restante)
+  const poolB = pool - distributed;
+  coproducers.forEach(c => {
+    const val = Math.floor(poolB * (c.percentage / 100));
+    if (val > 0) {
       splitArray.push({
-        recipient_id: copro.recipientId,
-        amount: amount,
+        recipient_id: c.recipientId,
+        amount: val,
         type: 'flat',
-        options: {
-          liable: false,
-          charge_remainder_fee: false,
-          charge_processing_fee: false
-        }
+        options: { liable: false, charge_remainder_fee: false, charge_processing_fee: false }
       });
-      totalDistributed += amount;
+      distributed += val;
     }
   });
 
-  // Master fica com o restante
-  const masterAmount = amountCents - totalDistributed;
+  // MASTER (Restante + Taxas)
+  const masterVal = amountCents - distributed;
   splitArray.push({
     recipient_id: MASTER_RECIPIENT_ID,
-    amount: masterAmount,
+    amount: masterVal,
     type: 'flat',
-    options: {
-      liable: true,
-      charge_remainder_fee: true,
-      charge_processing_fee: true
-    }
+    options: { liable: true, charge_remainder_fee: true, charge_processing_fee: true }
   });
 
-  // 4. Montagem do Payload V5 (RESET TOTAL)
+  // 3. MONTAGEM DO PAYLOAD V5 (RESET TOTAL)
   const payload: any = {
     antifraud_enabled: true,
     items: [{
       amount: amountCents,
-      description: orderData.description || 'Produto Digital',
+      description: orderData.description || 'VibeCode Digital',
       quantity: 1,
       code: productId || 'item_1'
     }],
@@ -178,12 +167,10 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     },
     payments: [{
       payment_method: paymentMethod,
-      // PONTO CRÍTICO: Split na raiz do payment (Padrão V5)
-      split: splitArray, 
-      // PONTO CRÍTICO: Redundância solicitada pelo usuário (Plural 'splits' dentro de 'pix')
+      split: splitArray, // Raiz do pagamento (PADRÃO V5)
       pix: paymentMethod === 'pix' ? {
         expires_in: 1800,
-        splits: splitArray 
+        splits: splitArray // Redundância PIX (PLURAL)
       } : undefined,
       credit_card: paymentMethod === 'credit_card' ? {
         installments: orderData.installments || 1,

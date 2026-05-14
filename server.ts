@@ -690,31 +690,45 @@ async function setupVite(app: any) {
     }
   });
 
-  // Rota de Criação de Pagamento Pagar.me
+  // ==========================================
+  // ROTA DE PAGAMENTO PAGAR.ME (RESET V5)
+  // ==========================================
   app.post('/api/payments/pagarme/create', async (req, res) => {
-    console.log(">>>> [FLUXO] REQUISIÇÃO DE PAGAMENTO RECEBIDA <<<<");
+    console.log(">>>> [VIBECODE V5] PROCESSANDO NOVO PEDIDDO <<<<");
     try {
       const { dbAdmin } = getAdminConfig();
       const body = req.body;
       const productId = body.productId || body.metadata?.courseId;
 
+      // 1. Coleta de Coprodutores para o Split
       let coproducers: any[] = [];
       if (productId) {
         try {
+          // Buscamos na coleção de coprodutores oficial do sistema
           const coproSnap = await dbAdmin.collection('coproducers')
             .where('courseId', '==', String(productId))
             .where('isActive', '==', true)
             .get();
           
-          coproducers = coproSnap.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+          coproducers = coproSnap.docs.map(doc => {
+            const data = doc.data();
+            return {
+              recipientId: data.pagarmeRecipientId || data.recipientId,
+              percentage: Number(data.percentage) || 0
+            };
+          }).filter(c => c.recipientId && c.percentage > 0);
+          
+          console.log(`[Split] ${coproducers.length} coprodutores identificados.`);
         } catch (err) {
-          console.error('[Server] Erro ao buscar coprodutores para split:', err);
+          console.error('Erro ao buscar coprodutores:', err);
         }
       }
 
+      // 2. Execução via Service (onde o Payload V5 é montado com as Regras de Ouro)
+      // O split será injetado em payments[0].pix.splits e payments[0].split
       const response = await createPagarmeOrder(body, coproducers);
       
-      // Se for PIX, extraímos os dados do QR Code para o frontend
+      // 3. Resposta amigável para o Frontend (QR Code PIX)
       if (body.payment_method === 'pix' && response.status === 'pending') {
         const charge = response.charges?.[0];
         const lastTransaction = charge?.last_transaction;
@@ -734,22 +748,10 @@ async function setupVite(app: any) {
 
       return res.status(200).json({ success: true, payment: response });
     } catch (error: any) {
-      console.error("❌ Pagarme Route Error:", error);
-      
-      // Se for uma falha de pagamento (cartão recusado), retornamos a mensagem específica
-      if (error.status === 'failed') {
-        return res.status(400).json({
-          success: false,
-          error: "Pagamento Recusado",
-          message: error.message || "Pagamento recusado pelo banco. Verifique seus dados ou tente outro cartão.",
-          status: 'failed'
-        });
-      }
-
+      console.error("❌ Erro Crítico Pagarme Route:", error);
       return res.status(400).json({ 
         success: false, 
-        error: "Erro no Checkout",
-        message: error.message || "Falha na comunicação com o provedor de pagamentos."
+        message: error.message || "Erro ao processar pagamento na Pagar.me"
       });
     }
   });
