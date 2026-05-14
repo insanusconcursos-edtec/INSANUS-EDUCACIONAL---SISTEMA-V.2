@@ -14,22 +14,37 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
 
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
-    // Handle Firebase Timestamp or JS Date or String
-    let d: Date;
     
-    // Improved date parsing (similar to StudentAccessManager)
-    if (date.seconds || date._seconds) {
-      const s = date.seconds || date._seconds;
-      const n = date.nanoseconds || date._nanoseconds || 0;
-      d = new Date(s * 1000 + n / 1000000);
-    } else if (date.toDate && typeof date.toDate === 'function') {
-      d = date.toDate();
-    } else {
-      d = new Date(date);
-    }
+    // 1. Improved date parsing (extremely robust)
+    const d = ensureDate(date);
     
-    if (isNaN(d.getTime())) return 'N/A';
+    if (!d || isNaN(d.getTime())) return 'N/A';
     return d.toLocaleDateString('pt-BR');
+  };
+
+  const ensureDate = (val: any): Date | null => {
+    if (!val) return null;
+
+    // A. If already a Date
+    if (val instanceof Date) return val;
+
+    // B. If it's a Firestore Timestamp (Client or Admin SDK)
+    if (typeof val.toDate === 'function') return val.toDate();
+    
+    // C. Object with seconds (Admin SDK / JSON)
+    if (typeof val === 'object' && (val.seconds !== undefined || val._seconds !== undefined)) {
+      const s = val.seconds ?? val._seconds;
+      const n = val.nanoseconds ?? val._nanoseconds ?? 0;
+      return new Date(s * 1000 + n / 1000000);
+    }
+
+    // D. String (ISO or other)
+    if (typeof val === 'string' && val.trim() !== '') {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    return null;
   };
 
   return (

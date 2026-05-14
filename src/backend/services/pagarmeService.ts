@@ -110,6 +110,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       
       if (productDoc.exists) {
         const courseData = productDoc.data();
+        console.log(`[Pagarme] 📦 Dados Brutos do Produto Recuperados:`, JSON.stringify(courseData));
         
         // 1. Encontra a oferta exata dentro do array do produto (se existir)
         const offersArray = courseData?.offers || [];
@@ -138,19 +139,21 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
         console.log(`✅ [DEBUG AFILIADO] Oferta ID: ${offerId} | Comissão Extraída: ${percentualVendedor}%`);
 
-        // Extrair coprodutores do documento (priorizando ticto_products structure)
-        if (courseData?.coproduction && Array.isArray(courseData.coproduction)) {
-          coproducers = courseData.coproduction.map((item: any) => ({
-            recipientId: item.pagarmeRecipientId,
-            percentage: Number(item.percentage) || 0
+        // Extrair coprodutores do documento (Sincronização com CoproductionDashboard e ProductFormModal field names)
+        const coproSource = courseData?.coproduction || courseData?.coproducers || courseData?.splits || [];
+        
+        if (Array.isArray(coproSource) && coproSource.length > 0) {
+          coproducers = coproSource.map((item: any) => ({
+            recipientId: item.pagarmeRecipientId || item.recipientId || item.pagarme_recipient_id || item.id,
+            percentage: Number(item.percentage) || Number(item.comission) || 0
           })).filter(c => c.recipientId && c.percentage > 0);
-          console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores mapeados do Produto (ticto_products.coproduction).`);
+          console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores mapeados do Produto (Documento Principal). IDs: ${coproducers.map(c => c.recipientId).join(', ')}`);
         } else if (currentOffer?.coproducers && Array.isArray(currentOffer.coproducers)) {
           coproducers = currentOffer.coproducers;
           console.log(`[Pagarme] ✅ ${coproducers.length} Coprodutores encontrados na Oferta.`);
         }
       } else {
-        console.error(`❌ [ERRO CRÍTICO] O ID ${productId} não existe na coleção ticto_products!`);
+        console.error(`❌ [ERRO CRÍTICO] O ID ${productId} não existe na coleção ticto_products! Verifique se o ID passado (${productId}) é o Document ID correto.`);
       }
     }
         
@@ -189,10 +192,13 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
   // 🔴 LÓGICA DE DISTRIBUIÇÃO EM CASCATA (Split Cascade - Refatorado 14/05/2026):
 
+  console.log(`>>>> [AUDITORIA-DEBUG] Iniciando cálculo de Split para ${orderData.description} <<<<`);
+  console.log(`>>>> [AUDITORIA-DEBUG] Coprodutores na memória: ${JSON.stringify(coproducers)} <<<<`);
+
   // 1. Valor Bruto da Transação
   const grossAmount = totalAmountCents;
   const rawMethod = orderData.payment_method;
-  const paymentMethod = (rawMethod === 'ticket' || rawMethod === 'boleto') ? 'boleto' : rawMethod;
+  const paymentMethod = (rawMethod === 'ticket' || rawMethod === 'boleto' || rawMethod === 'ticket') ? 'boleto' : rawMethod;
   
   // 2. Cálculo das Taxas Pagar.me (Dedução 1)
   const pagarmeFees = calculatePagarmeFees(grossAmount, paymentMethod, installments);
@@ -205,15 +211,19 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   let totalNetDistributed = 0;
 
   // Helper para criar item de split com a estrutura exata exigida pela V5
-  const createSplitItem = (recipientId: string, amount: number) => ({
-    amount: Math.round(amount),
-    recipient_id: recipientId,
-    type: 'flat',
-    options: { 
-      liable: false, 
-      charge_processing_fee: false 
-    }
-  });
+  const createSplitItem = (recipientId: string, amount: number, label: string = 'Split') => {
+    const roundedAmount = Math.round(amount);
+    console.log(`[SPLIT-ITEM] Adicionando item (${label}): ID=${recipientId} | Valor=${roundedAmount}`);
+    return {
+      amount: roundedAmount,
+      recipient_id: recipientId.trim(),
+      type: 'flat',
+      options: { 
+        liable: false, 
+        charge_processing_fee: false 
+      }
+    };
+  };
 
   // 4. Saldo A -> Dedução Vendedor/Afiliado (Comissão sobre Saldo Líquido A)
   let affiliateAmount = 0;
@@ -221,7 +231,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     affiliateAmount = Math.floor(saldoA * (affiliateDataFromDB.percentage / 100));
     if (affiliateAmount > 0) {
       console.log(`[SPLIT] Processando regras para o recebedor ${affiliateDataFromDB.recipientId} (Afiliado) no valor líquido de ${affiliateAmount}`);
-      splitArray.push(createSplitItem(affiliateDataFromDB.recipientId, affiliateAmount));
+      splitArray.push(createSplitItem(affiliateDataFromDB.recipientId, affiliateAmount, 'Afiliado'));
       totalNetDistributed += affiliateAmount;
       console.log(`✅ [Pagarme Split] Vendedor ${affiliateDataFromDB.recipientId} recebe ${affiliateAmount} (${affiliateDataFromDB.percentage}% do Saldo A)`);
     }
@@ -234,20 +244,23 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   // 6. Saldo B -> Loop de Coprodutores (Comissão sobre Saldo Líquido B)
   const coprodutoresArray = coproducers || [];
   if (coprodutoresArray.length > 0) {
-    coprodutoresArray.forEach((copro: any) => {
-      const recipientId = copro.pagarmeRecipientId || copro.recipientId;
+    coprodutoresArray.forEach((copro: any, idx) => {
+      // Suporte a múltiplas nomenclaturas de ID do recebedor
+      const recipientId = copro.pagarmeRecipientId || copro.recipientId || copro.pagarme_recipient_id;
       const percentage = Number(copro.percentage) || 0;
       
-      if (recipientId && recipientId.startsWith('re_') && percentage > 0) {
+      console.log(`[SPLIT-LOOP] Analisando coprodutor ${idx}: ID=${recipientId} | %=${percentage}`);
+
+      if (recipientId && recipientId.trim().startsWith('re_') && percentage > 0) {
         const coproAmount = Math.floor(saldoB * (percentage / 100));
         if (coproAmount > 0) {
           console.log(`[SPLIT] Processando regras para o recebedor ${recipientId} no valor líquido de ${coproAmount}`);
-          splitArray.push(createSplitItem(recipientId, coproAmount));
+          splitArray.push(createSplitItem(recipientId, coproAmount, `Coprodutor-${idx}`));
           totalNetDistributed += coproAmount;
           console.log(`✅ [Pagarme Split] Coprodutor ${recipientId} recebe ${coproAmount} (${percentage}% do Saldo B)`);
         }
       } else {
-        console.log(`❌ [Pagarme Split] Coprodutor ignorado. ID ou percentual inválido:`, JSON.stringify(copro));
+        console.warn(`❌ [Pagarme Split] Coprodutor ${idx} ignorado. Motivo: ${!recipientId ? 'Sem ID' : !recipientId.trim().startsWith('re_') ? 'ID não inicia com re_' : 'Porcentagem zero'}`);
       }
     });
   }
@@ -258,22 +271,22 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   const masterRecipientId = await getMasterRecipientId();
 
   if (masterRecipientId) {
-    splitArray.push(createSplitItem(masterRecipientId, masterAmount));
+    splitArray.push(createSplitItem(masterRecipientId, masterAmount, 'Master'));
     
-    // LOG DETALHADO DO SPLIT SOLICITADO
-    process.stderr.write(">>>> [REMIX-CHECKOUT] DETALHAMENTO DO SPLIT ARRAY <<<<\n");
-    splitArray.forEach((s, idx) => {
-      process.stderr.write(`[SPLIT #${idx}] ID: ${s.recipient_id} | Valor: ${s.amount} | Liable: ${s.options.liable}\n`);
-    });
+    // Verificação de integridade da soma
+    const finalSum = splitArray.reduce((acc, curr) => acc + curr.amount, 0);
+    console.log(`>>>> [AUDITORIA-FINAL] Soma do Split: ${finalSum} | Bruto Esperado: ${grossAmount} | Diferença: ${grossAmount - finalSum} <<<<`);
     
-    // Verificação de soma
-    const sum = splitArray.reduce((acc, curr) => acc + curr.amount, 0);
-    process.stderr.write(`[AUDITORIA-SOMA] Soma Split: ${sum} | Gross: ${grossAmount} | Match: ${sum === grossAmount}\n`);
+    if (finalSum !== grossAmount) {
+      console.warn("⚠️ [AJUSTE] Ajustando discrepância de centavos no Master...");
+      const diff = grossAmount - finalSum;
+      splitArray[splitArray.length - 1].amount += diff;
+    }
   } else {
-    console.error("❌ [ERRO CRÍTICO] PAGARME_MASTER_RECIPIENT_ID não configurado!");
+    console.error("❌ [ERRO CRÍTICO] Master Recipient ID não encontrado!");
   }
 
-  console.log("🚨 [Pagarme Cascade] Distribuição Final do Split:", JSON.stringify(splitArray));
+  console.log("🚨 [Pagarme Cascade] Distribuição Final Finalizada:", JSON.stringify(splitArray));
 
   // 3. Build Payload (Update: using the new splitArray)
   const payload: any = {
@@ -351,16 +364,32 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
   // TAREFA: Salvar log no banco (audit_splits) para depuração na Vercel
   try {
-    const productId = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.productId;
-    await dbAdmin.collection('audit_splits').add({
-      productId: productId || 'unknown',
+    const productIdLog = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.productId || 'none';
+    const auditData: any = {
+      productId: productIdLog,
       orderDescription: orderData.description || 'N/A',
-      rawPayload: JSON.parse(JSON.stringify(payload)), 
-      splitCount: splitArray.length,
-      debug_split_sent: splitArray,
-      timestamp: new Date().toISOString()
-    });
-    process.stderr.write(`>>>> [AUDITORIA-DB] Log de split salvo no Firestore para o produto ${productId} <<<<\n`);
+      splitSent: JSON.parse(JSON.stringify(splitArray)),
+      fullPayload: JSON.parse(JSON.stringify(payload)),
+      paymentMethod: paymentMethod,
+      timestamp: new Date().toISOString(),
+      amountCents: totalAmountCents,
+      calculations: {
+        totalAmountCents,
+        pagarmeFees,
+        totalNetDistributed,
+        remainderMaster: remainder
+      }
+    };
+
+    // Remover dados sensíveis do log
+    if (auditData.fullPayload.payments?.[0]?.credit_card?.card) {
+      auditData.fullPayload.payments[0].credit_card.card.number = '***';
+      auditData.fullPayload.payments[0].credit_card.card.cvv = '***';
+    }
+
+    console.log(`[Pagarme] 📝 Gravando log de auditoria na coleção audit_splits...`);
+    await dbAdmin.collection('audit_splits').add(auditData);
+    process.stdout.write(`>>>> [AUDITORIA-DB] Log de split salvo na coleção 'audit_splits' para o produto ${productIdLog} <<<<\n`);
   } catch (dbLogErr) {
     process.stderr.write(`>>>> [AUDITORIA-DB-ERRO] Falha ao salvar log de split: ${dbLogErr instanceof Error ? dbLogErr.message : String(dbLogErr)} <<<<\n`);
   }
@@ -912,7 +941,9 @@ async function recordCoproductionCommissions(orderData: any) {
 
     // 4. Cálculo e Registro da Parte dos Coprodutores
     const saldoB = saldoA - affiliatePart;
-    const coproducers = currentOffer?.coproducers || courseData?.coproduction || [];
+    
+    // Sincronização com CoproductionDashboard e ProductFormModal field names
+    const coproducers = currentOffer?.coproducers || courseData?.coproduction || courseData?.coproducers || courseData?.splits || [];
     
     if (Array.isArray(coproducers) && coproducers.length > 0) {
       const batch = dbAdmin.batch();
