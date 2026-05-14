@@ -191,7 +191,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
   // 1. Valor Bruto da Transação
   const grossAmount = totalAmountCents;
-  const paymentMethod = orderData.payment_method;
+  const rawMethod = orderData.payment_method;
+  const paymentMethod = (rawMethod === 'ticket' || rawMethod === 'boleto') ? 'boleto' : rawMethod;
   
   // 2. Cálculo das Taxas Pagar.me (Dedução 1)
   const pagarmeFees = calculatePagarmeFees(grossAmount, paymentMethod, installments);
@@ -300,9 +301,9 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     },
     payments: [
       {
-        payment_method: orderData.payment_method,
+        payment_method: paymentMethod,
         // Configuração de Cartão de Crédito
-        credit_card: orderData.payment_method === 'credit_card' ? {
+        credit_card: paymentMethod === 'credit_card' ? {
             installments: orderData.installments || 1,
             statement_descriptor: 'VIBECODE',
             card: orderData.card_token ? {
@@ -331,12 +332,12 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
             split: splitArray.length > 0 ? splitArray : undefined
         } : undefined,
         // Configuração de PIX
-        pix: orderData.payment_method === 'pix' ? {
+        pix: paymentMethod === 'pix' ? {
             expires_in: 1800, // 30 minutes
             split: splitArray.length > 0 ? splitArray : undefined
         } : undefined,
         // Configuração de Boleto (Ticker)
-        boleto: (orderData.payment_method === 'boleto' || orderData.payment_method === 'ticket') ? {
+        boleto: paymentMethod === 'boleto' ? {
             expires_in: 86400 * 3, // 3 days
             split: splitArray.length > 0 ? splitArray : undefined
         } : undefined
@@ -627,6 +628,7 @@ export const handlePagarmeWebhook = async (payload: Record<string, any>) => {
       };
 
       const productId = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.metadata?.offerId;
+      console.log(`🚀 [Pagarme] Extraído ProductID para provisionamento: ${productId}`);
       
       if (productId) {
         // Salva a ordem completa na coleção 'orders' para consulta de saldo baseada em split_rules

@@ -80,7 +80,9 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
     let productDocId = '';
 
     if (origin === 'ticto' || origin === 'mp' || origin === 'pagarme') {
-      // 1. Tentar na coleção unificada 'products'
+      console.log(`[PROVISIONING] 🔍 Buscando produto para ID: ${safeTargetId}`);
+      
+      // 1. Tentar na coleção unificada 'products' (por externalId)
       const productsSnapshot = await dbAdmin.collection('products')
         .where('externalId', '==', safeTargetId)
         .limit(1)
@@ -93,40 +95,64 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
         productName = productData.name;
         accessDays = productData.accessDays || 365;
         linkedResources = productData.linkedResources || linkedResources;
+        console.log(`[PROVISIONING] ✅ Produto encontrado em 'products': ${productName}`);
       } else {
-        // 2. Tentar na coleção 'ticto_products' (Principal)
+        // 2. Tentar na coleção 'ticto_products' (Principal) - Por ID de Documento
         const tictoProductSnap = await dbAdmin.collection('ticto_products').doc(safeTargetId).get();
         if (tictoProductSnap.exists) {
           const productData = tictoProductSnap.data();
           productDocId = tictoProductSnap.id;
-          productName = productData?.name || 'Produto';
+          productName = productData?.name || productData?.title || 'Produto';
           accessDays = productData?.accessDays || productData?.validity || 365;
           
-          // Se for um curso direto ou tiver linkedResources
           if (productData?.linkedResources) {
             linkedResources = productData.linkedResources;
           } else {
-            // Se o produto for o próprio curso
             linkedResources.onlineCourses.push(safeTargetId);
           }
+          console.log(`[PROVISIONING] ✅ Produto encontrado em 'ticto_products': ${productName}`);
         } else {
-          // 3. Fallback para coleções diretas
-          const courseSnap = await dbAdmin.collection('online_courses').doc(safeTargetId).get();
-          if (courseSnap.exists) {
-            const courseData = courseSnap.data();
-            productName = courseData?.title || 'Curso Online';
-            linkedResources.onlineCourses.push(safeTargetId);
-          } else {
-            // Tentar buscar por ID direto na coleção products
-            const directProductSnap = await dbAdmin.collection('products').doc(safeTargetId).get();
-            if (directProductSnap.exists) {
-              const productData = directProductSnap.data();
-              productDocId = directProductSnap.id;
-              productName = productData?.name || 'Produto';
-              accessDays = productData?.accessDays || 365;
-              linkedResources = productData?.linkedResources || linkedResources;
+          // 2.1 Tentar buscar se o safeTargetId é um 'offerId' dentro de algum documento de 'ticto_products'
+          const offerSearchSnap = await dbAdmin.collection('ticto_products').get();
+          let foundByOffer = false;
+          
+          for (const doc of offerSearchSnap.docs) {
+            const data = doc.data();
+            const offers = data.offers || [];
+            const matchingOffer = offers.find((o: any) => String(o.id) === safeTargetId);
+            
+            if (matchingOffer) {
+              productDocId = doc.id;
+              productName = matchingOffer.title || data.name || 'Produto via Oferta';
+              accessDays = matchingOffer.accessDays || data.accessDays || data.validity || 365;
+              linkedResources = data.linkedResources || { onlineCourses: [doc.id] };
+              foundByOffer = true;
+              console.log(`[PROVISIONING] ✅ Produto encontrado via Oferta (${safeTargetId}) em 'ticto_products': ${productName}`);
+              break;
+            }
+          }
+
+          if (!foundByOffer) {
+            // 3. Fallback para coleções diretas (online_courses)
+            const courseSnap = await dbAdmin.collection('online_courses').doc(safeTargetId).get();
+            if (courseSnap.exists) {
+              const courseData = courseSnap.data();
+              productName = courseData?.title || 'Curso Online';
+              linkedResources.onlineCourses.push(safeTargetId);
+              console.log(`[PROVISIONING] ✅ Curso encontrado em 'online_courses': ${productName}`);
             } else {
-              console.warn(`Aviso: Alvo de provisionamento ${safeTargetId} não encontrado em coleções conhecidas.`);
+              // 4. Fallback final: Tentar ID direto na coleção products
+              const directProductSnap = await dbAdmin.collection('products').doc(safeTargetId).get();
+              if (directProductSnap.exists) {
+                const productData = directProductSnap.data();
+                productDocId = directProductSnap.id;
+                productName = productData?.name || 'Produto';
+                accessDays = productData?.accessDays || 365;
+                linkedResources = productData?.linkedResources || linkedResources;
+                console.log(`[PROVISIONING] ✅ Produto encontrado via ID em 'products': ${productName}`);
+              } else {
+                console.warn(`[PROVISIONING] ⚠️ AVISO: Alvo ${safeTargetId} não localizado em NENHUMA coleção. Access array ficará vazio.`);
+              }
             }
           }
         }
