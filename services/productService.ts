@@ -7,9 +7,24 @@ import { Product } from '../types/product';
 const COLLECTION_NAME = 'ticto_products';
 
 export const uploadProductCover = async (file: File): Promise<string> => {
-  const storageRef = ref(storage, `products/covers/${Date.now()}_${file.name}`);
-  await uploadBytes(storageRef, file);
-  return await getDownloadURL(storageRef);
+  try {
+    const extension = file.name.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+    const storageRef = ref(storage, `products/covers/${fileName}`);
+    
+    console.log('Uploading file to:', storageRef.fullPath);
+    const metadata = {
+      contentType: file.type,
+    };
+    const snapshot = await uploadBytes(storageRef, file, metadata);
+    console.log('Upload successful:', snapshot.metadata.fullPath);
+    
+    const url = await getDownloadURL(snapshot.ref);
+    return url;
+  } catch (error) {
+    console.error('Detailed Upload error:', error);
+    throw error;
+  }
 };
 
 export const getProducts = async (): Promise<Product[]> => {

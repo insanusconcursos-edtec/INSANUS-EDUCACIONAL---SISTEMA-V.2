@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Product, ProductType, ProductOffer, ProductSplit } from '../../../types/product';
 import { createProduct, updateProduct, uploadProductCover } from '../../../services/productService';
 import { getPlans } from '../../../services/planService';
@@ -13,6 +14,7 @@ import { liveEventService } from '../../../services/liveEventService';
 import { LiveEvent } from '../../../types/liveEvent';
 import { coproducerService } from '../../../services/coproducerService';
 import { Coproducer } from '../../../types/coproducer';
+import { useAuth } from '../../../contexts/AuthContext';
 import { Users, DollarSign } from 'lucide-react';
 
 interface ProductFormModalProps {
@@ -24,6 +26,7 @@ interface ProductFormModalProps {
 export default function ProductFormModal({ product, onClose, onSave }: ProductFormModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { currentUser } = useAuth();
 
   // Form State
   const [name, setName] = useState(product?.name || '');
@@ -574,11 +577,19 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           <input type="file" accept="image/*" className="hidden" disabled={isUploading} onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              if (!currentUser) {
+                                toast.error('Você precisa estar logado para fazer upload.');
+                                return;
+                              }
                               setIsUploading(true);
                               try {
                                  const url = await uploadProductCover(file);
                                  setCoverUrl(url);
-                              } catch { alert('Erro no upload'); }
+                                 toast.success('Capa carregada com sucesso!');
+                              } catch (err: any) { 
+                                 console.error("Upload Error:", err);
+                                 toast.error('Erro no upload: ' + (err.message || 'Verifique as permissões do Storage')); 
+                              }
                               setIsUploading(false);
                             }
                           }} />
@@ -607,11 +618,19 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           <input type="file" accept="image/*" className="hidden" disabled={isUploadingCheckout} onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              if (!currentUser) {
+                                toast.error('Você precisa estar logado para fazer upload.');
+                                return;
+                              }
                               setIsUploadingCheckout(true);
                               try {
                                  const url = await uploadProductCover(file);
                                  setCheckoutCoverUrl(url);
-                              } catch { alert('Erro no upload'); }
+                                 toast.success('Capa do checkout carregada!');
+                              } catch (err: any) { 
+                                 console.error("Upload Error (Checkout):", err);
+                                 toast.error('Erro no upload: ' + (err.message || 'Verifique as permissões do Storage')); 
+                              }
                               setIsUploadingCheckout(false);
                             }
                           }} />
