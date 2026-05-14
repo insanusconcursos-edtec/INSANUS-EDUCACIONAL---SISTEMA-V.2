@@ -2,10 +2,14 @@ import React, { useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Topbar from './Topbar';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 const AdminLayout: React.FC = () => {
   const { currentUser, userRole, userData } = useAuth();
   const location = useLocation();
+  
+  // Register for push notifications
+  usePushNotifications();
   
   const adminNav = useMemo(() => {
     const perms = userData?.permissions || {} as any;

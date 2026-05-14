@@ -89,7 +89,8 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
           if (Array.isArray(coproSource)) {
             coproducers = coproSource.map((c: any) => ({
               recipientId: c.pagarmeRecipientId || c.recipientId,
-              percentage: Number(c.percentage) || 0
+              percentage: Number(c.percentage) || 0,
+              userId: c.userId || c.id || c.coproducerId
             })).filter(c => c.recipientId && c.percentage > 0);
           }
         }
@@ -214,6 +215,36 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     });
 
     const result = response.data;
+    
+    // Notificações de PIX EMITIDO
+    if (paymentMethod === 'pix' && result.status === 'pending') {
+      const amountFormatted = (amountCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const title = "NOVO PIX EMITIDO! 💎";
+      const body = `Venda de ${amountFormatted} aguardando pagamento.`;
+
+      // Notificar Coprodutores
+      for (const c of coproducers) {
+        if (c.userId) {
+          await sendPushNotification(c.userId, title, body);
+        }
+      }
+
+      // Notificar Afiliado
+      const affiliateId = orderData.metadata?.refId;
+      if (affiliateId) {
+        await sendPushNotification(affiliateId, title, body);
+      }
+
+      // Notificar Admins
+      try {
+        const adminUsers = await dbAdmin.collection('users').where('role', '==', 'ADMIN').get();
+        for (const adminDoc of adminUsers.docs) {
+          await sendPushNotification(adminDoc.id, title, body);
+        }
+      } catch (err) {
+        console.error('[Push] Erro ao notificar admins:', err);
+      }
+    }
     
     // 1. Salvar na coleção 'orders' para acionar o gatilho de notificação Push (PIX Emitido)
     try {
@@ -353,6 +384,20 @@ async function recordAdminSalesReport(orderData: any) {
       metadata: orderData.metadata,
       createdAt: new Date().toISOString()
     });
+
+    // Notificar Admins sobre a Venda Realizada
+    const amountCents = orderData.amount;
+    const amountFormatted = (amountCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const productDesc = orderData.description || 'Venda';
+    
+    try {
+      const adminUsers = await dbAdmin.collection('users').where('role', '==', 'ADMIN').get();
+      for (const adminDoc of adminUsers.docs) {
+        await sendPushNotification(adminDoc.id, "VENDA REALIZADA! 🔥", `${productDesc} - ${amountFormatted}`);
+      }
+    } catch (err) {
+      console.error('[Push] Erro ao notificar admins:', err);
+    }
   } catch (e) {
     console.error('Erro ao gravar relatório admin:', e);
   }
@@ -408,6 +453,10 @@ async function recordCoproductionCommissions(orderData: any) {
           createdAt: new Date().toISOString(),
           status: 'paid'
         });
+        
+        // Notificação de Venda Realizada
+        const amountFormatted = (commissionValue / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        await sendPushNotification(userId, "VENDA REALIZADA! 🚀", `Sua comissão de ${amountFormatted} foi confirmada!`);
         
         console.log(`[SPLIT LOG] Comissão gravada para ${userId}: R$ ${commissionValue/100}`);
       }
