@@ -16,11 +16,14 @@ const getHeaders = () => {
   if (!secretKey) throw new Error('PAGARME_SECRET_KEY não encontrada no ambiente.');
   
   const auth = Buffer.from(`${secretKey}:`).toString('base64');
-  return {
+  const headers = {
     'Authorization': `Basic ${auth}`,
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   };
+
+  console.log(`>>>> [PAGARME V5 HEADERS] Target: ${PAGARME_BASE_URL} | Type: application/json`);
+  return headers;
 };
 
 /**
@@ -167,14 +170,18 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     },
     payments: [{
       payment_method: paymentMethod,
+      // REDUNDÂNCIA V5: Injetando split no root do pagamento
+      split: splitArray, 
       pix: paymentMethod === 'pix' ? {
         expires_in: 1800,
-        split: splitArray 
+        // CHAVE PLURAL: Alterado para 'splits' conforme solicitação definitiva
+        splits: splitArray 
       } : undefined,
       credit_card: paymentMethod === 'credit_card' ? {
         installments: orderData.installments || 1,
         statement_descriptor: 'VIBECODE',
-        split: splitArray,
+        // CHAVE PLURAL: Alterado para 'splits' no cartão também
+        splits: splitArray,
         card: {
           token: orderData.card_token || undefined,
           number: orderData.card_number || undefined,
