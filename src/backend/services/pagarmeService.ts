@@ -214,13 +214,18 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   const createSplitItem = (recipientId: string, amount: number, label: string = 'Split') => {
     const roundedAmount = Math.round(amount);
     console.log(`[SPLIT-ITEM] Adicionando item (${label}): ID=${recipientId} | Valor=${roundedAmount}`);
+    
+    // STRICT V5: Apenas o recebedor Master paga a taxa de processamento
+    // ID Master fornecido pelo usuário: re_cmouicmz204gz0l9tyr4jkmut
+    const isMaster = recipientId.trim() === 're_cmouicmz204gz0l9tyr4jkmut';
+    
     return {
       amount: roundedAmount,
       recipient_id: recipientId.trim(),
       type: 'flat',
       options: { 
-        liable: false, 
-        charge_processing_fee: false 
+        liable: isMaster, 
+        charge_processing_fee: isMaster 
       }
     };
   };
@@ -288,9 +293,10 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
   console.log("🚨 [Pagarme Cascade] Distribuição Final Finalizada:", JSON.stringify(splitArray));
 
-  // 3. Build Payload (Update: using the new splitArray)
+  // 3. Build Payload (Update: STRICT V5 Positioning)
   const payload: any = {
     antifraud_enabled: true,
+    split: splitArray.length > 0 ? splitArray : undefined, // Nível 1: Order level
     items: [
       {
         amount: totalAmountCents,
@@ -315,6 +321,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     payments: [
       {
         payment_method: paymentMethod,
+        split: splitArray.length > 0 ? splitArray : undefined, // Nível 2: Payment level (irmão do pix/card)
         // Configuração de Cartão de Crédito
         credit_card: paymentMethod === 'credit_card' ? {
             installments: orderData.installments || 1,
@@ -342,57 +349,39 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
                 country: "BR"
               } : undefined
             },
-            split: splitArray.length > 0 ? splitArray : undefined
+            split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Credit Card level
         } : undefined,
         // Configuração de PIX
         pix: paymentMethod === 'pix' ? {
             expires_in: 1800, // 30 minutes
-            split: splitArray.length > 0 ? splitArray : undefined
+            split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Pix level
         } : undefined,
         // Configuração de Boleto (Ticker)
         boleto: paymentMethod === 'boleto' ? {
             expires_in: 86400 * 3, // 3 days
-            split: splitArray.length > 0 ? splitArray : undefined
+            split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Boleto level
         } : undefined
       }
     ],
     metadata: orderData.metadata
   };
 
-  // Log payload for auditing
-  process.stderr.write(`>>>> [AUDITORIA] Payload final de Split: ${JSON.stringify(splitArray)}\n`);
-
-  // TAREFA: Salvar log no banco (audit_splits) para depuração na Vercel
-  try {
-    const productIdLog = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.productId || 'none';
-    const auditData: any = {
-      productId: productIdLog,
-      orderDescription: orderData.description || 'N/A',
-      splitSent: JSON.parse(JSON.stringify(splitArray)),
-      fullPayload: JSON.parse(JSON.stringify(payload)),
-      paymentMethod: paymentMethod,
-      timestamp: new Date().toISOString(),
-      amountCents: totalAmountCents,
-      calculations: {
-        totalAmountCents,
-        pagarmeFees,
-        totalNetDistributed,
-        remainderMaster: masterAmount
-      }
-    };
-
-    // Remover dados sensíveis do log
-    if (auditData.fullPayload.payments?.[0]?.credit_card?.card) {
-      auditData.fullPayload.payments[0].credit_card.card.number = '***';
-      auditData.fullPayload.payments[0].credit_card.card.cvv = '***';
+  // Preparar dados de auditoria
+  const productIdLog = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.productId || 'none';
+  const auditData: any = {
+    productId: productIdLog,
+    orderDescription: orderData.description || 'N/A',
+    splitSent: JSON.parse(JSON.stringify(splitArray)),
+    paymentMethod: paymentMethod,
+    timestamp: new Date().toISOString(),
+    amountCents: totalAmountCents,
+    calculations: {
+      totalAmountCents,
+      pagarmeFees,
+      totalNetDistributed,
+      remainderMaster: masterAmount
     }
-
-    console.log(`[Pagarme] 📝 Gravando log de auditoria na coleção audit_splits...`);
-    await dbAdmin.collection('audit_splits').add(auditData);
-    process.stdout.write(`>>>> [AUDITORIA-DB] Log de split salvo na coleção 'audit_splits' para o produto ${productIdLog} <<<<\n`);
-  } catch (dbLogErr) {
-    process.stderr.write(`>>>> [AUDITORIA-DB-ERRO] Falha ao salvar log de split: ${dbLogErr instanceof Error ? dbLogErr.message : String(dbLogErr)} <<<<\n`);
-  }
+  };
 
   // Critical Log for Auditing as requested
   const safePayload = JSON.parse(JSON.stringify(payload));
@@ -420,9 +409,51 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
       const response = await pagarme.post('/orders', payload);
       result = response.data;
       
+      // LOG DE RESPOSTA DA PAGAR.ME NO FIRESTORE (Após o envio)
+      try {
+        const fullAudit = {
+          ...auditData,
+          pagarme_response_raw: result,
+          status: 'success',
+          finalPayload: JSON.parse(JSON.stringify(payload))
+        };
+        // Mascarar dados do payload fial no log
+        if (fullAudit.finalPayload.payments?.[0]?.credit_card?.card) {
+          fullAudit.finalPayload.payments[0].credit_card.card.number = '***';
+          fullAudit.finalPayload.payments[0].credit_card.card.cvv = '***';
+        }
+        await dbAdmin.collection('audit_splits').add(fullAudit);
+        process.stdout.write(`>>>> [AUDITORIA-DB] Log de split (Sucesso) salvo para ${productIdLog} <<<<\n`);
+      } catch (e) {
+        console.error("Erro ao gravar audit_splits success:", e);
+      }
+      
     } catch (reqError: any) {
       console.error("[CRITICAL-CHECKOUT]", reqError.message);
       console.error("🚨 [Pagarme] FALHA CRÍTICA DE REDE/API NA CRIAÇÃO DO PEDIDO:", reqError.message);
+      
+      const errorResponse = reqError.response?.data || { message: reqError.message };
+      
+      // LOG DE RESPOSTA DE ERRO DA PAGAR.ME NO FIRESTORE
+      try {
+        const fullAudit = {
+          ...auditData,
+          pagarme_response_raw: errorResponse,
+          status: 'error',
+          errorMessage: reqError.message,
+          finalPayload: JSON.parse(JSON.stringify(payload))
+        };
+        // Mascarar dados do payload final no log
+        if (fullAudit.finalPayload.payments?.[0]?.credit_card?.card) {
+          fullAudit.finalPayload.payments[0].credit_card.card.number = '***';
+          fullAudit.finalPayload.payments[0].credit_card.card.cvv = '***';
+        }
+        await dbAdmin.collection('audit_splits').add(fullAudit);
+        process.stdout.write(`>>>> [AUDITORIA-DB] Log de split (Erro) salvo para ${productIdLog} <<<<\n`);
+      } catch (e) {
+        console.error("Erro ao gravar audit_splits error:", e);
+      }
+
       if (reqError.response) {
         console.error("🚨 [Pagarme] HTTP Status:", reqError.response.status);
         console.error("🚨 [Pagarme] Response Data do ERRO:", JSON.stringify(reqError.response.data, null, 2));
