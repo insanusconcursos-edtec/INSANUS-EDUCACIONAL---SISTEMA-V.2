@@ -376,21 +376,71 @@ async function recordAffiliateCommission(orderData: any) {
 
 async function recordAdminSalesReport(orderData: any) {
   const { dbAdmin } = getAdminConfig();
+  const metadata = orderData.metadata || {};
+  const productId = metadata.courseId || metadata.productId;
+  const offerId = metadata.offerId;
+
+  if (!productId) {
+    console.error('[Admin Report] Sem productId no metadata');
+    return;
+  }
+
   try {
+    const productDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+    if (!productDoc.exists) return;
+
+    const pData = productDoc.data();
+    const offersArray = pData?.offers || [];
+    const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
+    
+    const amountCents = orderData.amount;
+    const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
+    const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
+    
+    // Cálculo de Taxas
+    const gatewayFee = calculatePagarmeFees(amountCents, paymentMethod, installments);
+    const pool = amountCents - gatewayFee;
+
+    // Cálculo do Afiliado
+    let affiliatePercent = 0;
+    if (currentOffer && currentOffer.isAffiliationEnabled) {
+      affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
+    }
+    const affiliatePart = Math.floor(pool * (affiliatePercent / 100));
+    
+    // Cálculo da Coprodução
+    const coproducers = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
+    let coproductionPart = 0;
+    const poolForCopro = pool - affiliatePart;
+    
+    for (const copro of coproducers) {
+      const percentage = Number(copro.percentage) || 0;
+      if (percentage > 0) {
+        coproductionPart += Math.floor(poolForCopro * (percentage / 100));
+      }
+    }
+
+    const netCompanyValue = pool - affiliatePart - coproductionPart;
+
     await dbAdmin.collection('admin_sales_report').add({
       orderId: orderData.id,
-      grossValue: orderData.amount,
+      courseId: productId,
+      courseName: pData.name || 'Produto',
+      grossValue: amountCents,
+      gatewayFee,
+      affiliatePart,
+      coproductionPart,
+      netCompanyValue,
       status: 'paid',
       customer: orderData.customer,
-      customerData: orderData.customer, // Added for frontend compatibility
+      customerData: orderData.customer, 
       metadata: orderData.metadata,
       createdAt: new Date().toISOString()
     });
 
     // Notificar Admins sobre a Venda Realizada
-    const amountCents = orderData.amount;
     const amountFormatted = (amountCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const productDesc = orderData.description || 'Venda';
+    const productDesc = pData.name || orderData.description || 'Venda';
     
     try {
       const adminUsers = await dbAdmin.collection('users').where('role', '==', 'ADMIN').get();

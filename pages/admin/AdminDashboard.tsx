@@ -93,7 +93,7 @@ const AdminDashboard: React.FC = () => {
     const weekStart = subDays(todayStart, 7);
     const monthStart = subDays(todayStart, 30);
 
-    const calculateTotal = (items: SalesReport[]) => items.reduce((acc, curr) => acc + curr.netCompanyValue, 0);
+    const calculateTotal = (items: SalesReport[]) => items.reduce((acc, curr) => acc + (curr.netCompanyValue || 0), 0);
 
     const total = calculateTotal(filteredReports);
     
@@ -123,8 +123,8 @@ const AdminDashboard: React.FC = () => {
     }).reverse();
 
     return last15Days.map(dayStr => {
-      const dayReports = filteredReports.filter(r => r.createdAt.startsWith(dayStr));
-      const value = dayReports.reduce((acc, curr) => acc + curr.netCompanyValue, 0);
+      const dayReports = filteredReports.filter(r => r.createdAt && r.createdAt.startsWith(dayStr));
+      const value = dayReports.reduce((acc, curr) => acc + (curr.netCompanyValue || 0), 0);
       return {
         date: format(parseISO(dayStr), 'dd/MM'),
         value: value / 100 // Convert cents to real
@@ -140,7 +140,7 @@ const AdminDashboard: React.FC = () => {
       const current = rankingMap.get(r.courseId) || { name: r.courseName, net: 0, count: 0 };
       rankingMap.set(r.courseId, {
         name: r.courseName,
-        net: current.net + r.netCompanyValue,
+        net: current.net + (r.netCompanyValue || 0),
         count: current.count + 1
       });
     });
