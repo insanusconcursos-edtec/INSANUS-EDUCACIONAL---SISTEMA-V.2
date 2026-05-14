@@ -4,19 +4,33 @@ export const sendPushNotification = async (userId: string, title: string, body: 
   const { dbAdmin, messagingAdmin } = getAdminConfig();
 
   try {
-    // 1. Buscar o FCM Token do usuário
-    const userDoc = await dbAdmin.collection('users').doc(userId).get();
+    // 1. Buscar o FCM Token (Tentar na coleção 'users' e 'coproducers')
+    let token: string | null = null;
     
-    if (!userDoc.exists) {
-      console.log(`[Push] Usuário ${userId} não encontrado.`);
-      return;
+    // Tentar na coleção users
+    const userDoc = await dbAdmin.collection('users').doc(userId).get();
+    if (userDoc.exists) {
+      token = userDoc.data()?.fcmToken;
     }
 
-    const userData = userDoc.data();
-    const token = userData?.fcmToken;
+    // Se não encontrou, talvez o userId seja um email ou esteja na coleção coproducers
+    if (!token) {
+      const coproDoc = await dbAdmin.collection('coproducers').doc(userId).get();
+      if (coproDoc.exists) {
+        token = coproDoc.data()?.fcmToken;
+      }
+    }
+
+    // Se ainda não encontrou e o userId parece um email, tentar buscar o usuário pelo campo email na coleção users
+    if (!token && userId.includes('@')) {
+      const userByEmail = await dbAdmin.collection('users').where('email', '==', userId).limit(1).get();
+      if (!userByEmail.empty) {
+        token = userByEmail.docs[0].data()?.fcmToken;
+      }
+    }
 
     if (!token) {
-      console.log(`[Push] Usuário ${userId} não possui FCM Token cadastrado.`);
+      console.log(`[Push] Token não encontrado para identificador: ${userId}`);
       return;
     }
 

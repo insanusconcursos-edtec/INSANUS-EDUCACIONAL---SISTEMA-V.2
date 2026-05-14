@@ -35,12 +35,39 @@ export const usePushNotifications = () => {
 
   const saveTokenToFirestore = async (token: string) => {
     if (!auth.currentUser) return;
+    
+    console.log(`FCM Token gerado: ${token}`);
+
     try {
+      // 1. Update in users collection
       const userRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userRef, {
         fcmToken: token,
         fcmLastUpdated: new Date().toISOString()
       });
+
+      // 2. Update in coproducers collection (checking by email if doc ID is email)
+      const userEmail = auth.currentUser.email;
+      if (userEmail) {
+        try {
+          const coproducerRef = doc(db, 'coproducers', userEmail);
+          await updateDoc(coproducerRef, {
+            fcmToken: token,
+            fcmLastUpdated: new Date().toISOString()
+          });
+        } catch (err) {
+          // If doc by email doesn't exist, try by UID
+          try {
+            const coproducerRefByUid = doc(db, 'coproducers', auth.currentUser.uid);
+            await updateDoc(coproducerRefByUid, {
+              fcmToken: token,
+              fcmLastUpdated: new Date().toISOString()
+            });
+          } catch (err2) {
+            console.log('[FCM] Documento não encontrado na coleção coproducers por email ou UID');
+          }
+        }
+      }
     } catch (err) {
       console.error('[FCM] Erro ao salvar no Firestore:', err);
     }

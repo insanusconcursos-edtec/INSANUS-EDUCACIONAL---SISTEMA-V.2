@@ -77,8 +77,13 @@ interface CoproducerUser {
   role: string;
 }
 
+import { usePushNotifications } from '../../hooks/usePushNotifications';
+
 const CoproductionDashboard: React.FC = () => {
   const { currentUser, userRole } = useAuth();
+  
+  // Register for push notifications
+  usePushNotifications();
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [products, setProducts] = useState<ProductInfo[]>([]);
   const [coproducerUsers, setCoproducerUsers] = useState<CoproducerUser[]>([]);
