@@ -351,10 +351,10 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
             },
             split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Credit Card level
         } : undefined,
-        // Configuração de PIX
+        // Configuração de PIX (STRICT V5 plural 'splits')
         pix: paymentMethod === 'pix' ? {
             expires_in: 1800, // 30 minutes
-            split: splitArray.length > 0 ? splitArray : undefined // Nível 3: Pix level
+            splits: splitArray.length > 0 ? splitArray : undefined // Nível 3: Pix level (STRICT PLURAL)
         } : undefined,
         // Configuração de Boleto (Ticker)
         boleto: paymentMethod === 'boleto' ? {
@@ -414,6 +414,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         const fullAudit = {
           ...auditData,
           pagarme_response_raw: result,
+          pagarme_debug_full_response: result, // Forçando campo solicitado
           status: 'success',
           finalPayload: JSON.parse(JSON.stringify(payload))
         };
@@ -439,6 +440,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         const fullAudit = {
           ...auditData,
           pagarme_response_raw: errorResponse,
+          pagarme_debug_full_response: errorResponse, // Forçando campo solicitado
           status: 'error',
           errorMessage: reqError.message,
           finalPayload: JSON.parse(JSON.stringify(payload))
