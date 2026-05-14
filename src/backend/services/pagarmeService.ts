@@ -324,6 +324,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
         credit_card: paymentMethod === 'credit_card' ? {
             installments: orderData.installments || 1,
             statement_descriptor: 'VIBECODE',
+            splits: splitArray.length > 0 ? splitArray : undefined,
             card: orderData.card_token ? {
               token: orderData.card_token,
               billing_address: orderData.billingAddress ? {
