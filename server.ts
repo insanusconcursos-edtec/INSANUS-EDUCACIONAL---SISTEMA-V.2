@@ -8,6 +8,7 @@ import { generateStudyMaterial } from './src/backend/services/geminiService.js';
 import { getAdminConfig } from './src/backend/services/firebaseAdmin.js';
 import { provisionExternalPurchase, revokePurchase } from './src/backend/services/provisioningService.js';
 import { createPagarmeOrder, handlePagarmeWebhook, getPagarmeOrderStatus, requestPagarmeTransfer, getPagarmeRecipientBalance, getPagarmeRecipients } from './src/backend/services/pagarmeService.js';
+import { initOrderNotificationListener } from './src/backend/services/orderNotificationService.js';
 
 process.stdout.write(">>>> [SISTEMA] SERVIDOR INICIALIZADO COM SUCESSO <<<<\n");
 
@@ -1019,6 +1020,9 @@ async function startServer() {
     process.stdout.write(`>>>> [BOOT] Frontend URL: ${process.env.FRONTEND_URL || 'NÃO DEFINIDA'}\n`);
 
     await setupVite(app);
+    
+    // Inicializar o listener de notificações (Trigger Firestore Emulator)
+    initOrderNotificationListener();
 
     if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
       app.listen(PORT, '0.0.0.0', () => {

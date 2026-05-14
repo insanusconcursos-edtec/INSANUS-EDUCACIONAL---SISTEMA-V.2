@@ -215,6 +215,24 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 
     const result = response.data;
     
+    // 1. Salvar na coleção 'orders' para acionar o gatilho de notificação Push (PIX Emitido)
+    try {
+      await dbAdmin.collection('orders').doc(result.id).set({
+        id: result.id,
+        status: result.status,
+        payment_method: paymentMethod,
+        transaction_amount: amountCents,
+        description: orderData.description || 'VibeCode Digital',
+        split: splitArray,
+        customer: payload.customer,
+        metadata: payload.metadata,
+        createdAt: new Date().toISOString()
+      });
+      console.log(`[Push Trigger] Ordem ${result.id} salva na coleção 'orders' (Status: ${result.status})`);
+    } catch (dbErr) {
+      console.error('[Push Trigger] Erro ao salvar na coleção orders:', dbErr);
+    }
+    
     // Auditoria Firestore (KEEP)
     await dbAdmin.collection('audit_splits').add({
       status: 'success',
@@ -251,6 +269,18 @@ export const handlePagarmeWebhook = async (payload: any) => {
   
   if (payload.type === 'order.paid') {
     const orderData = payload.data;
+    const { dbAdmin } = getAdminConfig();
+
+    // Atualizar status na coleção 'orders' para acionar o gatilho de notificação Push (Sucesso)
+    try {
+      await dbAdmin.collection('orders').doc(orderData.id).update({
+        status: 'paid',
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('[Push Trigger] Erro ao atualizar status da ordem no Firestore:', err);
+    }
+
     const email = orderData.customer?.email;
     const productId = orderData.metadata?.courseId || orderData.metadata?.productId;
 
