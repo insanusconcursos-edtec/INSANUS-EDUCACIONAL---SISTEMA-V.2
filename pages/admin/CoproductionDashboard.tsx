@@ -525,11 +525,26 @@ const CoproductionDashboard: React.FC = () => {
       if (selectedProductId !== 'all' && comm.courseId !== selectedProductId) return;
 
       // Match commission with coproducer
-      const gainObj = map.get(comm.coproducerId);
-      if (gainObj) {
-        gainObj.totalGained += comm.commissionValue;
-        gainObj.salesCount += 1;
+      let gainObj = map.get(comm.coproducerId);
+      
+      // Se não estiver no mapa (ex: parceiro antigo ou ID não mapeado), adiciona dinamicamente
+      if (!gainObj) {
+        const knownUser = coproducerUsers.find(u => u.uid === comm.coproducerId);
+        const managed = managedCoproducers.find(m => m.id === comm.coproducerId);
+        
+        gainObj = {
+          id: comm.coproducerId,
+          name: comm.coproducerName || knownUser?.name || managed?.name || 'Parceiro (ID)',
+          email: knownUser?.email || managed?.email || 'N/A',
+          totalGained: 0,
+          salesCount: 0
+        };
+        map.set(comm.coproducerId, gainObj);
       }
+
+      const val = Number(comm.commissionValue) || 0;
+      gainObj.totalGained += val;
+      gainObj.salesCount += 1;
     });
 
     // 3. Ordenação: Maior faturamento primeiro
@@ -555,8 +570,8 @@ const CoproductionDashboard: React.FC = () => {
       return matchProduct && matchDate;
     });
 
-    const total = relevantComms.reduce((acc, c) => acc + c.commissionValue, 0);
-    const prevTotal = prevComms.reduce((acc, c) => acc + c.commissionValue, 0);
+    const total = relevantComms.reduce((acc, c) => acc + (Number(c.commissionValue) || 0), 0);
+    const prevTotal = prevComms.reduce((acc, c) => acc + (Number(c.commissionValue) || 0), 0);
     
     const growth = prevTotal === 0 
       ? (total > 0 ? 100 : 0) 
@@ -612,7 +627,7 @@ const CoproductionDashboard: React.FC = () => {
 
       const dateStr = new Date(c.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       if (days[dateStr] !== undefined) {
-        days[dateStr] += c.commissionValue / 100;
+        days[dateStr] += (Number(c.commissionValue) || 0) / 100;
       }
     });
 

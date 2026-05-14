@@ -96,7 +96,7 @@ const AdminLayout: React.FC = () => {
       groups[1].items.push({ label: 'Meu Desempenho', path: '/admin/afiliado' });
     }
     if (isAdmin || perms.vendas) {
-      groups[1].items.push({ label: 'RELATÓRIO DE COPRODUÇÃO', path: '/admin/coproducao' });
+      groups[1].items.push({ label: 'RELATÓRIO DE COPRODUÇÃO', path: '/comercial/coprodutor/dashboard' });
     }
 
     // ADMINISTRATIVO Group

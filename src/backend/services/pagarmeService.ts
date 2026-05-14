@@ -389,17 +389,31 @@ async function recordAffiliateCommission(orderData: any) {
     if (percent <= 0) return;
 
     const amount = orderData.amount;
-    const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
+    const paymentMethod = orderData.charges?.[0]?.payment_method || orderData.payment_method || 'pix';
     const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
     const fees = calculatePagarmeFees(amount, paymentMethod, installments);
     const netCommission = Math.floor((amount - fees) * (percent / 100));
 
+    // Captura dados do cliente para o relatório
+    const customer = orderData.customer || {};
+    let phone = metadata.userPhone || customer.phones?.mobile_phone?.number || 'N/A';
+    if (customer.phones?.mobile_phone) {
+      const mp = customer.phones.mobile_phone;
+      phone = `+${mp.country_code}${mp.area_code}${mp.number}`;
+    }
+
     await dbAdmin.collection('affiliate_commissions').add({
       affiliateId,
       orderId: orderData.id,
+      orderCode: orderData.code || 'N/A',
       courseId: productId,
+      courseName: pData.name || 'Produto',
       commissionEarned: netCommission,
       grossValue: amount,
+      paymentMethod: paymentMethod,
+      customerName: customer.name || 'Cliente',
+      customerEmail: customer.email || 'N/A',
+      customerPhone: phone,
       createdAt: new Date().toISOString()
     });
 
@@ -586,14 +600,27 @@ async function recordCoproductionCommissions(orderData: any) {
         }
 
         if (commissionValue > 0) {
+          // Captura dados do cliente para o relatório
+          const customer = orderData.customer || {};
+          let phone = metadata.userPhone || customer.phones?.mobile_phone?.number || 'N/A';
+          if (customer.phones?.mobile_phone) {
+            const mp = customer.phones.mobile_phone;
+            phone = `+${mp.country_code}${mp.area_code}${mp.number}`;
+          }
+
           await dbAdmin.collection('coproduction_commissions').add({
             coproducerId: identifier,
             recipientId: recipientId,
             orderId: orderData.id,
+            orderCode: orderData.code || 'N/A',
             courseId: productId,
             courseName: pData.name || 'Produto',
             commissionValue: commissionValue, 
             grossValue: amountCents,
+            paymentMethod: orderData.charges?.[0]?.payment_method || orderData.payment_method || 'pix',
+            customerName: customer.name || 'Cliente',
+            customerEmail: customer.email || 'N/A',
+            customerPhone: phone,
             createdAt: new Date().toISOString(),
             status: 'paid'
           });
@@ -639,13 +666,26 @@ async function recordCoproductionCommissions(orderData: any) {
       if (identifier && percentage > 0) {
         const commissionValue = Math.floor(poolForCopro * (percentage / 100));
         
+        // Captura dados do cliente para o relatório fallback
+        const customer = orderData.customer || {};
+        let phone = metadata.userPhone || customer.phones?.mobile_phone?.number || 'N/A';
+        if (customer.phones?.mobile_phone) {
+          const mp = customer.phones.mobile_phone;
+          phone = `+${mp.country_code}${mp.area_code}${mp.number}`;
+        }
+
         await dbAdmin.collection('coproduction_commissions').add({
           coproducerId: identifier,
           orderId: orderData.id,
+          orderCode: orderData.code || 'N/A',
           courseId: productId,
           courseName: pData.name || 'Produto',
           commissionValue: commissionValue, 
           grossValue: amountCents,
+          paymentMethod: paymentMethod,
+          customerName: customer.name || 'Cliente',
+          customerEmail: customer.email || 'N/A',
+          customerPhone: phone,
           createdAt: new Date().toISOString(),
           status: 'paid'
         });

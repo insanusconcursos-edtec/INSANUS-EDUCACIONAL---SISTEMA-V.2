@@ -217,13 +217,6 @@ const LoginPage: React.FC = () => {
         </form>
 
         <div className="mt-12 flex flex-col items-center gap-6">
-          <button 
-            onClick={handleSeed}
-            disabled={isSeeding}
-            className="text-[10px] text-zinc-800 hover:text-brand-red transition-colors font-mono"
-          >
-            {isSeeding ? 'Criando usuários...' : '[DEV] Configuração Inicial (Seed)'}
-          </button>
 
           <button className="text-[10px] text-zinc-600 font-bold hover:text-white transition-colors uppercase tracking-widest">
             Não tem acesso ou esqueceu a senha?
