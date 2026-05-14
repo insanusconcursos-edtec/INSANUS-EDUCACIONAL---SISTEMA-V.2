@@ -11,19 +11,16 @@ const MASTER_RECIPIENT_ID = 're_cmouicmz204gz0l9tyr4jkmut';
  * Helper para Autenticação Basic com Base64
  * Padrão Pagar.me: Basic base64(sk_test_...:)
  */
-const getHeaders = () => {
+export const getHeaders = () => {
   const secretKey = (process.env.PAGARME_SECRET_KEY || '').trim();
   if (!secretKey) throw new Error('PAGARME_SECRET_KEY não encontrada no ambiente.');
   
   const auth = Buffer.from(`${secretKey}:`).toString('base64');
-  const headers = {
+  return {
     'Authorization': `Basic ${auth}`,
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   };
-
-  console.log(`>>>> [PAGARME V5 HEADERS] Target: ${PAGARME_BASE_URL} | Type: application/json`);
-  return headers;
 };
 
 /**
@@ -170,17 +167,18 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     },
     payments: [{
       payment_method: paymentMethod,
-      // REDUNDÂNCIA V5: Injetando split no root do pagamento
+      // REDUNDÂNCIA MÁXIMA V5: Injetando split e splits no root do pagamento
       split: splitArray, 
+      splits: splitArray,
       pix: paymentMethod === 'pix' ? {
         expires_in: 1800,
-        // CHAVE PLURAL: Alterado para 'splits' conforme solicitação definitiva
+        split: splitArray,
         splits: splitArray 
       } : undefined,
       credit_card: paymentMethod === 'credit_card' ? {
         installments: orderData.installments || 1,
         statement_descriptor: 'VIBECODE',
-        // CHAVE PLURAL: Alterado para 'splits' no cartão também
+        split: splitArray,
         splits: splitArray,
         card: {
           token: orderData.card_token || undefined,
@@ -333,6 +331,7 @@ async function recordCoproductionCommissions(orderData: any) {
   const { dbAdmin } = getAdminConfig();
   const metadata = orderData.metadata || {};
   const productId = metadata.courseId || metadata.productId;
+  const offerId = metadata.offerId;
 
   if (!productId) return;
 
@@ -341,17 +340,45 @@ async function recordCoproductionCommissions(orderData: any) {
     if (!productDoc.exists) return;
 
     const pData = productDoc.data();
-    const coproducers = pData?.coproduction || [];
+    const offersArray = pData?.offers || [];
+    const currentOffer = offersArray.find((o: any) => String(o.id) === String(offerId));
+    
+    // Regras de Split (Sincronizado com createPagarmeOrder)
+    const coproducers = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
+
+    const amountCents = orderData.amount;
+    const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
+    const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
+    const fees = calculatePagarmeFees(amountCents, paymentMethod, installments);
+    const pool = amountCents - fees;
+
+    // Cálculo do Afiliado (se houver) para deduzir do pool
+    let affiliatePercent = 0;
+    if (currentOffer && currentOffer.isAffiliationEnabled) {
+      affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
+    }
+    const distributedAffiliate = Math.floor(pool * (affiliatePercent / 100));
+    const poolForCopro = pool - distributedAffiliate;
 
     for (const copro of coproducers) {
-      const userId = copro.userId || copro.id;
-      if (userId) {
+      const userId = copro.userId || copro.id || copro.coproducerId;
+      const percentage = Number(copro.percentage) || 0;
+      
+      if (userId && percentage > 0) {
+        const commissionValue = Math.floor(poolForCopro * (percentage / 100));
+        
         await dbAdmin.collection('coproduction_commissions').add({
           coproducerId: userId,
           orderId: orderData.id,
-          value: 0, // Cálculo simplificado para log
-          createdAt: new Date().toISOString()
+          courseId: productId,
+          courseName: pData.name || 'Produto',
+          commissionValue: commissionValue, // Usando o nome que o Dashboard espera
+          grossValue: amountCents,
+          createdAt: new Date().toISOString(),
+          status: 'paid'
         });
+        
+        console.log(`[SPLIT LOG] Comissão gravada para ${userId}: R$ ${commissionValue/100}`);
       }
     }
   } catch (e) {
@@ -366,7 +393,29 @@ export const getPagarmeOrderStatus = async (orderId: string) => {
 };
 
 export const getPagarmeRecipientBalance = async (recipientId: string) => {
-  const response = await axios.get(`${PAGARME_BASE_URL}/recipients/${recipientId}/balance`, { headers: getHeaders() });
+  try {
+    const url = `${PAGARME_BASE_URL}/recipients/${recipientId}/balance`;
+    const response = await axios.get(url, { headers: getHeaders() });
+    const data = response.data;
+    
+    return {
+      available: data.available_amount || 0,
+      waiting_funds: data.waiting_funds_amount || 0,
+      transferred: data.transferred_amount || 0,
+      recipient_name: data.recipient?.name || ''
+    };
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      console.warn(`[PAGARME] Saldo não encontrado para recebedor ${recipientId} (404)`);
+    } else {
+      console.error(`[PAGARME] Erro ao buscar saldo de ${recipientId}:`, error.message);
+    }
+    throw error;
+  }
+};
+
+export const getPagarmeRecipients = async () => {
+  const response = await axios.get(`${PAGARME_BASE_URL}/recipients`, { headers: getHeaders() });
   return response.data;
 };
 

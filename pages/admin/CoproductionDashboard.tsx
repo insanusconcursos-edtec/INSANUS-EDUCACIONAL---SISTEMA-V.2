@@ -26,7 +26,9 @@ import {
   Calendar,
   ChevronDown,
   Smartphone,
-  Download
+  Download,
+  X,
+  Check
 } from 'lucide-react';
 import { 
   XAxis, 
@@ -84,7 +86,7 @@ const CoproductionDashboard: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [balance, setBalance] = useState<{ available: number; waiting_funds: number } | null>(null);
+  const [balance, setBalance] = useState<{ available: number; waiting_funds: number; recipient_name?: string } | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
@@ -92,6 +94,8 @@ const CoproductionDashboard: React.FC = () => {
   const [payoutMessage, setPayoutMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const isCoprodutorRole = userRole === 'COPRODUTOR';
+  const [editingRecipientId, setEditingRecipientId] = useState(false);
+  const [newRecipientId, setNewRecipientId] = useState('');
 
   const { isInstallable, installApp } = usePWAInstall();
 
@@ -138,19 +142,51 @@ const CoproductionDashboard: React.FC = () => {
   };
 
   const fetchBalance = async (recipientId: string) => {
-    if (!recipientId || recipientId === 'undefined') return;
+    if (!recipientId || recipientId === 'undefined' || recipientId === 'null' || loadingBalance) return;
     
     setLoadingBalance(true);
     try {
       const response = await fetch(`/api/payments/pagarme/balance?recipientId=${recipientId}`);
+      if (!response.ok) throw new Error('Falha ao buscar saldo');
       const data = await response.json();
       
       if (data.success && data.balance) {
         setBalance(data.balance);
-        console.log(`[CARTEIRA] Saldo real sincronizado: R$ ${data.balance.available / 100}`);
       }
     } catch (err) {
       console.error('Error fetching real-time balance:', err);
+    } finally {
+      setLoadingBalance(false);
+    }
+  };
+
+  const handleUpdateRecipientId = async () => {
+    if (!newRecipientId || !currentUser) return;
+    
+    try {
+      setLoadingBalance(true);
+      const response = await fetch('/api/users/profile/pagarme', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          uid: currentUser.uid,
+          pagarmeRecipientId: newRecipientId.trim()
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        toast.success('ID Pagar.me atualizado com sucesso!');
+        setUserProfile((prev: any) => ({ ...prev, pagarmeRecipientId: newRecipientId.trim() }));
+        setEditingRecipientId(false);
+        fetchBalance(newRecipientId.trim());
+      } else {
+        toast.error('Erro ao atualizar ID: ' + (data.error || 'Erro desconhecido'));
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao atualizar ID.');
     } finally {
       setLoadingBalance(false);
     }
@@ -630,9 +666,46 @@ const CoproductionDashboard: React.FC = () => {
               </h1>
               <p className="text-gray-400 text-xs md:text-sm font-medium">Acompanhe seus ganhos e saldo em tempo real.</p>
             </div>
-            <div className="hidden md:flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 rounded-xl border border-[#222]">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Sincronizado Pagar.me</span>
+            <div className="flex items-center gap-3">
+              {editingRecipientId ? (
+                <div className="flex items-center gap-2 bg-zinc-900 p-1 rounded-xl border border-zinc-800 animate-in slide-in-from-right-4">
+                  <input 
+                    type="text"
+                    value={newRecipientId}
+                    onChange={(e) => setNewRecipientId(e.target.value)}
+                    placeholder="re_..."
+                    className="bg-transparent border-none text-xs text-white px-3 py-1.5 focus:outline-none w-40 font-mono"
+                    autoFocus
+                  />
+                  <button 
+                    onClick={handleUpdateRecipientId}
+                    className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button 
+                    onClick={() => setEditingRecipientId(false)}
+                    className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-gray-400 rounded-lg transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setNewRecipientId(userProfile?.pagarmeRecipientId || '');
+                    setEditingRecipientId(true);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all hover:scale-105 active:scale-95 ${userProfile?.pagarmeRecipientId ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${userProfile?.pagarmeRecipientId ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                  <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest">
+                    {userProfile?.pagarmeRecipientId ? (
+                      balance?.recipient_name ? `PAGAR.ME: ${balance.recipient_name.toUpperCase()}` : `PAGAR.ME: ${userProfile.pagarmeRecipientId}`
+                    ) : 'CONECTAR CARTEIRA PAGAR.ME'}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -720,6 +793,8 @@ const CoproductionDashboard: React.FC = () => {
             <h3 className="text-2xl font-black text-green-400 tracking-tighter">
               {loadingBalance ? (
                 <span className="text-xs font-medium animate-pulse text-gray-500">Sincronizando...</span>
+              ) : !userProfile?.pagarmeRecipientId ? (
+                <span className="text-xs font-medium text-red-500/50">Configure seu ID</span>
               ) : formatCurrency((balance?.available || 0) / 100)}
             </h3>
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
@@ -741,6 +816,8 @@ const CoproductionDashboard: React.FC = () => {
             <h3 className="text-2xl font-black text-amber-400 tracking-tighter">
               {loadingBalance ? (
                 <span className="text-xs font-medium animate-pulse text-gray-500">Calculando...</span>
+              ) : !userProfile?.pagarmeRecipientId ? (
+                <span className="text-xs font-medium text-red-500/50">Configure seu ID</span>
               ) : formatCurrency((balance?.waiting_funds || 0) / 100)}
             </h3>
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">

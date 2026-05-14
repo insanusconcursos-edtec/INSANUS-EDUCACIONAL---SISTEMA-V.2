@@ -7,7 +7,7 @@ import { fetchPandaVideoTranscription } from './src/backend/services/pandaVideoS
 import { generateStudyMaterial } from './src/backend/services/geminiService.js';
 import { getAdminConfig } from './src/backend/services/firebaseAdmin.js';
 import { provisionExternalPurchase, revokePurchase } from './src/backend/services/provisioningService.js';
-import { createPagarmeOrder, handlePagarmeWebhook, getPagarmeOrderStatus, requestPagarmeTransfer, getPagarmeRecipientBalance } from './src/backend/services/pagarmeService.js';
+import { createPagarmeOrder, handlePagarmeWebhook, getPagarmeOrderStatus, requestPagarmeTransfer, getPagarmeRecipientBalance, getPagarmeRecipients } from './src/backend/services/pagarmeService.js';
 
 process.stdout.write(">>>> [SISTEMA] SERVIDOR INICIALIZADO COM SUCESSO <<<<\n");
 
@@ -557,6 +557,37 @@ async function setupVite(app: any) {
     }
   });
 
+  // Rota para o próprio coprodutor atualizar seu ID da Pagar.me
+  app.put('/api/users/profile/pagarme', async (req, res) => {
+    try {
+      const { dbAdmin } = getAdminConfig();
+      const { uid, pagarmeRecipientId } = req.body;
+      
+      if (!uid || !pagarmeRecipientId) {
+        return res.status(400).json({ success: false, error: 'UID e RecipientID são obrigatórios' });
+      }
+
+      const updateData = {
+        pagarmeRecipientId: pagarmeRecipientId.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await dbAdmin.collection('users').doc(uid).update(updateData);
+      
+      // Sincronizar com a coleção de coprodutores se existir
+      const coproRef = dbAdmin.collection('coproducers').doc(uid);
+      const coproDoc = await coproRef.get();
+      if (coproDoc.exists) {
+        await coproRef.update(updateData);
+      }
+
+      return res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error("Erro ao atualizar ID Pagar.me do perfil:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Rota de Explorer do Panda (Pastas e Vídeos Hierárquicos)
   app.get('/api/panda-explorer', async (req, res) => {
     try {
@@ -748,7 +779,7 @@ async function setupVite(app: any) {
 
       return res.status(200).json({ success: true, payment: response });
     } catch (error: any) {
-      console.error("❌ Erro Crítico Pagarme Route:", error);
+      console.error("❌ Erro Crítico Pagarme Route:", error.message);
       return res.status(400).json({ 
         success: false, 
         message: error.message || "Erro ao processar pagamento na Pagar.me"
@@ -769,9 +800,20 @@ async function setupVite(app: any) {
         status: order.status, // 'paid', 'pending', 'canceled', etc.
         order 
       });
-    } catch (error) {
-      console.error("Erro ao consultar status Pagar.me:", error);
+    } catch (error: any) {
+      console.error("Erro ao consultar status Pagar.me:", error.message);
       return res.status(500).json({ success: false, error: 'Internal Server Error' });
+    }
+  });
+
+  // Diagnostic route to list recipients
+  app.get('/api/payments/pagarme/recipients', async (req, res) => {
+    try {
+      const data = await getPagarmeRecipients();
+      return res.status(200).json({ success: true, recipients: data.data || data });
+    } catch (error: any) {
+      console.error("Erro ao listar recebedores Pagar.me:", error.message);
+      return res.status(500).json({ success: false, error: error.message });
     }
   });
 
@@ -787,7 +829,7 @@ async function setupVite(app: any) {
       const balance = await getPagarmeRecipientBalance(recipientId);
       return res.status(200).json({ success: true, balance });
     } catch (error: any) {
-      console.error("Erro ao consultar saldo Pagar.me:", error);
+      console.error("Erro ao consultar saldo Pagar.me:", error.message);
       return res.status(500).json({ success: false, error: error.message || 'Erro interno no servidor' });
     }
   });
@@ -804,7 +846,7 @@ async function setupVite(app: any) {
       const transfer = await requestPagarmeTransfer(recipientId, amount);
       return res.status(200).json({ success: true, transfer });
     } catch (error: any) {
-      console.error("Erro ao solicitar saque Pagar.me:", error);
+      console.error("Erro ao solicitar saque Pagar.me:", error.message);
       return res.status(500).json({ success: false, error: error.message || 'Erro interno no servidor' });
     }
   });
