@@ -20,6 +20,7 @@ interface UserData {
   phone?: string;
   photoURL?: string;
   access?: unknown[];
+  allowManualGeneration?: boolean;
 }
 
 interface AuthContextType {

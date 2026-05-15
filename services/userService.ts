@@ -57,6 +57,7 @@ export interface Student {
   photoURL?: string;
   photoUrl?: string;
   photo?: string;
+  allowManualGeneration?: boolean;
   access: AccessItem[];
   products?: AccessItem[]; // Array of products (combos) released to the user
   courses?: UserCourseAccess[]; // Separate array for Online Courses (Legacy/Alternative)

@@ -24,8 +24,10 @@ import {
   ShieldCheck,
   Zap,
   Info,
-  BarChart
+  BarChart,
+  Lock
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { 
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
 } from 'recharts';
@@ -168,6 +170,27 @@ export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, link
     if (newSet.has(groupId)) newSet.delete(groupId);
     else newSet.add(groupId);
     setExpandedGroups(newSet);
+  };
+
+  const handleToggleManualGeneration = async (student: Student, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newValue = !student.allowManualGeneration;
+    try {
+        await updateStudent(student.uid, { allowManualGeneration: newValue });
+        
+        if (selectedStudent?.uid === student.uid) {
+            setSelectedStudent(prev => prev ? { ...prev, allowManualGeneration: newValue } : null);
+        }
+
+        toast.success(
+            newValue 
+                ? `Geração manual LIBERADA para ${student.name}` 
+                : `Geração manual BLOQUEADA para ${student.name}`,
+            { icon: newValue ? '🔓' : '🔒' }
+        );
+    } catch (error) {
+        toast.error("Erro ao atualizar permissão");
+    }
   };
 
   // Fetch Rank for the selected attempt
@@ -774,8 +797,22 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                                               </span>
                                             </td>
                                             <td className="px-8 py-3 text-right">
-                                              <div className="inline-flex items-center justify-center p-2 rounded-xl bg-zinc-800 text-zinc-500 group-hover:bg-yellow-400 group-hover:text-black transition-all transform active:scale-90">
-                                                <ChevronRight size={16} />
+                                              <div className="flex items-center justify-end gap-2">
+                                                <button 
+                                                  onClick={(e) => handleToggleManualGeneration(student, e)}
+                                                  title={student.allowManualGeneration ? "Bloquear Geração Manual" : "Liberar Geração Manual"}
+                                                  className={`p-2 rounded-xl border transition-all ${
+                                                    student.allowManualGeneration 
+                                                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                                                      : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                                                  }`}
+                                                >
+                                                  <Lock size={14} className={student.allowManualGeneration ? 'animate-pulse' : ''} />
+                                                </button>
+
+                                                <div className="inline-flex items-center justify-center p-2 rounded-xl bg-zinc-800 text-zinc-500 group-hover:bg-yellow-400 group-hover:text-black transition-all transform active:scale-90">
+                                                  <ChevronRight size={16} />
+                                                </div>
                                               </div>
                                             </td>
                                           </tr>
@@ -825,6 +862,19 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                        <span className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-500 uppercase tracking-widest">
                          <CheckCircle2 size={12} /> Aluno Ativo
                        </span>
+
+                       {/* NOVO: BOTÃO DE BLOQUEIO NA DASHBOARD */}
+                       <button 
+                          onClick={(e) => handleToggleManualGeneration(selectedStudent!, e)}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                            selectedStudent?.allowManualGeneration 
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                          }`}
+                        >
+                          <Lock size={12} className={selectedStudent?.allowManualGeneration ? 'animate-pulse' : ''} />
+                          {selectedStudent?.allowManualGeneration ? 'Geração Manual: Liberada' : 'Geração Manual: Bloqueada'}
+                       </button>
                     </div>
                   </div>
                 </div>

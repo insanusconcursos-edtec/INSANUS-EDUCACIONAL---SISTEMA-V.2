@@ -22,7 +22,8 @@ const PlanForm: React.FC<PlanFormProps> = ({ isOpen, onClose, planToEdit, catego
     organ: '',
     purchaseLink: '',
     linkedSimuladoClassId: '', // NOVO: Campo de vínculo
-    linkedMentors: [] as string[]
+    linkedMentors: [] as string[],
+    isGenerationBlocked: false
   });
   
   // Estado para lidar com upload
@@ -53,7 +54,8 @@ const PlanForm: React.FC<PlanFormProps> = ({ isOpen, onClose, planToEdit, catego
         organ: planToEdit.organ,
         purchaseLink: planToEdit.purchaseLink,
         linkedSimuladoClassId: planToEdit.linkedSimuladoClassId || '',
-        linkedMentors: planToEdit.linkedMentors || []
+        linkedMentors: planToEdit.linkedMentors || [],
+        isGenerationBlocked: planToEdit.isGenerationBlocked || false
       });
       setPreviewUrl(planToEdit.imageUrl);
       setSelectedFile(null);
@@ -66,7 +68,8 @@ const PlanForm: React.FC<PlanFormProps> = ({ isOpen, onClose, planToEdit, catego
         organ: '',
         purchaseLink: '',
         linkedSimuladoClassId: '',
-        linkedMentors: []
+        linkedMentors: [],
+        isGenerationBlocked: false
       });
       setPreviewUrl('');
       setSelectedFile(null);
@@ -80,8 +83,13 @@ const PlanForm: React.FC<PlanFormProps> = ({ isOpen, onClose, planToEdit, catego
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target as any;
+    if (type === 'checkbox') {
+        const checked = (e.target as HTMLInputElement).checked;
+        setFormData(prev => ({ ...prev, [name]: checked }));
+    } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const toggleMentor = (mentorId: string) => {
@@ -348,6 +356,26 @@ const PlanForm: React.FC<PlanFormProps> = ({ isOpen, onClose, planToEdit, catego
                 placeholder="https://..."
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-xs text-white placeholder-zinc-700 focus:outline-none focus:border-brand-red"
             />
+          </div>
+
+          {/* NOVO: BLOQUEIO DE GERAÇÃO */}
+          <div className="bg-red-950/20 border border-red-900/30 p-4 rounded-xl flex items-center justify-between gap-4">
+              <div className="flex-1">
+                  <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest">Bloqueio de Cronograma</h4>
+                  <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                      Se ativado, nenhum aluno poderá gerar novos cronogramas para este plano.
+                  </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                      type="checkbox" 
+                      name="isGenerationBlocked"
+                      checked={formData.isGenerationBlocked}
+                      onChange={handleChange}
+                      className="sr-only peer" 
+                  />
+                  <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-red"></div>
+              </label>
           </div>
 
           <div className="pt-4">

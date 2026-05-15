@@ -45,6 +45,7 @@ export interface Plan {
   linkedSimuladoClassId?: string;
   simuladosVinculados?: string[];
   linkedMentors?: string[]; // IDs dos mentores vinculados
+  isGenerationBlocked?: boolean;
   createdAt?: any;
   lastModifiedAt?: any;
   lastSyncedAt?: any;

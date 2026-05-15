@@ -100,6 +100,22 @@ const StudentManager: React.FC = () => {
     setManagingAccessStudent(student);
   };
 
+  const handleToggleManualGeneration = async (student: Student) => {
+    const newValue = !student.allowManualGeneration;
+    try {
+        await updateStudent(student.uid, { allowManualGeneration: newValue });
+        setStudents(prev => prev.map(s => s.uid === student.uid ? { ...s, allowManualGeneration: newValue } : s));
+        toast.success(
+            newValue 
+                ? `Geração manual LIBERADA para ${student.name}` 
+                : `Geração manual BLOQUEADA para ${student.name}`,
+            { icon: newValue ? '🔓' : '🔒' }
+        );
+    } catch (error) {
+        toast.error("Erro ao atualizar permissão");
+    }
+  };
+
   const handleRequestPasswordReset = (student: Student, e: React.MouseEvent) => {
     e.stopPropagation();
     setStudentToReset(student);
@@ -444,6 +460,18 @@ const StudentManager: React.FC = () => {
                                         onClick={() => handleManageAccess(student)}
                                     >
                                         <Key size={14} />
+                                    </button>
+
+                                    <button 
+                                        className={`p-2 border rounded-lg transition-all ${
+                                            student.allowManualGeneration 
+                                                ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-500' 
+                                                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                                        }`}
+                                        title={student.allowManualGeneration ? "Bloquear Geração Manual" : "Liberar Geração Manual"}
+                                        onClick={() => handleToggleManualGeneration(student)}
+                                    >
+                                        <Lock size={14} className={student.allowManualGeneration ? 'animate-pulse' : ''} />
                                     </button>
                                     
                                     {/* Password Reset Button (Fixed with Modal) */}

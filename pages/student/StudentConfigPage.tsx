@@ -5,7 +5,7 @@ import {
   CheckCircle, Clock, Zap, BookOpen, 
   Layout, Search, Filter, Building2,
   PlayCircle, FileText, Scale, Loader2,
-  Maximize, CalendarClock
+  Maximize, CalendarClock, Lock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -21,6 +21,8 @@ import Loading from '../../components/ui/Loading';
 import PlanControlPanel from '../../components/student/config/PlanControlPanel';
 import WeeklyPlannerModal, { RoutineTemplate } from '../../components/student/config/WeeklyPlannerModal';
 
+import { toast } from 'react-hot-toast';
+
 const DAYS_OF_WEEK = [
   { id: 0, label: 'Domingo' },
   { id: 1, label: 'Segunda' },
@@ -32,7 +34,7 @@ const DAYS_OF_WEEK = [
 ];
 
 const StudentConfigPage: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const navigate = useNavigate();
   
   // Data State
@@ -178,6 +180,17 @@ const StudentConfigPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!currentUser || !selectedPlanId) return;
+
+    // NOVO: Verificação de bloqueio
+    const selectedPlan = plans.find(p => p.id === selectedPlanId);
+    if (selectedPlan?.isGenerationBlocked && !userData?.allowManualGeneration) {
+        toast.error("O plano está em manutenção técnica. Geração bloqueada pelo administrador.", {
+            icon: '🛠️',
+            duration: 4000
+        });
+        return;
+    }
+
     setSaving(true);
     setGeneratingMessage("Salvando preferências...");
 
@@ -208,6 +221,10 @@ const StudentConfigPage: React.FC = () => {
       setGeneratingMessage("");
     }
   };
+
+  // FAB Lock Logic
+  const selectedPlan = plans.find(p => p.id === selectedPlanId);
+  const isGenerationLocked = selectedPlan?.isGenerationBlocked && !userData?.allowManualGeneration;
 
   if (loading) return <Loading />;
 
@@ -637,12 +654,20 @@ const StudentConfigPage: React.FC = () => {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent z-50 flex justify-center pointer-events-none">
         <button 
           onClick={checkPlanChangeAndSave}
-          disabled={!selectedPlanId || saving}
-          className="pointer-events-auto shadow-2xl shadow-brand-red/40 bg-brand-red hover:bg-red-600 text-white text-sm font-black uppercase tracking-widest py-4 px-10 rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+          disabled={!selectedPlanId || saving || isGenerationLocked}
+          className={`pointer-events-auto shadow-2xl text-white text-sm font-black uppercase tracking-widest py-4 px-10 rounded-full transition-all flex items-center gap-3 ${
+            isGenerationLocked 
+              ? 'bg-zinc-800 border border-zinc-700 cursor-not-allowed opacity-100 shadow-none' 
+              : 'shadow-brand-red/40 bg-brand-red hover:bg-red-600 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+          }`}
         >
           {saving ? (
             <>
                 <Loader2 size={18} className="animate-spin" /> {generatingMessage || 'Salvando...'}
+            </>
+          ) : isGenerationLocked ? (
+            <>
+              <Lock size={18} className="text-zinc-500" /> BLOQUEADO PELO ADMINISTRADOR - AGUARDE LIBERAÇÃO
             </>
           ) : (
             <>
