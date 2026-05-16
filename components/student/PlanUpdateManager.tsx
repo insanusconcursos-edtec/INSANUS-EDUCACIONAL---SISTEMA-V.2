@@ -1,19 +1,22 @@
 
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { syncStudentPlan } from '../../services/syncService';
 import { Student } from '../../services/userService';
-import { RefreshCw, Zap, Loader2, Info } from 'lucide-react';
+import { RefreshCw, Zap, Loader2, Info, CalendarClock, ArrowRight } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const PlanUpdateManager: React.FC = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const [hasUpdate, setHasUpdate] = useState(false);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [showRoutineRedirect, setShowRoutineRedirect] = useState(false);
 
   const [masterSync, setMasterSync] = useState<any>(null);
   const [userSync, setUserSync] = useState<any>(null);
@@ -109,19 +112,77 @@ const PlanUpdateManager: React.FC = () => {
       // Mas forçamos o close visualmente para feedback imediato
       setIsOpen(false);
       setHasUpdate(false);
-      
-      // Opcional: Recarregar a página para garantir que caches de query sejam limpos, 
-      // ou confiar na reatividade do React se os componentes estiverem ouvindo o banco.
-      // window.location.reload(); 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao sincronizar:", error);
-      alert("Houve um erro ao atualizar seu plano. Tente novamente.");
+      
+      const errorMessage = error?.message || "";
+      if (errorMessage.includes("Sua rotina semanal não tem nenhum tempo disponível") || 
+          errorMessage.includes("rotina") || 
+          errorMessage.includes("tempo disponível")) {
+        // Fluxo Amigável de Redirecionamento
+        setIsOpen(false);
+        setShowRoutineRedirect(true);
+      } else {
+        alert("Houve um erro ao atualizar seu plano. Tente novamente.");
+      }
     } finally {
       setIsSyncing(false);
     }
   };
 
-  if (!isOpen || !hasUpdate) return null;
+  if (!isOpen && !showRoutineRedirect) return null;
+
+  // Renderização do Modal de Redirecionamento (Rotina Vazia)
+  if (showRoutineRedirect) {
+    return createPortal(
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="relative w-full max-w-md bg-zinc-950 border border-brand-red/30 rounded-3xl shadow-[0_0_80px_rgba(220,38,38,0.2)] p-8 overflow-hidden text-center">
+          
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-red to-red-400"></div>
+
+          <div className="flex flex-col items-center gap-6 relative z-10">
+            <div className="w-20 h-20 rounded-full bg-brand-red/10 border-2 border-brand-red/30 flex items-center justify-center text-brand-red">
+              <CalendarClock size={40} />
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight">
+                Monte sua Rotina Primeiro! 📅
+              </h3>
+              <p className="text-zinc-400 text-sm leading-relaxed">
+                Para carregar suas metas personalizadas, precisamos saber seus horários disponíveis. Vamos montar sua rotina?
+              </p>
+            </div>
+
+            <div className="w-full space-y-3">
+               <button
+                onClick={() => {
+                  setShowRoutineRedirect(false);
+                  navigate('/app/config');
+                }}
+                className="w-full py-4 bg-white text-black font-black uppercase text-xs tracking-widest rounded-2xl shadow-[0_4px_20px_rgba(255,255,255,0.2)] transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+              >
+                Configurar Horários <ArrowRight size={16} />
+              </button>
+              
+              <button
+                onClick={() => setShowRoutineRedirect(false)}
+                className="w-full py-2 text-zinc-500 font-bold uppercase text-[10px] tracking-widest hover:text-zinc-300 transition-colors"
+              >
+                Fazer isso depois
+              </button>
+            </div>
+          </div>
+
+          {/* Decorative Elements */}
+          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-brand-red/5 rounded-full blur-3xl"></div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  if (!hasUpdate) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
