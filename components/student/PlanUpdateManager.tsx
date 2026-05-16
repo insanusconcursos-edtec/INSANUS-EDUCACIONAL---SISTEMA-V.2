@@ -24,8 +24,8 @@ const PlanUpdateManager: React.FC = () => {
     // 1. Monitorar Usuário para saber qual plano está ativo e qual a última sync dele
     const userUnsub = onSnapshot(doc(db, 'users', currentUser.uid), (userSnap) => {
       if (userSnap.exists()) {
-        const userData = userSnap.data() as Student & { currentPlanId?: string };
-        const activePlanId = userData.currentPlanId;
+        const userData = userSnap.data() as Student;
+        const activePlanId = userData.activePlanId || userData.currentPlanId;
         
         if (activePlanId) {
           setCurrentPlanId(activePlanId);

@@ -329,3 +329,21 @@ export const updateCategory = async (id: string, data: Partial<Category>) => {
 export const deleteCategory = async (id: string) => {
   await deleteDoc(doc(db, 'categories', id));
 };
+
+import { getStudentPlans } from './studentService';
+
+export const planService = {
+  touchPlan,
+  uploadPlanImage,
+  getPlans,
+  getPlanById,
+  createPlan,
+  updatePlan,
+  deletePlan,
+  duplicatePlan,
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getStudentPlans
+};

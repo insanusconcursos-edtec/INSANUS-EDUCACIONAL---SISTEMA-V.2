@@ -67,6 +67,7 @@ export interface Student {
   lifetimeMinutes?: number; // Tempo total acumulado na vida (minutos)
   studentLevel?: 'beginner' | 'intermediate' | 'advanced' | 'insane';
   currentPlanId?: string;
+  activePlanId?: string;
   planStats?: Record<string, { // Chave é o planId
     minutes: number;
     completedGoals?: number;
@@ -471,4 +472,26 @@ export const toggleCourseAccess = async (uid: string, courseAccess: UserCourseAc
     console.error("Erro ao atualizar acesso ao curso:", error);
     throw error;
   }
+};
+
+export const updateUserActivePlan = async (uid: string, planId: string) => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { 
+    activePlanId: planId,
+    updatedAt: serverTimestamp()
+  });
+};
+
+export const userService = {
+  createStudent,
+  updateStudent,
+  sendPasswordReset,
+  deleteStudent,
+  getStudents,
+  getStudentById,
+  grantStudentAccess,
+  revokeStudentAccess,
+  extendStudentAccess,
+  toggleCourseAccess,
+  updateUserActivePlan
 };

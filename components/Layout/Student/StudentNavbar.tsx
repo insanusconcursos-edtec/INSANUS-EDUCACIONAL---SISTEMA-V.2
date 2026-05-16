@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Clock, Timer, Target, CalendarDays, FileText, GraduationCap, Video, Settings, ChevronDown, Radio } from 'lucide-react';
-import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, getDoc } from 'firebase/firestore';
 import { db } from '../../../services/firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Student } from '../../../services/userService';
@@ -17,7 +17,7 @@ const StudentNavbar: React.FC = () => {
   const [planMinutes, setPlanMinutes] = useState(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [hasLiveEvent, setHasLiveEvent] = useState(false);
-  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -31,10 +31,10 @@ const StudentNavbar: React.FC = () => {
     const unsubLive = onSnapshot(q, (snapshot) => {
       const liveEvents = snapshot.docs.map(doc => doc.data() as LiveEvent);
       
-      // If we have currentPlanId, check if any live event is for this plan
-      if (currentPlanId) {
+      // If we have activePlanId, check if any live event is for this plan
+      if (activePlanId) {
         const isLiveForPlan = liveEvents.some(event => 
-          event.accessControl?.plans?.includes(currentPlanId)
+          event.accessControl?.plans?.includes(activePlanId)
         );
         setHasLiveEvent(isLiveForPlan);
       } else {
@@ -43,7 +43,7 @@ const StudentNavbar: React.FC = () => {
     });
 
     return () => unsubLive();
-  }, [currentUser, currentPlanId]);
+  }, [currentUser, activePlanId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -59,11 +59,13 @@ const StudentNavbar: React.FC = () => {
   const isSimulatedContext = location.pathname.includes('/app/simulated');
   const isCoursesContext = location.pathname.includes('/app/courses');
 
+  const [activePlanTitle, setActivePlanTitle] = useState<string | null>(null);
+
   useEffect(() => {
     if (!currentUser) return;
 
     // Listen to User Stats changes
-    const unsub = onSnapshot(doc(db, 'users', currentUser.uid), (docSnap) => {
+    const unsub = onSnapshot(doc(db, 'users', currentUser.uid), async (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data() as Student;
             
@@ -71,8 +73,20 @@ const StudentNavbar: React.FC = () => {
             setLifetimeMinutes(data.lifetimeMinutes || 0);
 
             // Current Plan Stats
-            const planId = data.currentPlanId;
-            setCurrentPlanId(planId || null);
+            const planId = data.activePlanId || data.currentPlanId;
+            setActivePlanId(planId || null);
+
+            if (planId) {
+                // If we don't have the title or the plan changed, fetch it
+                const planRef = doc(db, 'plans', planId);
+                const planSnap = await getDoc(planRef);
+                if (planSnap.exists()) {
+                    setActivePlanTitle(planSnap.data().title);
+                }
+            } else {
+                setActivePlanTitle(null);
+            }
+
             if (planId && data.planStats && data.planStats[planId]) {
                 setPlanMinutes(data.planStats[planId].minutes || 0);
             } else {
@@ -91,8 +105,9 @@ const StudentNavbar: React.FC = () => {
     return `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
   };
 
-  // Level 2 Nav Items (Plan Context Only)
-  const planNavItems = [
+  // Level 2 Nav Items
+  const allNavItems = [
+    { label: 'PLANOS', path: '/app/dashboard/planos', icon: <GraduationCap className="w-4 h-4" /> },
     { label: 'METAS DE HOJE', path: '/app/dashboard', icon: <Target className="w-4 h-4" /> },
     { label: 'CALENDÁRIO', path: '/app/calendar', icon: <CalendarDays className="w-4 h-4" /> },
     { label: 'EDITAL', path: '/app/edict', icon: <FileText className="w-4 h-4" /> },
@@ -130,6 +145,11 @@ const StudentNavbar: React.FC = () => {
     { label: 'CONFIGURAÇÃO', path: '/app/config', icon: <Settings className="w-4 h-4" /> },
   ];
 
+  // Filter based on active plan
+  const planNavItems = activePlanId 
+    ? allNavItems 
+    : allNavItems.filter(item => item.label === 'PLANOS');
+
   const currentItem = planNavItems.find(item => {
     if (item.path.includes('?tab=')) {
       return activeTab === item.path.split('=')[1];
@@ -146,7 +166,16 @@ const StudentNavbar: React.FC = () => {
     <div className="h-14 px-6 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-900 flex items-center justify-between sticky top-0 z-40">
       
       {/* LEVEL 2 NAVIGATION LINKS */}
-      <div className="flex-1 md:flex-none relative dropdown-container h-full flex items-center">
+      <div className="flex-1 md:flex-none relative dropdown-container h-full flex items-center gap-4">
+        {activePlanTitle && !isSimulatedContext && !isCoursesContext && (
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-red-600/10 border border-red-600/30 rounded-lg">
+            <div className="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse shadow-[0_0_5px_rgba(220,38,38,0.8)]" />
+            <span className="text-[9px] font-black text-red-600 uppercase tracking-widest truncate max-w-[200px]">
+              {activePlanTitle}
+            </span>
+          </div>
+        )}
+
         {!isSimulatedContext && !isCoursesContext && (
           <>
             {/* MOBILE DROPDOWN */}

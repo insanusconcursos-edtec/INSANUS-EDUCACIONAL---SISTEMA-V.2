@@ -22,7 +22,9 @@ export function CoursePlayerSidebar({
   completedLessons = []
 }: CoursePlayerSidebarProps) {
   // Helper para filtrar aulas
-  const getLessonsInFolder = (folderId: string) => structure.lessons.filter(l => l.subModuleId === folderId);
+  const getLessonsInFolder = (folderId: string) => structure.lessons
+    .filter(l => l.subModuleId === folderId)
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   // --- CÁLCULO MÓDULO (Local) ---
   const moduleTotal = structure.lessons.length;

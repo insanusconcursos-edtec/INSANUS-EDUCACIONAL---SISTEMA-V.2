@@ -22,16 +22,23 @@ interface UserData {
   access?: unknown[];
   allowManualGeneration?: boolean;
   currentPlanId?: string;
+  activePlanId?: string;
+  activeCourseId?: string;
   planId?: string;
+  permissions?: any;
+  planStats?: Record<string, any>;
+  routine?: any;
+  studyProfile?: any;
 }
 
 interface AuthContextType {
   currentUser: User | null;
   userRole: 'ADMIN' | 'STUDENT' | 'COLLABORATOR' | 'SELLER' | 'COPRODUTOR' | null;
-  userData: UserData | null; // Stores full firestore document data (permissions, etc)
+  userData: any | null; // Stores full firestore document data (permissions, etc)
   loading: boolean;
   login: (email: string, password: string) => Promise<UserCredential>;
   logout: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
   seedInitialUsers: () => Promise<void>;
 }
 
@@ -50,6 +57,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userRole, setUserRole] = useState<'ADMIN' | 'STUDENT' | 'COLLABORATOR' | 'SELLER' | 'COPRODUTOR' | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshUserData = async () => {
+    if (!currentUser) return;
+    try {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        setUserData(userDocSnap.data());
+      }
+    } catch (error) {
+      console.error("Error refreshing user data:", error);
+    }
+  };
 
   // Hardcoded admin email for this phase
   const ADMIN_EMAIL = 'insanusconcursos@gmail.com';
@@ -165,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     login,
     logout,
+    refreshUserData,
     seedInitialUsers
   };
 

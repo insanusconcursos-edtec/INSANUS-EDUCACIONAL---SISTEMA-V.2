@@ -41,7 +41,7 @@ import { subscribeToAnnouncements, Announcement } from '../../services/announcem
 import { AnnouncementPopUp } from '../../components/student/announcements/AnnouncementPopUp';
 
 const StudentDashboard: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const { openSpacedReviewModal } = useSpacedReviewModal();
   const { data: cachedData, setData: setCachedData } = useEdictData();
   const navigate = useNavigate();
@@ -95,6 +95,16 @@ const StudentDashboard: React.FC = () => {
   const [topicCompletionPayload, setTopicCompletionPayload] = useState<any>(null);
   const closedTopicModalsRef = React.useRef<Set<string>>(new Set());
   const prefetchPromiseRef = React.useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Se o aluno não tem plano ativo e não tem curso ativo, redireciona para seleção de planos
+    // Use userData?.activePlanId ou userData?.currentPlanId dependendo de como salvamos
+    if (!userData?.activePlanId && !userData?.currentPlanId && !userData?.activeCourseId) {
+      navigate('/app/dashboard/planos');
+    }
+  }, [userData, navigate, currentUser]);
 
   useEffect(() => {
     if (pendingTopicReview) {

@@ -2,6 +2,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useStudyContext } from '../../contexts/StudyContext';
 import { SystemLogo } from '../common/SystemLogo';
 import { ChevronDown, Bell } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
@@ -27,6 +28,7 @@ interface TopbarProps {
 const Topbar: React.FC<TopbarProps> = ({ navGroups, roleLabel, dashboardLabel }) => {
   const location = useLocation();
   const { logout } = useAuth();
+  const { reset: resetTimer } = useStudyContext();
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
@@ -38,6 +40,7 @@ const Topbar: React.FC<TopbarProps> = ({ navGroups, roleLabel, dashboardLabel })
 
   const handleLogout = async () => {
     try {
+      resetTimer();
       await logout();
     } catch (error) {
       console.error("Failed to logout", error);

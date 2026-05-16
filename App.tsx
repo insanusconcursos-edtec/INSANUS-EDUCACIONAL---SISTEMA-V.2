@@ -51,6 +51,7 @@ import {
 } from './pages/student/StudentPages';
 import { StudentHome } from './pages/student/StudentHome';
 import StudentConfigPage from './pages/student/StudentConfigPage';
+import { PlanSelectionPage } from './pages/student/PlanSelectionPage';
 import ProductsManager from './pages/admin/products/ProductsManager';
 import { SupportManager } from './pages/admin/SupportManager';
 
@@ -202,6 +203,7 @@ const App: React.FC = () => {
                 <Route index element={<Navigate to="home" replace />} />
                 <Route path="home" element={<StudentHome />} />
                 <Route path="dashboard" element={<StudentDashboard />} />
+                <Route path="dashboard/planos" element={<PlanSelectionPage />} />
                 <Route path="calendar" element={<StudentCalendar />} />
                 <Route path="edict" element={<StudentEdict />} />
                 <Route path="simulated" element={<StudentSimulated />} />

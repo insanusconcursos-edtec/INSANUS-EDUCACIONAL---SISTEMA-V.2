@@ -27,14 +27,19 @@ export const FloatingStudyTimer: React.FC = () => {
   const isPublicPage = location.pathname === '/login' || location.pathname === '/';
   
   useEffect(() => {
-    const shouldFloat = (status === 'running' || status === 'paused');
+    if (!currentUser) {
+      setIsFloating(false);
+      return;
+    }
+
+    const shouldFloat = (status === 'running' || status === 'paused') && (!isAtDashboard || isMaterialActive);
     
-    if (shouldFloat && currentUser) {
+    if (shouldFloat) {
       setIsFloating(true);
     } else {
       setIsFloating(false);
     }
-  }, [status, setIsFloating, currentUser]);
+  }, [status, isAtDashboard, isMaterialActive, setIsFloating, currentUser]);
 
   if (!currentUser || isPublicPage) return null;
   if (!activeGoal || status === 'idle' || status === 'completed') return null;

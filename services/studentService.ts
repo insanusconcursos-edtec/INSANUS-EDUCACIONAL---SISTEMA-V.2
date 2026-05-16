@@ -392,9 +392,9 @@ export const getDashboardData = async (uid: string): Promise<{
   if (!userSnap.exists()) return { planId: '', overdue: [], today: [], lastScheduledDate: null };
   
   const userData = userSnap.data();
-  const currentPlanId = userData.currentPlanId;
+  const currentPlanId = userData?.activePlanId || userData?.currentPlanId;
 
-  if (userData.isPlanPaused || !currentPlanId) {
+  if (userData?.isPlanPaused || !currentPlanId) {
     return { planId: currentPlanId || '', overdue: [], today: [], lastScheduledDate: null };
   }
 
@@ -763,10 +763,11 @@ export const getStudentConfig = async (uid: string) => {
   if (!userSnap.exists()) return null;
   
   const data = userSnap.data();
+  if (!data) return null;
   const lastScheduledDate = await getStudentLastScheduledDate(uid);
 
   return {
-    currentPlanId: data.currentPlanId,
+    currentPlanId: data.activePlanId || data.currentPlanId,
     routine: data.routine,
     studyProfile: data.studyProfile,
     savedRoutines: data.savedRoutines || [],

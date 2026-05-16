@@ -19,9 +19,10 @@ const StudentLayout: React.FC = () => {
   const isLiveRoom = location.pathname.includes('/app/eventos-ao-vivo/sala/');
 
   useEffect(() => {
-    if (!userData?.currentPlanId) return;
+    const planId = userData?.activePlanId || userData?.currentPlanId;
+    if (!planId) return;
 
-    const unsub = onSnapshot(doc(db, 'plans', userData.currentPlanId), (docSnap) => {
+    const unsub = onSnapshot(doc(db, 'plans', planId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setThemeColor(data.themeColor || '#EF4444');
@@ -30,12 +31,14 @@ const StudentLayout: React.FC = () => {
     });
 
     return () => unsub();
-  }, [userData?.currentPlanId]);
+  }, [userData?.activePlanId, userData?.currentPlanId]);
 
   const hexToRgb = (hex: string) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '239, 68, 68';
   };
+
+  const currentPlanId = userData?.activePlanId || userData?.currentPlanId;
 
   return (
     <div 
@@ -72,11 +75,11 @@ const StudentLayout: React.FC = () => {
         </div>
       </main>
 
-      {userData?.currentPlanId && (
+      {currentPlanId && (
         <SupportFloatingButton 
           productInfo={{
             type: 'plano',
-            id: userData.currentPlanId,
+            id: currentPlanId,
             name: planTitle
           }}
         />
