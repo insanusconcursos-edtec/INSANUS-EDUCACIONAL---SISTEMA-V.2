@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2, Clock, BookOpen, Check, ChevronLeft, Pencil, Plus, Save, Trophy, Bell } from 'lucide-react';
+import { X, Trash2, Clock, BookOpen, Check, ChevronLeft, Pencil, Plus, Save, Trophy, Bell, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -33,6 +33,8 @@ interface WeeklyPlannerModalProps {
   initialRoutines?: RoutineTemplate[];
   initialActiveRoutineId?: string;
   onSaveTemplates: (templates: RoutineTemplate[], activeId: string) => void;
+  targetUserId?: string;
+  studentName?: string;
 }
 
 const DAYS = [
@@ -66,7 +68,9 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
   onSave, 
   initialRoutines = [], 
   initialActiveRoutineId,
-  onSaveTemplates 
+  onSaveTemplates,
+  targetUserId,
+  studentName
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [showForm, setShowForm] = useState(false);
@@ -74,6 +78,9 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [newRoutineName, setNewRoutineName] = useState("");
+  
+  const effectiveUid = targetUserId || auth.currentUser?.uid;
+  const isMentorshipMode = !!targetUserId && targetUserId !== auth.currentUser?.uid;
   
   const [savedRoutines, setSavedRoutines] = useState<RoutineTemplate[]>([]);
   const [activeRoutineId, setActiveRoutineId] = useState<string>("");
@@ -170,27 +177,39 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
       return;
     }
 
-    if (!auth.currentUser || !auth.currentUser.uid) {
+    if (!effectiveUid) {
       console.error("Falha: Usuário não autenticado no momento do salvamento.");
       toast.error("Erro de autenticação. Recarregue a página.");
       return;
     }
 
-    const toastId = toast.loading("Salvando rotina...");
+    const toastId = toast.loading(isMentorshipMode ? "Salvando rotina do aluno..." : "Salvando rotina...");
 
     try {
       const updatedRoutines = savedRoutines.map(r => r.id === activeRoutineId ? { ...r, events } : r);
       setSavedRoutines(updatedRoutines);
       onSaveTemplates(updatedRoutines, activeRoutineId);
 
+      // NOVO: Calcular a carga horária diária baseada nos blocos de estudo
+      const calculatedRoutine: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+      [0, 1, 2, 3, 4, 5, 6].forEach(dayId => {
+        const dayStudyMin = events
+          .filter(e => e.isStudy && e.days.includes(dayId))
+          .reduce((acc, curr) => acc + (timeToMinutes(curr.endTime) - timeToMinutes(curr.startTime)), 0);
+        calculatedRoutine[dayId] = dayStudyMin;
+      });
+
+      // Chama o callback onSave para atualizar o estado no componente pai
+      onSave(calculatedRoutine);
+
       const payload = {
         savedRoutines: updatedRoutines,
-        activeRoutineId: activeRoutineId
+        activeRoutineId: activeRoutineId,
+        routine: calculatedRoutine // Atualiza também o campo de minutos diários para o cronograma
       };
-      console.log("Payload de Salvamento:", payload);
-
-      await updateDoc(doc(db, "users", auth.currentUser.uid), payload);
-      toast.success("Rotina salva com sucesso!", { id: toastId });
+      
+      await updateDoc(doc(db, "users", effectiveUid), payload);
+      toast.success(isMentorshipMode ? "Rotina do aluno salva com sucesso!" : "Rotina salva com sucesso!", { id: toastId });
     } catch (error) {
       console.error("Erro ao salvar no banco de dados:", error);
       toast.error("Erro ao salvar no banco de dados.", { id: toastId });
@@ -205,7 +224,7 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
   };
 
   const confirmDelete = async () => {
-    if (!auth.currentUser || !auth.currentUser.uid) {
+    if (!effectiveUid) {
       toast.error("Erro de autenticação.");
       return;
     }
@@ -225,7 +244,7 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
 
     // 4. Persistência no Banco de Dados
     try {
-        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+        await updateDoc(doc(db, "users", effectiveUid), {
             savedRoutines: updatedRoutines,
             activeRoutineId: nextActiveId
         });
@@ -351,6 +370,17 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
       style={{ zIndex: 999999 }}
     >
       <Toaster position="top-right" />
+      
+      {/* Mentorship Mode Banner */}
+      {isMentorshipMode && (
+        <div className="bg-yellow-400/10 border-b border-yellow-400/20 py-2 px-6 flex items-center justify-center gap-3 animate-in slide-in-from-top duration-500 shrink-0">
+          <Brain size={14} className="text-yellow-400" />
+          <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest">
+            Modo Mentoria: Editando a rotina de <span className="text-white">{studentName}</span>
+          </span>
+        </div>
+      )}
+
       {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4">

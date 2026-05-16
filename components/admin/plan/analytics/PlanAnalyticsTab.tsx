@@ -41,6 +41,7 @@ import { collection, getDocs, query, where, documentId, doc, getDoc, onSnapshot,
 import { db } from '../../../../services/firebase';
 import { toPlainObject } from '../../../../services/firestoreUtils';
 import { StudyCalendar } from '../../../../components/student/calendar/StudyCalendar';
+import WeeklyPlannerModal, { RoutineTemplate } from '../../../../components/student/config/WeeklyPlannerModal';
 import DisciplineItem from '../../../../components/student/edital/DisciplineItem';
 import Loading from '../../../ui/Loading';
 import { updateStudent } from '../../../../services/userService';
@@ -98,7 +99,7 @@ interface PlanAnalyticsTabProps {
 }
 
 type ViewState = 'STUDENTS' | 'STUDENT_DASHBOARD' | 'ATTEMPT_DETAIL';
-type SubTab = 'SIMULADOS' | 'SCHEDULE' | 'EDITAL';
+type SubTab = 'SIMULADOS' | 'SCHEDULE' | 'EDITAL' | 'ROUTINE';
 
 export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, linkedSimuladoClassId }) => {
   const [view, setView] = useState<ViewState>('STUDENTS');
@@ -122,6 +123,13 @@ export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, link
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['beginner', 'intermediate', 'advanced', 'insane', 'not_leveled']));
   const [isSyncing, setIsSyncing] = useState(false);
   const [chartMode, setChartMode] = useState<'quantity' | 'percentage' | 'autodiagnosis'>('quantity');
+  const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+
+  // NOVO: Garantir que o selectedStudent reflita os dados em tempo real da lista allStudents
+  const activeStudent = useMemo(() => {
+    if (!selectedStudent) return null;
+    return allStudents.find(s => s.uid === selectedStudent.uid) || selectedStudent;
+  }, [allStudents, selectedStudent]);
 
   // Routine to sync levels for non-leveled students
   const handleSyncLevels = async () => {
@@ -837,27 +845,27 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
               <div className="max-w-6xl mx-auto space-y-8 pb-20">
                 {/* Student Identity Header */}
                 <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 flex flex-col md:flex-row items-center gap-6 backdrop-blur-xl">
-                  <StudentAvatar student={selectedStudent!} size={80} onExpand={setExpandedPhotoUrl} />
+                  <StudentAvatar student={activeStudent!} size={80} onExpand={setExpandedPhotoUrl} />
                   <div className="flex-1 text-center md:text-left">
-                    <h3 className="text-3xl font-black text-white uppercase tracking-tighter leading-none mb-1">{selectedStudent?.name}</h3>
-                    <p className="text-sm text-zinc-500 font-medium lowercase mb-4">{selectedStudent?.email}</p>
+                    <h3 className="text-3xl font-black text-white uppercase tracking-tighter leading-none mb-1">{activeStudent?.name}</h3>
+                    <p className="text-sm text-zinc-500 font-medium lowercase mb-4">{activeStudent?.email}</p>
                     <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                       {selectedStudent?.studentLevel && (
+                       {activeStudent?.studentLevel && (
                          <span className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest ${
-                           selectedStudent.studentLevel === 'insane' ? 'bg-red-500/10 border-red-500/30 text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]' :
-                           selectedStudent.studentLevel === 'advanced' ? 'bg-[#FFFF00]/10 border-[#FFFF00]/30 text-[#FFFF00]' :
-                           selectedStudent.studentLevel === 'intermediate' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' :
+                           activeStudent.studentLevel === 'insane' ? 'bg-red-500/10 border-red-500/30 text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]' :
+                           activeStudent.studentLevel === 'advanced' ? 'bg-[#FFFF00]/10 border-[#FFFF00]/30 text-[#FFFF00]' :
+                           activeStudent.studentLevel === 'intermediate' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' :
                            'bg-cyan-500/10 border-cyan-500/30 text-cyan-500'
                          }`}>
                            <Medal size={12} />
-                           {selectedStudent.studentLevel === 'insane' ? 'Nível Insano' :
-                            selectedStudent.studentLevel === 'advanced' ? 'Nível Avançado' :
-                            selectedStudent.studentLevel === 'intermediate' ? 'Nível Intermediário' :
+                           {activeStudent.studentLevel === 'insane' ? 'Nível Insano' :
+                            activeStudent.studentLevel === 'advanced' ? 'Nível Avançado' :
+                            activeStudent.studentLevel === 'intermediate' ? 'Nível Intermediário' :
                             'Nível Iniciante'}
                          </span>
                        )}
                        <span className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-800 border border-zinc-700 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                         <Clock size={12} className="text-yellow-400" /> {formatStudyTime(selectedStudent?.lifetimeMinutes || 0)} de estudo
+                         <Clock size={12} className="text-yellow-400" /> {formatStudyTime(activeStudent?.lifetimeMinutes || 0)} de estudo
                        </span>
                        <span className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-500 uppercase tracking-widest">
                          <CheckCircle2 size={12} /> Aluno Ativo
@@ -865,15 +873,15 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
 
                        {/* NOVO: BOTÃO DE BLOQUEIO NA DASHBOARD */}
                        <button 
-                          onClick={(e) => handleToggleManualGeneration(selectedStudent!, e)}
+                          onClick={(e) => handleToggleManualGeneration(activeStudent!, e)}
                           className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
-                            selectedStudent?.allowManualGeneration 
+                            activeStudent?.allowManualGeneration 
                               ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
                               : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:text-zinc-300'
                           }`}
                         >
-                          <Lock size={12} className={selectedStudent?.allowManualGeneration ? 'animate-pulse' : ''} />
-                          {selectedStudent?.allowManualGeneration ? 'Geração Manual: Liberada' : 'Geração Manual: Bloqueada'}
+                          <Lock size={12} className={activeStudent?.allowManualGeneration ? 'animate-pulse' : ''} />
+                          {activeStudent?.allowManualGeneration ? 'Geração Manual: Liberada' : 'Geração Manual: Bloqueada'}
                        </button>
                     </div>
                   </div>
@@ -901,6 +909,13 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                   >
                     <ListTodo size={14} />
                     EDITAL VERTICALIZADO
+                  </button>
+                  <button 
+                    onClick={() => setSubTab('ROUTINE')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all ${subTab === 'ROUTINE' ? 'bg-zinc-800 text-yellow-400 border border-zinc-700 shadow-xl' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    <Clock size={14} />
+                    PLANEJADOR DE ROTINA
                   </button>
                 </div>
 
@@ -1017,8 +1032,8 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                     >
-                      {selectedStudent && (
-                        <StudyCalendar userId={selectedStudent.uid} isReadOnly={true} />
+                      {activeStudent && (
+                        <StudyCalendar userId={activeStudent.uid} isReadOnly={true} />
                       )}
                     </motion.div>
                   )}
@@ -1031,6 +1046,58 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                       exit={{ opacity: 0, y: -10 }}
                     >
                       <StudentEditalReadOnly structure={edictStructure} completedIds={studentEditalProgress} metaLookup={metaLookup} />
+                    </motion.div>
+                  )}
+
+                  {subTab === 'ROUTINE' && (
+                    <motion.div 
+                      key="routine"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-6"
+                    >
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-8 backdrop-blur-xl flex flex-col items-center justify-center text-center">
+                        <div className="w-20 h-20 bg-yellow-400/10 rounded-2xl flex items-center justify-center mb-6 border border-yellow-400/20">
+                          <Clock size={40} className="text-yellow-400" />
+                        </div>
+                        <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2">Editor de Rotina do Aluno</h3>
+                        <p className="text-zinc-500 max-w-md text-sm mb-8 font-medium">
+                          Você está no Modo Mentoria. Como administrador, você pode ajustar a disponibilidade semanal deste aluno para otimizar o cronograma de estudos dele.
+                        </p>
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3 mb-8 w-full max-w-3xl">
+                          {[0, 1, 2, 3, 4, 5, 6].map(day => {
+                            const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                            const minutes = (activeStudent as any)?.routine?.[day] || 0;
+                            return (
+                              <div key={day} className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl text-center flex flex-col gap-1">
+                                <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{DAYS_SHORT[day]}</span>
+                                <span className="text-sm font-black text-white">{(minutes / 60).toFixed(1)}h</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <button 
+                          onClick={() => setIsPlannerOpen(true)}
+                          className="bg-yellow-400 hover:bg-yellow-300 text-black px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-yellow-400/20 flex items-center gap-3 transform active:scale-95"
+                        >
+                          <Calendar size={18} />
+                          Abrir Planejador de Rotina
+                        </button>
+                      </div>
+
+                      <WeeklyPlannerModal 
+                        isOpen={isPlannerOpen}
+                        onClose={() => setIsPlannerOpen(false)}
+                        onSave={() => {}} // Admin saves directly in modal
+                        initialRoutines={(activeStudent as any)?.savedRoutines || []}
+                        initialActiveRoutineId={(activeStudent as any)?.activeRoutineId || ''}
+                        onSaveTemplates={() => {}} // Admin saves directly in modal
+                        targetUserId={activeStudent?.uid}
+                        studentName={activeStudent?.name}
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>

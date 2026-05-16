@@ -4,6 +4,7 @@ import StudentHeader from './Student/StudentHeader';
 import StudentNavbar from './Student/StudentNavbar';
 import PlanUpdateManager from '../student/PlanUpdateManager';
 import { SupportFloatingButton } from '../student/support/SupportFloatingButton';
+import { ChatNotificationToast } from '../student/chat/ChatNotificationToast';
 import { useAuth } from '../../contexts/AuthContext';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase';
@@ -46,6 +47,9 @@ const StudentLayout: React.FC = () => {
     >
       {/* Update Listener (Global) */}
       <PlanUpdateManager />
+
+      {/* Notificações In-App (Popups) */}
+      <ChatNotificationToast />
 
       {/* Top Header Strip */}
       {!isLiveRoom && <StudentHeader />}

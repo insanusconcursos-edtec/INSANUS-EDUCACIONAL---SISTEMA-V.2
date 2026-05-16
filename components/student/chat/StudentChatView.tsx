@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Send, User, MessageSquare, Loader2, CheckCheck, Headphones, ArrowLeft, Smile, Paperclip, Reply, Edit2, X, MoreVertical, Trash2, Video, Calendar, ExternalLink, Ban, Image as ImageIcon
 } from 'lucide-react';
-import { getOrCreateCall, subscribeToMessages, sendMessage, editMessage, deleteMessage } from '../../../services/chatService';
+import { getOrCreateCall, subscribeToMessages, sendMessage, editMessage, deleteMessage, markAsRead } from '../../../services/chatService';
 import { subscribeToScheduledCalls } from '../../../services/videoCallService';
 import { ScheduledCall } from '../../../types/videoCall';
 import { getMentorById } from '../../../services/mentorService';
@@ -19,9 +19,10 @@ import EmojiPicker, { Theme } from 'emoji-picker-react';
 interface StudentChatViewProps {
   planId: string;
   linkedMentorIds: string[];
+  initialMentorId?: string | null;
 }
 
-const StudentChatView: React.FC<StudentChatViewProps> = ({ planId, linkedMentorIds }) => {
+const StudentChatView: React.FC<StudentChatViewProps> = ({ planId, linkedMentorIds, initialMentorId }) => {
   const { currentUser, userData } = useAuth();
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
@@ -66,14 +67,23 @@ const StudentChatView: React.FC<StudentChatViewProps> = ({ planId, linkedMentorI
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch linked mentors
+  // Fetch linked mentors and handle initial selection
   useEffect(() => {
     const fetchMentors = async () => {
       setLoading(true);
       try {
         const mentorPromises = linkedMentorIds.map(id => getMentorById(id));
         const results = await Promise.all(mentorPromises);
-        setMentors(results.filter((m): m is Mentor => m !== null));
+        const fetchedMentors = results.filter((m): m is Mentor => m !== null);
+        setMentors(fetchedMentors);
+
+        // Se houver um initialMentorId e mentores carregados, auto-seleciona
+        if (initialMentorId) {
+          const mentor = fetchedMentors.find(m => m.id === initialMentorId);
+          if (mentor) {
+            handleSelectMentor(mentor);
+          }
+        }
       } catch (error) {
         console.error(error);
       } finally {
@@ -86,7 +96,7 @@ const StudentChatView: React.FC<StudentChatViewProps> = ({ planId, linkedMentorI
     } else {
       setLoading(false);
     }
-  }, [linkedMentorIds]);
+  }, [linkedMentorIds, initialMentorId]);
 
   // Subscribe to Video Calls
   useEffect(() => {
@@ -126,7 +136,8 @@ const StudentChatView: React.FC<StudentChatViewProps> = ({ planId, linkedMentorI
         mentor.id,
         mentor.name,
         studentPhoto,
-        mentor.photoUrl
+        mentor.photoUrl,
+        mentor.assignedMentor
       );
       setCallId(id);
       setSelectedMentor(mentor);
@@ -142,8 +153,13 @@ const StudentChatView: React.FC<StudentChatViewProps> = ({ planId, linkedMentorI
   useEffect(() => {
     if (!callId) return;
 
+    // Marcar como lido ao abrir o chat
+    markAsRead(callId, 'student');
+
     const unsubscribe = subscribeToMessages(callId, (updatedMessages) => {
       setMessages(updatedMessages);
+      // Se estamos com o chat aberto, qualquer nova mensagem deve ser marcada como lida
+      markAsRead(callId, 'student');
     });
     return () => unsubscribe();
   }, [callId]);

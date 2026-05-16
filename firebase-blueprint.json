@@ -119,6 +119,21 @@
         "commissionValue": { "type": "number" },
         "createdAt": { "type": "string" }
       }
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "A global announcement or notice for students of a specific plan.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "planId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "forcePopUp": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "readBy": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["planId", "title", "content", "forcePopUp", "createdAt"]
     }
   },
   "firestore": {
@@ -141,6 +156,10 @@
     "coproduction_commissions/{commissionId}": {
       "schema": "CoproductionCommission",
       "description": "Individual commission records for partners."
+    },
+    "announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Collection of global announcements for plans."
     }
   }
 }

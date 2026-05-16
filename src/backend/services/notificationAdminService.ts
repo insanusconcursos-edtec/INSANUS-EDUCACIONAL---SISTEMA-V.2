@@ -92,26 +92,33 @@ export const sendPushNotification = async (userId: string, title: string, body: 
       }
     };
 
-    const response = await messagingAdmin.send(message as any);
-    console.log(`[Push] Notificação enviada com sucesso para o usuário ${userId}:`, response);
-    return response;
-  } catch (error: any) {
-    console.error(`[Push] Erro ao enviar notificação para o usuário ${userId}:`, error);
+    try {
+      const response = await messagingAdmin.send(message as any);
+      console.log(`[Push] Notificação enviada com sucesso para o usuário ${userId}:`, response);
+      return response;
+    } catch (sendError: any) {
+      const isInvalidToken = 
+        sendError.code === 'messaging/registration-token-not-registered' || 
+        (sendError.message && sendError.message.includes('Requested entity was not found'));
 
-    // Tratamento de token inválido ou não registrado
+      if (isInvalidToken && matchedDocRef) {
+        await matchedDocRef.update({
+          fcmToken: FieldValue.delete()
+        });
+        console.log(`🧹 [FCM] Token fantasma removido para o usuário de ID: ${userId}`);
+        return;
+      }
+
+      throw sendError;
+    }
+  } catch (error: any) {
+    // Silencia o log se o erro for de token não registrado (caso tenha escapado do catch interno ou ocorrido erro na busca)
     const isInvalidToken = 
       error.code === 'messaging/registration-token-not-registered' || 
       (error.message && error.message.includes('Requested entity was not found'));
 
-    if (isInvalidToken && matchedDocRef) {
-      try {
-        console.log(`[Push] Token inválido para o usuário ${userId}. Removendo do banco de dados para evitar novos erros.`);
-        await matchedDocRef.update({
-          fcmToken: FieldValue.delete()
-        });
-      } catch (cleanupErr) {
-        console.error(`[Push] Erro ao limpar token inválido de ${userId}:`, cleanupErr);
-      }
+    if (!isInvalidToken) {
+      console.error(`[Push] Erro ao enviar notificação para o usuário ${userId}:`, error);
     }
   }
 };

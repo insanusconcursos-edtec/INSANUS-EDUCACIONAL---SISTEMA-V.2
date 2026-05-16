@@ -1,12 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { 
   LogOut, Maximize2, Layout, GraduationCap, PlayCircle, Home, Video, 
-  ChevronDown, Map, ClipboardList, MonitorPlay, Users, Radio 
+  ChevronDown, Map, ClipboardList, MonitorPlay, Users, Radio, Bell, MessageSquare, Clock
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SystemLogo } from '../../common/SystemLogo';
+import { NotificationBell } from '../NotificationBell';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const StudentHeader: React.FC = () => {
   const { logout } = useAuth();
@@ -200,6 +203,10 @@ const StudentHeader: React.FC = () => {
 
       {/* --- DIREITA: UTILITÁRIOS --- */}
       <div className="flex items-center gap-2 lg:gap-6 w-auto lg:w-48 justify-end shrink-0">
+        
+        {/* Sininho de Notificações */}
+        <NotificationBell />
+
         <button 
           onClick={toggleFullScreen}
           className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors uppercase tracking-widest group"

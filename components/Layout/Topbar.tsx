@@ -3,7 +3,8 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { SystemLogo } from '../common/SystemLogo';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Bell } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface NavItem {
   label: string;
@@ -68,6 +69,10 @@ const Topbar: React.FC<TopbarProps> = ({ navGroups, roleLabel, dashboardLabel })
         </div>
 
         <div className="flex items-center gap-6">
+          <NotificationBell />
+          
+          <div className="h-3 w-px bg-zinc-800"></div>
+
           <button 
             onClick={toggleFullScreen}
             className="flex items-center gap-2 text-[9px] font-black text-zinc-500 hover:text-white transition-colors uppercase tracking-widest"

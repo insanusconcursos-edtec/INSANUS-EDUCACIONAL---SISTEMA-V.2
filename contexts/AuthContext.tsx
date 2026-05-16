@@ -21,6 +21,8 @@ interface UserData {
   photoURL?: string;
   access?: unknown[];
   allowManualGeneration?: boolean;
+  currentPlanId?: string;
+  planId?: string;
 }
 
 interface AuthContextType {

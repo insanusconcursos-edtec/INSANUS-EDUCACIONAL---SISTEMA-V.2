@@ -23,7 +23,8 @@ export const getOrCreateCall = async (
   mentorId: string, 
   mentorName: string,
   studentPhotoUrl?: string,
-  mentorPhotoUrl?: string
+  mentorPhotoUrl?: string,
+  assignedMentor?: 'kelsen' | 'borges'
 ): Promise<string> => {
   const callsRef = collection(db, 'calls');
   const q = query(
@@ -36,7 +37,12 @@ export const getOrCreateCall = async (
   const snapshot = await getDocs(q);
   
   if (!snapshot.empty) {
-    return snapshot.docs[0].id;
+    // Se a conversa já existe mas não tem o assignedMentor (migração), atualizamos
+    const existingDoc = snapshot.docs[0];
+    if (assignedMentor && !existingDoc.data().assignedMentor) {
+      await updateDoc(doc(db, 'calls', existingDoc.id), { assignedMentor });
+    }
+    return existingDoc.id;
   }
   
   const newCall = await addDoc(callsRef, {
@@ -45,11 +51,13 @@ export const getOrCreateCall = async (
     studentName,
     studentPhotoUrl: studentPhotoUrl || '',
     mentorId,
+    assignedMentor: assignedMentor || null,
     mentorName,
     mentorPhotoUrl: mentorPhotoUrl || '',
     lastMessage: '',
     lastMessageTime: serverTimestamp(),
-    unreadCount: 0
+    unreadCount: 0,
+    studentUnreadCount: 0
   });
   
   return newCall.id;
@@ -70,6 +78,7 @@ export const sendMessage = async (
     senderId,
     senderRole,
     text,
+    unread: senderRole === 'mentor',
     timestamp: serverTimestamp()
   };
 
@@ -81,11 +90,20 @@ export const sendMessage = async (
   
   // Update call metadata
   const callRef = doc(db, 'calls', callId);
-  await updateDoc(callRef, {
+  const updateData: any = {
     lastMessage: imageUrl ? '📷 Imagem' : text,
     lastMessageTime: serverTimestamp(),
-    unreadCount: senderRole === 'student' ? increment(1) : 0
-  });
+  };
+
+  if (senderRole === 'student') {
+    updateData.unreadCount = increment(1);
+    updateData.studentUnreadCount = 0; // Se estou enviando, já li as que estavam lá
+  } else {
+    updateData.studentUnreadCount = increment(1);
+    updateData.unreadCount = 0;
+  }
+
+  await updateDoc(callRef, updateData);
 };
 
 export const editMessage = async (callId: string, messageId: string, newText: string) => {
@@ -163,9 +181,24 @@ export const subscribeToCalls = (
   });
 };
 
-export const markAsRead = async (callId: string) => {
+export const markAsRead = async (callId: string, role: 'student' | 'mentor' = 'mentor') => {
   const callRef = doc(db, 'calls', callId);
-  await updateDoc(callRef, {
-    unreadCount: 0
-  });
+  
+  if (role === 'mentor') {
+    await updateDoc(callRef, {
+      unreadCount: 0
+    });
+  } else {
+    await updateDoc(callRef, {
+      studentUnreadCount: 0
+    });
+    
+    // Marcar as mensagens do mentor como lidas
+    const messagesRef = collection(db, 'calls', callId, 'messages');
+    const q = query(messagesRef, where('senderRole', '==', 'mentor'), where('unread', '==', true));
+    const snapshot = await getDocs(q);
+    
+    const batchPromises = snapshot.docs.map(d => updateDoc(doc(messagesRef, d.id), { unread: false }));
+    await Promise.all(batchPromises);
+  }
 };

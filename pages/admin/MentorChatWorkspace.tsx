@@ -26,6 +26,7 @@ const MentorChatWorkspace: React.FC<MentorChatWorkspaceProps> = ({ planId }) => 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [mentorFilter, setMentorFilter] = useState<'all' | 'kelsen' | 'borges'>('all');
   
   // Advanced Chat States
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -274,6 +275,10 @@ const MentorChatWorkspace: React.FC<MentorChatWorkspaceProps> = ({ planId }) => 
   const filteredCalls = calls
     .filter(call => call.lastMessage && call.lastMessage.trim() !== '')
     .filter(call => {
+      if (mentorFilter === 'all') return true;
+      return call.assignedMentor === mentorFilter;
+    })
+    .filter(call => {
       if (!searchTerm) return true;
       return call.studentName?.toLowerCase().includes(searchTerm.toLowerCase());
     });
@@ -282,9 +287,32 @@ const MentorChatWorkspace: React.FC<MentorChatWorkspaceProps> = ({ planId }) => 
     <div className="h-full flex bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in duration-500">
       
       {/* Sidebar - Call List */}
-      <div className="w-80 border-right border-zinc-800 flex flex-col bg-zinc-900/30">
+      <div className="w-80 border-r border-zinc-800 flex flex-col bg-zinc-900/30">
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/50">
           <h2 className="text-lg font-black text-white uppercase tracking-tighter mb-4">Central de Dúvidas</h2>
+          
+          {/* Tabs de Mentores */}
+          <div className="flex border border-zinc-800 bg-zinc-950 p-1 gap-1 rounded-xl mb-4">
+            <button 
+              onClick={() => setMentorFilter('all')}
+              className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${mentorFilter === 'all' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Todos
+            </button>
+            <button 
+              onClick={() => setMentorFilter('kelsen')}
+              className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${mentorFilter === 'kelsen' ? 'bg-red-500/20 text-red-500 shadow-lg border border-red-500/30' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Kelsen
+            </button>
+            <button 
+              onClick={() => setMentorFilter('borges')}
+              className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${mentorFilter === 'borges' ? 'bg-blue-500/20 text-blue-500 shadow-lg border border-blue-500/30' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+              Borges
+            </button>
+          </div>
+
           <div className="relative">
             <Search size={14} className="absolute left-3 top-3 text-zinc-600" />
             <input 
@@ -336,6 +364,17 @@ const MentorChatWorkspace: React.FC<MentorChatWorkspaceProps> = ({ planId }) => 
                     <h3 className="text-xs font-black text-white uppercase truncate">{call.studentName || 'Aluno Sem Nome'}</h3>
                     <span className="text-[9px] text-zinc-600 font-mono">{formatTime(call.lastMessageTime)}</span>
                   </div>
+                  
+                  <div className="flex items-center gap-2 mb-1">
+                    {call.assignedMentor && (
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                        call.assignedMentor === 'kelsen' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                      }`}>
+                        {call.assignedMentor}
+                      </span>
+                    )}
+                  </div>
+
                   <p className="text-[10px] text-zinc-500 truncate font-medium">
                     {call.lastMessage || 'Inicie uma conversa...'}
                   </p>

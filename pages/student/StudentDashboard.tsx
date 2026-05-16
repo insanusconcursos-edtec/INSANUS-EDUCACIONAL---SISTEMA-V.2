@@ -37,6 +37,8 @@ import { Smartphone, Download } from 'lucide-react';
 import { useEdictData } from '../../contexts/EdictDataContext';
 import { getPlanById } from '../../services/planService';
 import { toPlainObject } from '../../services/firestoreUtils';
+import { subscribeToAnnouncements, Announcement } from '../../services/announcementService';
+import { AnnouncementPopUp } from '../../components/student/announcements/AnnouncementPopUp';
 
 const StudentDashboard: React.FC = () => {
   const { currentUser } = useAuth();
@@ -89,6 +91,7 @@ const StudentDashboard: React.FC = () => {
   const [metaLookup, setMetaLookup] = useState<Record<string, Meta>>(cachedData?.metaLookup || {});
   const [isEdictLoading, setIsEdictLoading] = useState(false);
   const [pendingTopicReview, setPendingTopicReview] = useState<any>(null);
+  const [activeAnnouncement, setActiveAnnouncement] = useState<Announcement | null>(null);
   const [topicCompletionPayload, setTopicCompletionPayload] = useState<any>(null);
   const closedTopicModalsRef = React.useRef<Set<string>>(new Set());
   const prefetchPromiseRef = React.useRef<Promise<void> | null>(null);
@@ -99,6 +102,26 @@ const StudentDashboard: React.FC = () => {
       setPendingTopicReview(null);
     }
   }, [pendingTopicReview, openSpacedReviewModal]);
+
+  // Lógica de Comunicados Globais (Pop-ups)
+  useEffect(() => {
+    if (!currentUser || !currentPlanId) return;
+
+    const unsubscribe = subscribeToAnnouncements(currentPlanId, (announcements) => {
+      // Encontra o primeiro anúncio mandatório que o usuário ainda não leu
+      const mandatoryUnread = announcements.find(ann => 
+        ann.forcePopUp && (!ann.readBy || !ann.readBy.includes(currentUser.uid))
+      );
+      
+      if (mandatoryUnread) {
+        setActiveAnnouncement(mandatoryUnread);
+      } else {
+        setActiveAnnouncement(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, currentPlanId]);
   
   // NOTEBOOK MODAL STATE
   const [notebookModal, setNotebookModal] = useState<{
@@ -1239,6 +1262,7 @@ const StudentDashboard: React.FC = () => {
 
   // --- RENDERIZAÇÃO DA ABA DE CALL (CHAT) ---
   if (currentTab === 'call') {
+      const mentorId = searchParams.get('mentorId');
       return (
           <div className="relative w-full h-[calc(100vh-140px)] bg-zinc-950 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
             {fullPlanData && (
@@ -1250,6 +1274,7 @@ const StudentDashboard: React.FC = () => {
               <StudentChatView 
                 planId={currentPlanId} 
                 linkedMentorIds={fullPlanData?.linkedMentors || []} 
+                initialMentorId={mentorId}
               />
             </div>
           </div>
@@ -1330,6 +1355,14 @@ const StudentDashboard: React.FC = () => {
       <div className="relative z-10 w-full max-w-[1600px] mx-auto px-4 md:px-8 pt-8 md:pt-12 flex-1 flex flex-col mb-10 -mt-10 md:-mt-20">
 
       {/* OVERLAY MODO FOCO (COM ACESSO AO PDF CORRIGIDO) */}
+      {activeAnnouncement && currentUser && (
+        <AnnouncementPopUp 
+          announcement={activeAnnouncement} 
+          userId={currentUser.uid}
+          onClose={() => setActiveAnnouncement(null)}
+        />
+      )}
+
       {isExamMode && activeSimulado && (
           <SimuladoFocusMode 
               simulado={{

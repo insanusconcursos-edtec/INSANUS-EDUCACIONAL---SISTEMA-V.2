@@ -4,6 +4,7 @@ export interface Mentor {
   id: string;
   name: string;
   photoUrl: string;
+  assignedMentor?: 'kelsen' | 'borges';
   createdAt: Timestamp | any;
 }
 
@@ -17,6 +18,7 @@ export interface Message {
   timestamp: Timestamp | any;
   isEdited?: boolean;
   isDeleted?: boolean;
+  unread?: boolean;
   imageUrl?: string;
   replyToId?: string;
   replyToText?: string;
@@ -29,9 +31,11 @@ export interface Call {
   studentName: string;
   studentPhotoUrl?: string;
   mentorId: string;
+  assignedMentor?: 'kelsen' | 'borges';
   mentorName: string;
   mentorPhotoUrl?: string;
   lastMessage: string;
   lastMessageTime: Timestamp | any;
   unreadCount: number;
+  studentUnreadCount?: number;
 }

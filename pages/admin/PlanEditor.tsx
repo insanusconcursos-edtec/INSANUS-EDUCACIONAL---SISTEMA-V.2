@@ -28,15 +28,16 @@ import MetaManager from '../../components/admin/metas/MetaManager';
 import VerticalEdictManager from '../../components/admin/edict/VerticalEdictManager';
 import { PlanMentorshipTab } from '../../components/admin/plan/mentorship/PlanMentorshipTab';
 import { PlanVideoCallTab } from '../../components/admin/plan/video/PlanVideoCallTab';
+import { PlanAnnouncementsTab } from '../../components/admin/plan/announcements/PlanAnnouncementsTab';
 import MentorChatWorkspace from '../admin/MentorChatWorkspace';
 import ConfirmationModal from '../../components/ui/ConfirmationModal';
 import Loading from '../../components/ui/Loading';
 import SyncControlPanel from '../../components/admin/sync/SyncControlPanel';
 import { usePlanSync } from '../../hooks/usePlanSync';
-import { Video, BarChart3 } from 'lucide-react';
+import { Video, BarChart3, Megaphone } from 'lucide-react';
 import { PlanAnalyticsTab } from '../../components/admin/plan/analytics/PlanAnalyticsTab';
 
-type TabView = 'STRUCTURE' | 'CYCLES' | 'EDICT' | 'MENTORSHIP' | 'VISUAL' | 'CHAT' | 'CALL' | 'ANALYTICS';
+type TabView = 'STRUCTURE' | 'CYCLES' | 'EDICT' | 'MENTORSHIP' | 'VISUAL' | 'CHAT' | 'CALL' | 'ANALYTICS' | 'ANNOUNCEMENTS';
 
 const PlanEditor: React.FC = () => {
   const { planId } = useParams<{ planId: string }>();
@@ -395,6 +396,12 @@ const PlanEditor: React.FC = () => {
             >
                 <Video size={14} /> Call
             </button>
+            <button 
+                onClick={() => setActiveTab('ANNOUNCEMENTS')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'ANNOUNCEMENTS' ? 'bg-zinc-800 text-white shadow-lg border border-red-500/30' : 'text-zinc-500 hover:text-zinc-300'}`}
+            >
+                <Megaphone size={14} className={activeTab === 'ANNOUNCEMENTS' ? 'text-red-500' : ''} /> Avisos
+            </button>
         </div>
       </div>
 
@@ -514,6 +521,12 @@ const PlanEditor: React.FC = () => {
       {activeTab === 'CALL' && planId && (
           <div className="flex-1 overflow-hidden">
              <PlanVideoCallTab planId={planId} />
+          </div>
+      )}
+
+      {activeTab === 'ANNOUNCEMENTS' && planId && (
+          <div className="flex-1 overflow-hidden">
+             <PlanAnnouncementsTab planId={planId} />
           </div>
       )}
 
