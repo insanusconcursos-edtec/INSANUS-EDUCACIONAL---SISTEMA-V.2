@@ -33,12 +33,14 @@ import {
 import AdminLayout from './components/Layout/AdminLayout';
 import StudentLayout from './components/Layout/StudentLayout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { StudyProvider } from './contexts/StudyContext';
 import { SpacedReviewModalProvider } from './contexts/SpacedReviewModalContext';
 import { EdictDataProvider } from './contexts/EdictDataContext';
 import PrivateRoute from './components/PrivateRoute';
 import StandaloneCheckout from './pages/checkout/StandaloneCheckout';
 import SuccessPage from './pages/checkout/SuccessPage';
 import { NotebookPopout } from './components/student/tools/NotebookPopout';
+import { FloatingStudyTimer } from './components/student/goals/FloatingStudyTimer';
 
 // Student Pages Imports
 import { 
@@ -119,9 +121,11 @@ const AdminIndexRedirect = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <SpacedReviewModalProvider>
+      <StudyProvider>
+        <SpacedReviewModalProvider>
         <EdictDataProvider>
           <Toaster position="top-right" />
+          <FloatingStudyTimer />
           <Routes>
             <Route path="/migracao/:token" element={<MigrationEnrollment />} />
             <Route path="/login" element={<LoginPage />} />
@@ -222,6 +226,7 @@ const App: React.FC = () => {
           </Routes>
         </EdictDataProvider>
       </SpacedReviewModalProvider>
+      </StudyProvider>
     </AuthProvider>
   );
 };

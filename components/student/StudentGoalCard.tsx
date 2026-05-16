@@ -5,9 +5,9 @@ import {
   PlayCircle, FileText, ListChecks, Book, RefreshCw, 
   Clock, CheckCircle2, Circle, StickyNote,
   ChevronDown, ChevronUp, Link as LinkIcon, Download,
-  BrainCircuit, Layers, Play, Pause, Check, Maximize2, Timer, Loader2, Square, PlusCircle, Trophy, AlertTriangle, MessageSquare
+  BrainCircuit, Layers, Play, Pause, Check, Maximize2, Timer, Loader2, Square, PlusCircle, Trophy, AlertTriangle, MessageSquare, Minimize2
 } from 'lucide-react';
-import { useStudyTimer } from '../../hooks/useStudyTimer';
+import { useStudyContext } from '../../contexts/StudyContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { isPandaVideo } from '../../utils/videoHelpers';
 import { openWatermarkedPdf } from '../../utils/pdfSecurityService';
@@ -139,13 +139,25 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
   // -- CONTROLE DE SIMULADO (Local state to map to the requested logic) --
   const [isSimuladoMaterialsExpanded, setIsSimuladoMaterialsExpanded] = useState(false);
 
-  // O Timer é compartilhado. Para 'lesson', ele sincroniza com o vídeo. Para outros, ele é o timer global.
-  const timer = useStudyTimer();
+  // O Timer é global.
+  const studyManager = useStudyContext();
+  const isThisGoalActive = studyManager.activeGoal?.id === goal.id;
   
-  // RASTREADOR DE TEMPO (PERSISTÊNCIA)
-  // Armazena o valor do timer (segundos) na última vez que salvamos no banco
-  const lastSavedSeconds = useRef(0);
-
+  // Create a local proxy if this goal isn't active, it should look like 'idle'
+  const timer = isThisGoalActive ? studyManager : {
+    status: 'idle' as const,
+    seconds: 0,
+    formattedTime: '00:00',
+    start: () => studyManager.startGoal(goal),
+    pause: studyManager.pause,
+    resume: studyManager.resume,
+    finish: studyManager.finish,
+    reset: studyManager.reset,
+    setIsFloating: studyManager.setIsFloating,
+    setIsMaterialActive: studyManager.setIsMaterialActive,
+    isMaterialActive: studyManager.isMaterialActive
+  };
+  
   const defaultConfig = TYPE_CONFIG[goal.type] || TYPE_CONFIG.lesson;
   const activeColor = (goal.color && goal.color.startsWith('#')) ? goal.color : defaultConfig.color;
   const isLessonGoal = goal.type === 'lesson';
@@ -171,41 +183,6 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
         setIsMerged(false); // Reset state if prop changes structure
     }
   }, [goal.duration, goal.smartExtension]);
-
-  // --- LOGIC: REGISTER TIME SESSION ---
-  // Calculates delta since last save and sends to backend
-  // Returns minutes saved in this tick
-  const saveSessionTime = async () => {
-    if (!currentUser || !goal.planId) return 0;
-    
-    const currentTotalSeconds = timer.seconds;
-    const deltaSeconds = currentTotalSeconds - lastSavedSeconds.current;
-    
-    // Only save if meaningful time passed (> 5 seconds to avoid noise)
-    if (deltaSeconds > 5) {
-        const minutes = deltaSeconds / 60;
-        
-        // 1. Atualiza Stats Globais
-        await registerStudySession(currentUser.uid, goal.planId, minutes, goal.type);
-        
-        // 2. Atualiza Meta Específica (Para cálculo correto de antecipação)
-        // CORREÇÃO: Usa data local se a meta não tiver data explícita (fallback seguro)
-        const targetDate = goal.date || getLocalISODate(new Date());
-        
-        await updateGoalRecordedTime(currentUser.uid, targetDate, goal.id, minutes);
-
-        lastSavedSeconds.current = currentTotalSeconds; // Update reference point
-        return minutes;
-    }
-    return 0;
-  };
-
-  // Reset timer tracking when timer resets
-  useEffect(() => {
-    if (timer.status === 'idle') {
-        lastSavedSeconds.current = 0;
-    }
-  }, [timer.status]);
 
   // --- LOGIC: MERGE EXTENSION (OPTIMISTIC) ---
   const handleMergeExtension = async (e: React.MouseEvent) => {
@@ -301,10 +278,12 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
     if (isPandaVideo(video.link)) {
         if (activeVideoIndex === index && playerState !== 'closed') {
             setPlayerState('open');
+            studyManager.setIsMaterialActive(true);
             return;
         }
         setActiveVideoIndex(index);
         setPlayerState('open');
+        studyManager.setIsMaterialActive(true);
         timer.reset(); 
         if (onStart && timer.status === 'idle') onStart(goal);
     } else {
@@ -318,29 +297,29 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
 
   const handleMinimizePlayer = () => {
     setPlayerState('minimized');
+    studyManager.setIsMaterialActive(false);
   };
 
   const handleClosePlayer = async () => {
-    // Ao fechar player, pausa e salva
-    timer.pause();
-    await saveSessionTime();
+    // Ao fechar player, pausa (o contexto já salva o tempo)
+    await timer.pause();
     setPlayerState('closed');
     setActiveVideoIndex(null);
+    studyManager.setIsMaterialActive(false);
   };
 
   const handleCompleteVideo = async () => {
     if (activeVideoIndex !== null) {
         setCompletedVideoIndices(prev => new Set(prev).add(activeVideoIndex!));
-        // Ao completar vídeo, também salva o tempo acumulado
-        await saveSessionTime();
+        // Ao completar vídeo, também pausa
+        await timer.pause();
         handleClosePlayer();
     }
   };
 
   // Wrapper para Pausar do Player
   const handlePlayerPause = async () => {
-      timer.pause();
-      await saveSessionTime();
+      await timer.pause();
   };
 
   // --- LOGIC: PDF SECURITY (WATERMARK) ---
@@ -354,6 +333,7 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
 
     if (isPdf && isMaterialOrLaw && onPdfClick) {
         onPdfClick(goal, fileUrl, index);
+        studyManager.setIsMaterialActive(true);
         return;
     }
 
@@ -380,6 +360,7 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
     e.stopPropagation();
     if (!goal.mindMap) return;
     setIsMapOpen(true);
+    studyManager.setIsMaterialActive(true);
   };
 
   // --- LOGIC: FLASHCARD OPENER ---
@@ -388,24 +369,21 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
     if (!goal.flashcards) return;
     setSelectedFlashcards(goal.flashcards);
     setIsFlashcardOpen(true);
+    studyManager.setIsMaterialActive(true);
   };
 
   // --- LOGIC: GLOBAL TIMER CONTROLS (NON-LESSON) ---
   
   const handleGlobalPause = async () => {
-      timer.pause();
-      await saveSessionTime();
+      await timer.pause();
   };
 
   const handleFinishGlobalSession = async () => {
-    // 1. Force timer finish visually
-    const timeSpent = timer.finish(); 
+    // 1. Force timer finish visually (and save in context)
+    const timeSpent = await timer.finish(); 
     console.log(`Meta "${goal.title}" concluída em ${timeSpent} segundos.`);
     
-    // 2. Save last tick to DB
-    await saveSessionTime();
-
-    // 3. Calculate total time to pass up
+    // 2. Calculate total time to pass up
     const sessionMinutes = timeSpent / 60; // Total session time
     const updatedRecordedMinutes = (goal.recordedMinutes || 0) + sessionMinutes;
 
@@ -894,57 +872,22 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
             )}
 
             {timer.status === 'running' && (
-                <div className="flex flex-col gap-3 animate-in slide-in-from-bottom-2">
-                    <div className="flex items-center justify-between px-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest animate-pulse" style={{ color: activeColor }}>
-                            Estudando...
-                        </span>
-                        <div className="flex items-center gap-2 text-white font-mono text-xl font-bold tracking-tight tabular-nums">
-                            <Timer size={16} className="text-zinc-500" />
-                            {timer.formattedTime}
-                        </div>
+                <div className="flex flex-col gap-2 p-3 bg-[var(--plan-theme)]/5 border border-[var(--plan-theme)]/20 rounded-xl animate-pulse">
+                    <div className="flex items-center justify-center gap-2 text-[var(--plan-theme)] font-black text-[10px] uppercase tracking-[0.2em]">
+                        <Timer size={14} className="animate-spin-slow" />
+                        Estudo em Andamento
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button 
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleGlobalPause(); // Uses registered pause logic
-                            }} 
-                            className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border border-zinc-700"
-                        >
-                            <Pause size={12} fill="currentColor" /> Pausar
-                        </button>
-                        <button 
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                handleFinishGlobalSession(); 
-                            }} 
-                            className="py-3 bg-[var(--plan-theme)] hover:brightness-110 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[var(--plan-theme)]/20"
-                        >
-                            <CheckCircle2 size={12} /> Concluir
-                        </button>
-                    </div>
+                    <p className="text-[9px] text-zinc-500 text-center font-bold uppercase tracking-wider">
+                        Use o painel flutuante para pausar ou concluir
+                    </p>
                 </div>
             )}
 
             {timer.status === 'paused' && (
-                <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between px-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                            Pausado
-                        </span>
-                        <div className="flex items-center gap-2 text-zinc-400 font-mono text-xl font-bold tracking-tight tabular-nums opacity-70">
-                            <Timer size={16} />
-                            {timer.formattedTime}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); timer.resume(); }} className="py-3 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg" style={{ backgroundColor: activeColor }}>
-                            <Play size={12} fill="currentColor" /> Retomar
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); handleFinishGlobalSession(); }} className="py-3 bg-[var(--plan-theme)] hover:brightness-110 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[var(--plan-theme)]/20">
-                            <Square size={12} fill="currentColor" /> Concluir
-                        </button>
+                <div className="flex flex-col gap-2 p-3 bg-zinc-800/50 border border-zinc-700 rounded-xl">
+                    <div className="flex items-center justify-center gap-2 text-zinc-400 font-black text-[10px] uppercase tracking-[0.2em]">
+                        <Pause size={14} fill="currentColor" />
+                        Estudo Pausado
                     </div>
                 </div>
             )}
@@ -980,7 +923,10 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
       {/* MODAL PERSISTENTE (MIND MAP) */}
       <MindMapViewerModal
         isOpen={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
+        onClose={() => {
+            setIsMapOpen(false);
+            studyManager.setIsMaterialActive(false);
+        }}
         nodes={goal.mindMap || []}
         edges={[]} 
         title={goal.title}
@@ -993,7 +939,10 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
       {/* MODAL PERSISTENTE (FLASHCARDS) */}
       <FlashcardPlayerModal 
         isOpen={isFlashcardOpen}
-        onClose={() => setIsFlashcardOpen(false)}
+        onClose={() => {
+            setIsFlashcardOpen(false);
+            studyManager.setIsMaterialActive(false);
+        }}
         flashcards={selectedFlashcards}
         title={goal.title}
         timerState={{

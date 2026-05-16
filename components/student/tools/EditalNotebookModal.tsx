@@ -18,6 +18,7 @@ import { Meta } from '../../../services/metaService';
 import toast from 'react-hot-toast';
 import { DraggableNotesList } from './DraggableNotesList';
 import { MoveNoteModal } from './MoveNoteModal';
+import { useStudyContext } from '../../../contexts/StudyContext';
 
 export interface NotebookEditorModalProps {
   isOpen: boolean;
@@ -116,6 +117,7 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
   isPopoutMode
 }) => {
   const { currentUser } = useAuth();
+  const { isFloating, setIsMaterialActive } = useStudyContext();
   
   // Data State
   const [notes, setNotes] = useState<EditalNote[]>([]);
@@ -151,6 +153,14 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Load notes on mount/open
+  useEffect(() => {
+    if (isOpen) {
+      setIsMaterialActive(true);
+    } else {
+      setIsMaterialActive(false);
+    }
+  }, [isOpen, setIsMaterialActive]);
+
   useEffect(() => {
     if (isOpen && currentUser) {
       loadNotes();
@@ -916,7 +926,9 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
              {activePdfUrl && !isQuestionsNotebook && isNotebookMinimized && (
                 <button 
                   onClick={() => setIsNotebookMinimized(false)}
-                  className="fixed bottom-6 right-6 z-[130] bg-[#1a1a1e] hover:bg-[#252529] border border-amber-500/30 hover:border-amber-500/50 px-5 py-3 rounded-2xl hidden md:flex items-center gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-white animate-in slide-in-from-right-12 duration-500 transition-all group"
+                  className={`fixed right-6 z-[130] bg-[#1a1a1e] hover:bg-[#252529] border border-amber-500/30 hover:border-amber-500/50 px-5 py-3 rounded-2xl hidden md:flex items-center gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-white animate-in slide-in-from-right-12 duration-500 transition-all group ${
+                    isFloating ? 'bottom-[280px]' : 'bottom-6'
+                  }`}
                 >
                   <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 group-hover:bg-amber-500 group-hover:text-black transition-all">
                     <Maximize2 size={18} />

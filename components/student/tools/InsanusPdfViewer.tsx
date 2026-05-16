@@ -5,6 +5,7 @@ import {
   MousePointer2, Highlighter, StickyNote, Eraser, Trash2, BookOpen
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useStudyContext } from '../../../contexts/StudyContext';
 import { notebookService } from '../../../services/notebookService';
 import { applyWatermarkToPdf } from '../../../utils/pdfSecurityService';
 import toast from 'react-hot-toast';
@@ -40,6 +41,14 @@ const HIGHLIGHT_COLORS = [
 
 export const InsanusPdfViewer: React.FC<InsanusPdfViewerProps> = ({ url }) => {
     const { currentUser, userData } = useAuth();
+    const { setIsMaterialActive } = useStudyContext();
+
+    // Material active state management
+    useEffect(() => {
+        setIsMaterialActive(true);
+        return () => setIsMaterialActive(false);
+    }, [setIsMaterialActive]);
+    
     // PDF Data & Loading State
     const [numPages, setNumPages] = useState<number>();
     const [pageNumber, setPageNumber] = useState<number>(1);

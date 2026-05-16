@@ -5,6 +5,8 @@ import { SupportTicketModal } from './SupportTicketModal';
 import { FeedbackModal } from './FeedbackModal';
 import { ProductType } from '../../../types/support';
 
+import { useStudyContext } from '../../../contexts/StudyContext';
+
 interface SupportFloatingButtonProps {
   productInfo: {
     type: ProductType;
@@ -14,6 +16,7 @@ interface SupportFloatingButtonProps {
 }
 
 export const SupportFloatingButton: React.FC<SupportFloatingButtonProps> = ({ productInfo }) => {
+  const { isFloating } = useStudyContext();
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -23,7 +26,11 @@ export const SupportFloatingButton: React.FC<SupportFloatingButtonProps> = ({ pr
 
   return (
     <>
-      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3">
+      <div 
+        className={`fixed right-6 z-[9999] flex flex-col items-end gap-3 transition-all duration-500 ease-in-out ${
+          isFloating ? 'bottom-[340px]' : 'bottom-6'
+        }`}
+      >
         {/* Feedback Button */}
         <div className="relative flex items-center justify-end gap-3 group/feedback">
           <AnimatePresence>
