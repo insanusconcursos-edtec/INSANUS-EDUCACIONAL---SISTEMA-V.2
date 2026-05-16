@@ -129,7 +129,9 @@ export function StudentModuleView({ module, onBack, onLessonSelect }: StudentMod
                         {/* Conteúdo da Pasta (Preview) */}
                         {isOpen && (
                             <div className="bg-black/20 border-t border-gray-800 p-2 pl-8">
-                                {(item.data.lessons || []).map((l: any) => (
+                                {[...(item.data.lessons || [])]
+                                    .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+                                    .map((l: any) => (
                                     <div 
                                         key={l.id} 
                                         onClick={() => onLessonSelect(l)}

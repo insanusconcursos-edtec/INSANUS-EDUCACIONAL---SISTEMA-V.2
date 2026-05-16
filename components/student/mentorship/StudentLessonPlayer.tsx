@@ -24,10 +24,29 @@ export function StudentLessonPlayer({ module, planId, onBack }: StudentLessonPla
   const [completedLessons, setCompletedLessons] = useState<string[]>([]);
   const [isLoadingProgress, setIsLoadingProgress] = useState(false);
 
+  // Helper para obter itens ordenados (Aulas e Submódulos misturados)
+  const getSortedItems = (lessons: MentorshipLesson[] = [], subModules: MentorshipModule[] = []) => {
+    const lessonItems = lessons.map(l => ({ type: 'lesson' as const, data: l, order: l.order || 0 }));
+    const subModuleItems = subModules.map(s => ({ type: 'submodule' as const, data: s, order: s.order || 0 }));
+    return [...lessonItems, ...subModuleItems].sort((a, b) => a.order - b.order);
+  };
+
   // 1. Carregar aula inicial e expandir pastas
   useEffect(() => {
     if (module) {
-        const firstLesson = module.lessons?.[0] || module.subModules?.[0]?.lessons?.[0];
+        // Ordena para pegar a primeira aula real na ordem correta
+        const sortedLessons = [...(module.lessons || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const sortedSubModules = [...(module.subModules || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+        
+        let firstLesson = sortedLessons[0];
+        
+        if (!firstLesson && sortedSubModules.length > 0) {
+            // Se não tem aula na raiz, pega a primeira aula do primeiro submódulo (também ordenado)
+            const firstSub = sortedSubModules[0];
+            const subLessons = [...(firstSub.lessons || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+            firstLesson = subLessons[0];
+        }
+
         if (firstLesson) setActiveLesson(firstLesson);
         
         const initialExpanded: Record<string, boolean> = {};
@@ -264,17 +283,14 @@ export function StudentLessonPlayer({ module, planId, onBack }: StudentLessonPla
 
         {/* Lista Scrollável */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-            
-            {/* 1. LISTA DE AULAS SOLTAS (FORA DE PASTAS) */}
-            {module.lessons && module.lessons.length > 0 && (
-                <div className="border-b border-gray-800/50">
-                    {module.lessons.map(lesson => renderLessonItem(lesson))}
-                </div>
-            )}
+            {getSortedItems(module.lessons, module.subModules).map((item) => {
+                if (item.type === 'lesson') {
+                    return renderLessonItem(item.data);
+                }
 
-            {/* 2. LISTA DE SUBMÓDULOS (PASTAS) */}
-            {module.subModules?.map((subModule) => {
+                const subModule = item.data;
                 const isOpen = expandedFolders[subModule.id];
+                
                 return (
                     <div key={subModule.id} className="border-b border-gray-800/50">
                         {/* Header do Acordeão */}
@@ -293,7 +309,10 @@ export function StudentLessonPlayer({ module, planId, onBack }: StudentLessonPla
                         {/* Conteúdo do Acordeão (Aulas) */}
                         {isOpen && (
                             <div className="bg-black/20">
-                                {subModule.lessons?.map(lesson => renderLessonItem(lesson))}
+                                {[...(subModule.lessons || [])]
+                                    .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                    .map(lesson => renderLessonItem(lesson))
+                                }
                                 {(!subModule.lessons || subModule.lessons.length === 0) && (
                                     <div className="pl-8 py-3 text-xs text-gray-600 italic">Pasta vazia</div>
                                 )}

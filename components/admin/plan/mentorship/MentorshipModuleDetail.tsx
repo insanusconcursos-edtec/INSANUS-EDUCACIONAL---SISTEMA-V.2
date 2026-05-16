@@ -348,7 +348,9 @@ export function MentorshipModuleDetail({ planId, module, onBack, onEdit, onUpdat
                                                 <span>{s.title}</span>
                                             </div>
                                         ))}
-                                        {(item.data.lessons || []).map((l:any) => (
+                                        {(item.data.lessons || [])
+                                            .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+                                            .map((l:any) => (
                                             <div key={l.id} className="flex items-center gap-2 text-gray-300 pl-2">
                                                  <span className="w-1.5 h-1.5 bg-gray-600 rounded-full"></span>
                                                 <span>{l.title}</span>
