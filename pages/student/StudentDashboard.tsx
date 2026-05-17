@@ -93,18 +93,37 @@ const StudentDashboard: React.FC = () => {
   const [pendingTopicReview, setPendingTopicReview] = useState<any>(null);
   const [activeAnnouncement, setActiveAnnouncement] = useState<Announcement | null>(null);
   const [topicCompletionPayload, setTopicCompletionPayload] = useState<any>(null);
+  const hasAutoRedirectedRef = React.useRef(false); // NOVO: Controle de Redirecionamento Onboarding
   const closedTopicModalsRef = React.useRef<Set<string>>(new Set());
   const prefetchPromiseRef = React.useRef<Promise<void> | null>(null);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !userData) return;
     
     // Se o aluno não tem plano ativo e não tem curso ativo, redireciona para seleção de planos
-    // Use userData?.activePlanId ou userData?.currentPlanId dependendo de como salvamos
     if (!userData?.activePlanId && !userData?.currentPlanId && !userData?.activeCourseId) {
       navigate('/app/dashboard/planos');
+      return;
     }
-  }, [userData, navigate, currentUser]);
+
+    // REGRA DE REDIRECIONAMENTO ONBOARDING (PRD 9.2)
+    // O redirecionamento forçado para a aba 'MENTORIA' deve ocorrer estritamente no 
+    // primeiro carregamento pós-login (Onboarding inicial) se a rotina estiver zerada.
+    // Uma vez que o usuário está no Dash, permitimos que ele navegue livremente.
+    const routine = userData?.routine || {};
+    const totalMinutes = Object.values(routine).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
+    
+    if (!hasAutoRedirectedRef.current && (userData?.activePlanId || userData?.currentPlanId) && totalMinutes === 0 && !currentTab) {
+        hasAutoRedirectedRef.current = true;
+        navigate('/app/dashboard?tab=mentorship', { replace: true });
+        return;
+    }
+
+    // Se o usuário já estiver em alguma aba ou tiver rotina, marcamos que o onboarding inicial já passou
+    if (currentTab || totalMinutes > 0) {
+      hasAutoRedirectedRef.current = true;
+    }
+  }, [userData, navigate, currentUser, currentTab]);
 
   useEffect(() => {
     if (pendingTopicReview) {

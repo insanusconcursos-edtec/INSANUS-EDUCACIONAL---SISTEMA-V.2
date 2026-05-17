@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,8 +12,12 @@ import { createPortal } from 'react-dom';
 const PlanUpdateManager: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  
   const [hasUpdate, setHasUpdate] = useState(false);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [totalMinutes, setTotalMinutes] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [showRoutineRedirect, setShowRoutineRedirect] = useState(false);
@@ -37,6 +41,11 @@ const PlanUpdateManager: React.FC = () => {
           // @ts-expect-error - planStats might not be fully typed in userData
           const lastSync = userData.planStats?.[activePlanId]?.lastSyncedAt;
           setUserSync(lastSync);
+
+          // Calcular total de minutos da rotina
+          const routine = userData.routine || {};
+          const total = Object.values(routine).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
+          setTotalMinutes(total);
         }
       }
     });
@@ -81,18 +90,24 @@ const PlanUpdateManager: React.FC = () => {
     const masterMillis = getMillis(masterSync);
     const userMillis = getMillis(userSync);
 
+    const isMentorshipRoute = (location.pathname.includes('/dashboard') && searchParams.get('tab') === 'mentorship') || 
+                               location.pathname.includes('/mentoria') || 
+                               location.pathname.includes('/mentorship');
+
+    // REGRA DE SILENCIAMENTO COMPLETO (PRD 9.2)
+    // Se o aluno estiver na aba de Mentoria OU não tiver carga horária configurada, 
+    // ignoramos completamente qualquer alerta de sincronização pendente.
+    if (isMentorshipRoute || totalMinutes === 0) {
+      setHasUpdate(false);
+      setIsOpen(false);
+      setShowRoutineRedirect(false);
+      return;
+    }
+
     // Se o usuário nunca sincronizou, ou se o mestre é mais novo que o do usuário
     // Adicionamos uma margem de 1000ms para evitar falsos positivos por micro-diferenças de precisão
     const isOutdated = !userSync || (masterMillis > userMillis + 1000);
     
-    console.log(`[PlanUpdateManager] Checking update for ${currentPlanId}:`, {
-      master: masterMillis,
-      user: userMillis,
-      isOutdated,
-      masterDate: new Date(masterMillis).toISOString(),
-      userDate: userMillis > 0 ? new Date(userMillis).toISOString() : 'NEVER'
-    });
-
     if (isOutdated) {
       setHasUpdate(true);
       setIsOpen(true);
@@ -100,10 +115,20 @@ const PlanUpdateManager: React.FC = () => {
       setHasUpdate(false);
       setIsOpen(false);
     }
-  }, [masterSync, userSync, currentPlanId]);
+  }, [masterSync, userSync, currentPlanId, location.pathname, searchParams, totalMinutes]);
 
   const handleSync = async () => {
     if (!currentUser || !currentPlanId) return;
+
+    const isMentorshipRoute = (location.pathname.includes('/dashboard') && searchParams.get('tab') === 'mentorship') || 
+                               location.pathname.includes('/mentoria') || 
+                               location.pathname.includes('/mentorship');
+
+    // Bloqueio preventivo redundante
+    if (isMentorshipRoute || totalMinutes === 0) {
+      console.log("🚫 [SyncService] Sincronização manual abortada: Aluno sem rotina ou na aba Mentoria.");
+      return;
+    }
     
     setIsSyncing(true);
     try {

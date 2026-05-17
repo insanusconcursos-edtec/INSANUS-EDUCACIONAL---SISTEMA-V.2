@@ -54,8 +54,15 @@ export const PlanSelectionPage: React.FC = () => {
       toast.success(`Plano "${selectedPlan.title}" ativado com sucesso!`);
       setIsConfirming(false);
       
-      // Redirect to dashboard or config
-      navigate('/app/dashboard');
+      // Check if routine is empty
+      const routine = userData?.routine || {};
+      const totalMinutes = Object.values(routine).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
+      
+      if (totalMinutes === 0) {
+        navigate('/app/dashboard?tab=mentorship');
+      } else {
+        navigate('/app/dashboard');
+      }
     } catch (error) {
       console.error('Error activating plan:', error);
       toast.error('Erro ao ativar o plano.');
