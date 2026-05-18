@@ -4,12 +4,15 @@ import {
   X, Save, FileText, Upload, Plus, Trash2, 
   AlertTriangle, CheckCircle, Scale, Layers, Settings, FileCheck, Info, Clock 
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { 
   SimulatedExam, 
   ExamType, 
   ExamBlock, 
+  BlockDiscipline,
   addExamToClass, 
-  updateExam 
+  updateExam,
+  ExamStatus
 } from '../../../services/simulatedService';
 
 interface SimulatedExamConfigModalProps {
@@ -193,13 +196,26 @@ const SimulatedExamConfigModal: React.FC<SimulatedExamConfigModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title.trim()) return alert("O título é obrigatório.");
+    if (!title.trim()) {
+      toast.error("O título é obrigatório.", {
+        style: { background: '#18181b', color: '#fff', border: '1px solid #3f3f46' }
+      });
+      return;
+    }
     
     const totalDuration = (Number(durationHours) * 60) + Number(durationMinutes);
-    if (totalDuration <= 0) return alert("A duração da prova deve ser maior que 0 minutos.");
+    if (totalDuration <= 0) {
+      toast.error("A duração da prova deve ser maior que 0 minutos.", {
+        style: { background: '#18181b', color: '#fff', border: '1px solid #3f3f46' }
+      });
+      return;
+    }
 
     if (hasBlocks && !isBlockCountValid) {
-        return alert(`ERRO DE VALIDAÇÃO: A soma das questões dos blocos (${blocksTotalQuestions}) deve ser igual ao total de questões do simulado (${questionCount}).`);
+      toast.error(`A soma das questões dos blocos (${blocksTotalQuestions}) deve ser igual ao total de questões do simulado (${questionCount}).`, {
+        style: { background: '#18181b', color: '#fff', border: '1px solid #3f3f46' }
+      });
+      return;
     }
 
     // New validation: check if sum of disciplines matches block count
@@ -207,7 +223,10 @@ const SimulatedExamConfigModal: React.FC<SimulatedExamConfigModalProps> = ({
         for (const block of blocks) {
             const discSum = (block.disciplines || []).reduce((acc, d) => acc + (Number(d.questionCount) || 0), 0);
             if (discSum !== Number(block.questionCount)) {
-                return alert(`ERRO DE VALIDAÇÃO NO BLOCO "${block.name}": A soma das questões das disciplinas (${discSum}) deve ser igual ao total de questões do bloco (${block.questionCount}).`);
+                toast.error(`Erro no bloco "${block.name}": A soma das disciplinas (${discSum}) deve ser igual ao total do bloco (${block.questionCount}).`, {
+                  style: { background: '#18181b', color: '#fff', border: '1px solid #3f3f46' }
+                });
+                return;
             }
         }
     }
@@ -215,18 +234,23 @@ const SimulatedExamConfigModal: React.FC<SimulatedExamConfigModalProps> = ({
     setLoading(true);
     try {
         const examData: any = {
-            title,
+            title: title.trim(),
             publishDate: publishDate || null,
-            type,
-            questionCount: Number(questionCount),
-            duration: totalDuration,
-            hasPenalty,
-            hasBlocks,
-            minApprovalPercent: Number(minApprovalPercent),
-            isAutoDiagnosisEnabled,
-            isLeveling,
-            levelingRanges: isLeveling ? levelingRanges : undefined,
-            status: status
+            type: type || 'multiple_choice',
+            questionCount: Number(questionCount) || 0,
+            duration: totalDuration || 0,
+            hasPenalty: !!hasPenalty,
+            hasBlocks: !!hasBlocks,
+            minApprovalPercent: Number(minApprovalPercent) || 0,
+            isAutoDiagnosisEnabled: !!isAutoDiagnosisEnabled,
+            isLeveling: !!isLeveling,
+            levelingRanges: isLeveling ? {
+                beginner: Number(levelingRanges.beginner) || 0,
+                intermediate: Number(levelingRanges.intermediate) || 0,
+                advanced: Number(levelingRanges.advanced) || 0,
+                insane: Number(levelingRanges.insane) || 0
+            } : null,
+            status: status || 'draft'
         };
 
         if (type === 'multiple_choice') {
@@ -235,9 +259,14 @@ const SimulatedExamConfigModal: React.FC<SimulatedExamConfigModalProps> = ({
 
         if (hasBlocks) {
             examData.blocks = blocks.map(b => ({
-                ...b,
-                questionCount: Number(b.questionCount),
-                minApproval: Number(b.minApproval)
+                name: b.name || 'Sem Nome',
+                questionCount: Number(b.questionCount) || 0,
+                minApproval: Number(b.minApproval) || 0,
+                disciplines: (b.disciplines || []).map(d => ({
+                    id: d.id || crypto.randomUUID(),
+                    name: d.name || 'Sem Nome',
+                    questionCount: Number(d.questionCount) || 0
+                }))
             }));
         } else {
             examData.blocks = [];
@@ -257,11 +286,16 @@ const SimulatedExamConfigModal: React.FC<SimulatedExamConfigModalProps> = ({
             await addExamToClass(classId, examData, filesToUpload || {});
         }
 
+        toast.success("Simulado salvo com sucesso!", {
+          style: { background: '#18181b', color: '#fff', border: '1px solid #3f3f46' }
+        });
         onSuccess();
         onClose();
     } catch (error) {
         console.error("Erro ao salvar simulado:", error);
-        alert("Erro ao salvar. Verifique o console.");
+        toast.error("Erro ao salvar simulado. Verifique os campos e tente novamente.", {
+          style: { background: '#18181b', color: '#fff', border: '1px solid #3f3f46' }
+        });
     } finally {
         setLoading(false);
     }
