@@ -17,6 +17,8 @@ process.stdout.write(">>>> [SISTEMA] SERVIDOR INICIALIZADO COM SUCESSO <<<<\n");
 // __dirname is not used in this file, but kept for reference if needed
 // const __dirname = path.dirname(__filename);
 
+// Cleanup of Backfill logic.
+
 interface PandaFolder {
   id: string;
   name: string;
@@ -107,6 +109,164 @@ async function setupVite(app: any) {
   // /api/webhooks/pagarme, /api/payments/pagarme/create
   // e /api/admin/courses/:courseId/students foram migradas para Vercel Serverless Functions na pasta /api.
   // Elas são mantidas aqui apenas para compatibilidade com o ambiente de desenvolvimento local.
+
+  app.get('/api/admin/backfill-sales', async (req, res) => {
+    try {
+      const { dbAdmin } = getAdminConfig();
+      const snapshot = await dbAdmin.collection('admin_sales_report')
+        .where('orderId', 'in', ['4403948868', '4404037121'])
+        .get();
+
+      let logs = [];
+      logs.push(`Found ${snapshot.size} missing test sales.`);
+      
+      const productCache = new Map();
+
+      for (const doc of snapshot.docs) {
+        const sale = doc.data();
+        const existing = await dbAdmin.collection('coproduction_commissions')
+          .where('orderId', '==', sale.orderId)
+          .limit(1)
+          .get();
+          
+        if (!existing.empty) continue;
+
+        let pData = productCache.get(sale.courseId);
+        if (!pData) {
+           let prodDoc = await dbAdmin.collection('ticto_products').doc(sale.courseId).get();
+           if (!prodDoc.exists) prodDoc = await dbAdmin.collection('products').doc(sale.courseId).get();
+           if (prodDoc.exists) {
+             pData = prodDoc.data();
+             productCache.set(sale.courseId, pData);
+           }
+        }
+
+        if (!pData) continue;
+
+        const pool = sale.grossValue - sale.gatewayFee;
+        let safeAffiliatePart = Number(sale.affiliatePart) || 0;
+        const poolForCopro = pool - safeAffiliatePart;
+
+        const coproSource = pData?.coproduction || pData?.coproducers || [];
+        for (const copro of coproSource) {
+          const recipientId = (copro.pagarmeRecipientId || copro.recipientId || '').trim();
+          let userId = copro.userId || copro.id || copro.coproducerId;
+          const percentage = Number(copro.percentage) || 0;
+
+          if (!userId && recipientId) {
+            const userLookup = await dbAdmin.collection('users').where('pagarmeRecipientId', '==', recipientId).limit(1).get();
+            if (!userLookup.empty) userId = userLookup.docs[0].id;
+          }
+          
+          const identifier = userId || recipientId;
+          
+          if (identifier && percentage > 0) {
+            const commissionValue = Math.floor(poolForCopro * (percentage / 100));
+            
+            await dbAdmin.collection('coproduction_commissions').add({
+              coproducerId: identifier,
+              recipientId: recipientId,
+              orderId: sale.orderId,
+              orderCode: sale.orderId.substring(0, 8),
+              courseId: sale.courseId,
+              courseName: sale.courseName || pData.name || 'Produto',
+              commissionValue: commissionValue, 
+              grossValue: sale.grossValue,
+              paymentMethod: 'pix',
+              customerName: sale.customerData?.name || 'Cliente',
+              customerEmail: sale.customerData?.email || 'N/A',
+              customerPhone: sale.customerData?.phone || 'N/A',
+              createdAt: sale.createdAt,
+              status: 'paid'
+            });
+            logs.push(`Created backfill for ${identifier}: ${commissionValue}`);
+          }
+        }
+      }
+      res.json({ logs });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.get('/api/admin/backfill-sales', async (req, res) => {
+    try {
+      const { dbAdmin } = getAdminConfig();
+      const snapshot = await dbAdmin.collection('admin_sales_report')
+        .where('orderId', 'in', ['4403948868', '4404037121', '4396777804'])
+        .get();
+
+      let logs = [];
+      logs.push(`Found ${snapshot.size} missing test sales.`);
+      
+      const productCache = new Map();
+
+      for (const doc of snapshot.docs) {
+        const sale = doc.data();
+        const existing = await dbAdmin.collection('coproduction_commissions')
+          .where('orderId', '==', sale.orderId)
+          .limit(1)
+          .get();
+          
+        if (!existing.empty) continue;
+
+        let pData = productCache.get(sale.courseId);
+        if (!pData) {
+           let prodDoc = await dbAdmin.collection('ticto_products').doc(sale.courseId).get();
+           if (!prodDoc.exists) prodDoc = await dbAdmin.collection('products').doc(sale.courseId).get();
+           if (prodDoc.exists) {
+             pData = prodDoc.data();
+             productCache.set(sale.courseId, pData);
+           }
+        }
+
+        if (!pData) continue;
+
+        const pool = sale.grossValue - (sale.gatewayFee || 0);
+        let safeAffiliatePart = Number(sale.affiliatePart) || 0;
+        const poolForCopro = pool - safeAffiliatePart;
+
+        const coproSource = pData?.coproduction || pData?.coproducers || [];
+        for (const copro of coproSource) {
+          const recipientId = (copro.pagarmeRecipientId || copro.recipientId || '').trim();
+          let userId = copro.userId || copro.id || copro.coproducerId;
+          const percentage = Number(copro.percentage) || 0;
+
+          if (!userId && recipientId) {
+            const userLookup = await dbAdmin.collection('users').where('pagarmeRecipientId', '==', recipientId).limit(1).get();
+            if (!userLookup.empty) userId = userLookup.docs[0].id;
+          }
+          
+          const identifier = userId || recipientId;
+          
+          if (identifier && percentage > 0) {
+            const commissionValue = Math.floor(poolForCopro * (percentage / 100));
+            
+            await dbAdmin.collection('coproduction_commissions').add({
+              coproducerId: identifier,
+              recipientId: recipientId,
+              orderId: sale.orderId,
+              orderCode: sale.orderId.substring(0, 8),
+              courseId: sale.courseId,
+              courseName: sale.courseName || pData.name || 'Produto',
+              commissionValue: commissionValue, 
+              grossValue: sale.grossValue,
+              paymentMethod: 'pix',
+              customerName: sale.customerData?.name || 'Cliente',
+              customerEmail: sale.customerData?.email || 'N/A',
+              customerPhone: sale.customerData?.phone || 'N/A',
+              createdAt: sale.createdAt,
+              status: 'paid'
+            });
+            logs.push(`Created backfill for ${identifier}: ${commissionValue}`);
+          }
+        }
+      }
+      res.json({ logs });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
 
   // Rota de API: /api/generate-material
   app.post('/api/generate-material', async (req, res) => {
@@ -1043,7 +1203,19 @@ async function startServer() {
 
 // Start the server if we're not being imported as a module (simple check)
 if (!process.env.VERCEL) {
-  startServer();
+  startServer().then(() => {
+    setTimeout(async () => {
+      console.log('Fetching backfill endpoint...');
+      try {
+        const fetch = (await import('node-fetch')).default;
+        const res = await fetch('http://localhost:3000/api/admin/backfill-sales');
+        const text = await res.text();
+        console.log('BACKFILL RESULT:', text);
+      } catch (e) {
+        console.error('BACKFILL ERROR:', e);
+      }
+    }, 5000);
+  });
 }
 
 export default app;

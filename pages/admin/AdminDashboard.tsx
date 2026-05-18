@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -117,6 +117,43 @@ const AdminDashboard: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  const calculateDeductions = useCallback((report: SalesReport) => {
+    const safeGatewayFee = Number(report.gatewayFee) || 0;
+    let safeCoproductionPart = 0;
+    let safeAffiliatePart = 0;
+
+    const baseCalculo = report.grossValue - safeGatewayFee;
+
+    const product = products.find(p => p.id === report.courseId);
+    if (product) {
+       // Cálculo de afiliado (sempre sobre baseCalculo)
+       if (Number(report.affiliatePart) > 0) {
+           const affiliateP = Math.round((Number(report.affiliatePart) / report.grossValue) * 100);
+           if (affiliateP > 0 && affiliateP <= 100) {
+              safeAffiliatePart = Math.floor(baseCalculo * (affiliateP / 100));
+           } else {
+              safeAffiliatePart = Number(report.affiliatePart);
+           }
+       }
+
+       // Cálculo de coprodução em cascata (sobre baseCalculo - affiliate)
+       const coproducers = (product as any).coproduction || (product as any).coproducers || [];
+       const totalCoproPercentage = coproducers.reduce((acc: number, copro: any) => acc + (Number(copro.percentage) || 0), 0);
+       if (totalCoproPercentage > 0) {
+           const remainderForCopro = baseCalculo - safeAffiliatePart;
+           safeCoproductionPart = Math.floor(remainderForCopro * (totalCoproPercentage / 100));
+       }
+    }
+
+    return {
+       gatewayFee: safeGatewayFee,
+       coproductionPart: safeCoproductionPart,
+       affiliatePart: safeAffiliatePart,
+       totalDeductions: safeGatewayFee + safeCoproductionPart + safeAffiliatePart,
+       netCompanyValue: baseCalculo - safeCoproductionPart - safeAffiliatePart
+    };
+  }, [products]);
+
   // Filtered reports based on selection
   const filteredReports = useMemo(() => {
     if (selectedProductIds.length === 0) return reports;
@@ -130,7 +167,10 @@ const AdminDashboard: React.FC = () => {
     const weekStart = subDays(todayStart, 7);
     const monthStart = subDays(todayStart, 30);
 
-    const calculateTotal = (items: SalesReport[]) => items.reduce((acc, curr) => acc + (curr.netCompanyValue || 0), 0);
+    const calculateTotal = (items: SalesReport[]) => items.reduce((acc, curr) => {
+        const { netCompanyValue } = calculateDeductions(curr);
+        return acc + netCompanyValue;
+    }, 0);
 
     const total = calculateTotal(filteredReports);
     
@@ -161,7 +201,10 @@ const AdminDashboard: React.FC = () => {
 
     return last15Days.map(dayStr => {
       const dayReports = filteredReports.filter(r => r.createdAt && r.createdAt.startsWith(dayStr));
-      const value = dayReports.reduce((acc, curr) => acc + (curr.netCompanyValue || 0), 0);
+      const value = dayReports.reduce((acc, curr) => {
+        const { netCompanyValue } = calculateDeductions(curr);
+        return acc + netCompanyValue;
+      }, 0);
       return {
         date: format(parseISO(dayStr), 'dd/MM'),
         value: value / 100 // Convert cents to real
@@ -175,9 +218,13 @@ const AdminDashboard: React.FC = () => {
 
     filteredReports.forEach(r => {
       const current = rankingMap.get(r.courseId) || { name: r.courseName, net: 0, count: 0 };
+      
+      const { netCompanyValue } = calculateDeductions(r);
+      const safeNet = netCompanyValue;
+
       rankingMap.set(r.courseId, {
         name: r.courseName,
-        net: current.net + (r.netCompanyValue || 0),
+        net: current.net + safeNet,
         count: current.count + 1
       });
     });
@@ -550,14 +597,24 @@ const AdminDashboard: React.FC = () => {
                 <th className="px-8 py-4">Produto</th>
                 <th className="px-8 py-4">Cliente</th>
                 <th className="px-8 py-4">Bruto</th>
-                <th className="px-8 py-4 text-red-500/70">Taxas/Comissões</th>
+                <th className="px-8 py-4 text-orange-500/70">Taxa Pagar.me</th>
+                <th className="px-8 py-4 text-yellow-500/70">Comissão (Vendas)</th>
+                <th className="px-8 py-4 text-red-500/70">Coprodução</th>
                 <th className="px-8 py-4 text-emerald-500">Líquido Insanus</th>
                 <th className="px-8 py-4">Data</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredReports.slice(0, 5).map((r) => {
-                const totalDeductions = r.gatewayFee + r.affiliatePart + r.coproductionPart;
+                const {
+                  gatewayFee: safeGatewayFee,
+                  coproductionPart: safeCoproductionPart,
+                  affiliatePart: safeAffiliatePart,
+                  netCompanyValue: finalNet
+                } = calculateDeductions(r);
+
+                const baseCalculo = r.grossValue - safeGatewayFee;
+
                 return (
                   <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="px-8 py-5">
@@ -573,14 +630,28 @@ const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="px-8 py-5">
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-bold text-red-500/60 uppercase">-{formatCurrency(totalDeductions)}</span>
-                        <span className="text-[9px] text-gray-600">({((totalDeductions / r.grossValue) * 100).toFixed(1)}%)</span>
+                        <span className="text-[10px] font-bold text-orange-500/80 uppercase">-{formatCurrency(safeGatewayFee)}</span>
+                        <span className="text-[9px] text-gray-600">({((safeGatewayFee / r.grossValue) * 100).toFixed(1)}%)</span>
                       </div>
                     </td>
                     <td className="px-8 py-5">
-                      <div className="inline-flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full">
-                        <DollarSign className="w-3 h-3 text-emerald-500" />
-                        <span className="text-sm font-black text-emerald-500 font-mono">{formatCurrency(r.netCompanyValue)}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] font-bold text-yellow-500/80 uppercase">-{formatCurrency(safeAffiliatePart)}</span>
+                        {safeAffiliatePart > 0 && <span className="text-[9px] text-gray-600">({((safeAffiliatePart / baseCalculo) * 100).toFixed(1)}%)</span>}
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] font-bold text-red-500/80 uppercase">-{formatCurrency(safeCoproductionPart)}</span>
+                        {safeCoproductionPart > 0 && <span className="text-[9px] text-gray-600">({((safeCoproductionPart / (baseCalculo - safeAffiliatePart)) * 100).toFixed(1)}%)</span>}
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${finalNet >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                        <DollarSign className={`w-3 h-3 ${finalNet >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
+                        <span className={`text-sm font-black font-mono ${finalNet >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {finalNet > 0 ? '+' : ''}{formatCurrency(finalNet)}
+                        </span>
                       </div>
                     </td>
                     <td className="px-8 py-5 text-sm text-gray-500">

@@ -325,12 +325,64 @@ export const handlePagarmeWebhook = async (payload: any) => {
 
     // Atualizar status na coleção 'orders' para acionar o gatilho de notificação Push (Sucesso)
     try {
-      await dbAdmin.collection('orders').doc(orderData.id).update({
+      const orderRef = dbAdmin.collection('orders').doc(orderData.id);
+      await orderRef.update({
         status: 'paid',
         updatedAt: new Date().toISOString()
       });
+      // 1. GATILHO EM TEMPO REAL: itere sobre o array 'split' contido no documento
+      const orderSnapshot = await orderRef.get();
+      if (orderSnapshot.exists) {
+        const orderDocData = orderSnapshot.data();
+        const splits = orderDocData?.split || [];
+        const envMasterId = process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID;
+
+        // Tentar obter informações do produto
+        const productId = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.items?.[0]?.code;
+        let courseName = 'Produto';
+        if (productId) {
+          const tictoDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
+          if (tictoDoc.exists) courseName = tictoDoc.data()?.name || courseName;
+          else {
+            const prodDoc = await dbAdmin.collection('products').doc(productId).get();
+            if (prodDoc.exists) courseName = prodDoc.data()?.name || courseName;
+          }
+        }
+
+        for (const s of splits) {
+          const recipientId = s.recipient_id || s.recipient?.id || s.id;
+          if (!recipientId || recipientId === envMasterId) continue;
+          
+          let userId = null;
+          try {
+            const userLookup = await dbAdmin.collection('users')
+              .where('pagarmeRecipientId', '==', recipientId)
+              .limit(1)
+              .get();
+            if (!userLookup.empty) {
+              userId = userLookup.docs[0].id;
+            }
+          } catch (e) {
+            console.error('[GATILHO] Erro buscar UID:', e);
+          }
+
+          // Crie um documento correspondente dentro da coleção correta (coproduction_commissions)
+          await dbAdmin.collection('coproduction_commissions').add({
+            commissionValue: s.amount,
+            grossValue: orderDocData.transaction_amount || orderData.amount,
+            recipientId: recipientId,
+            coproducerId: userId || recipientId,
+            orderId: orderData.id,
+            courseName: courseName,
+            createdAt: new Date().toISOString(),
+            status: 'paid',
+            type: 'coproduction'
+          });
+          console.log(`[GATILHO] Transação gerada para ${userId || recipientId}`);
+        }
+      }
     } catch (err) {
-      console.error('[Push Trigger] Erro ao atualizar status da ordem no Firestore:', err);
+      console.error('[Push Trigger] Erro ao atualizar status da ordem ou gerar transactions:', err);
     }
 
     const email = orderData.customer?.email;
@@ -465,7 +517,7 @@ async function recordAdminSalesReport(orderData: any) {
     if (currentOffer && currentOffer.isAffiliationEnabled) {
       affiliatePercent = Number(currentOffer.affiliateCommission) || 0;
     }
-    const affiliatePart = Math.floor(pool * (affiliatePercent / 100));
+    let affiliatePart = Math.floor(pool * (affiliatePercent / 100));
     
     // Coprodução (Prioridade para splits reais se disponíveis)
     let coproductionPart = 0;
@@ -473,40 +525,50 @@ async function recordAdminSalesReport(orderData: any) {
     // Tenta encontrar splits reais na carga útil do webhook
     const actualSplits = charges[0]?.last_transaction?.splits || 
                          charges[0]?.last_transaction?.split ||
+                         charges[0]?.last_transaction?.split_rules ||
                          charges[0]?.splits || 
                          charges[0]?.split ||
+                         charges[0]?.split_rules ||
                          orderData.splits || 
                          orderData.split || 
+                         orderData.split_rules ||
                          [];
 
     if (actualSplits.length > 0) {
-      // Soma tudo que NÃO é master e NÃO é o afiliado (se identificado)
-      // Nota: No V5, o split do afiliado também aparece aqui. 
-      // Mas para o relatório simplificado de admin, somamos a parte que saiu do master para outros.
+      // Descobre o master real para não subtrair do próprio master
+      const envMasterId = process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID;
+      const hasRealMaster = actualSplits.find((s: any) => (s.recipient_id || s.recipient?.id || s.id) === envMasterId);
+      const appliedMasterId = hasRealMaster ? envMasterId : [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.recipient_id || [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.recipient?.id || [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.id;
+
       actualSplits.forEach((s: any) => {
-        if (s.recipient_id !== MASTER_RECIPIENT_ID) {
-          // Se soubermos qual recipient_id é do afiliado, poderíamos separar melhor.
-          // Por enquanto, somamos como parte da distribuição externa.
+        const sRecipientId = s.recipient_id || s.recipient?.id || s.id;
+        if (sRecipientId !== appliedMasterId) {
           coproductionPart += s.amount;
         }
       });
-      // Ajuste: Se houver comissão de afiliado calculada, subtraímos dela para não duplicar no relatório
-      // No admin_sales_report, 'coproductionPart' costuma ser o total dos coprodutores.
-      // Se affiliatePart > 0 e o afiliado está nos splits, o total distribuído inclui o afiliado.
-      // Vamos tentar isolar.
+      
+      // Ajuste: Evitamos colocar a comissão do afiliado 2 vezes na variável Taxas/Comissões
+      if (affiliatePart > 0 && coproductionPart >= affiliatePart) {
+        coproductionPart -= affiliatePart;
+      } else if (affiliatePart > 0 && coproductionPart < affiliatePart) {
+        affiliatePart = coproductionPart;
+        coproductionPart = 0;
+      }
     } else {
-      // Fallback manual
+      // Fallback manual (Comissões em cascata sobre a base líquida)
       const coproducers = currentOffer?.coproducers || pData?.coproduction || pData?.coproducers || [];
-      const poolForCopro = pool - affiliatePart;
-      for (const copro of coproducers) {
-        const percentage = Number(copro.percentage) || 0;
-        if (percentage > 0) {
-          coproductionPart += Math.floor(poolForCopro * (percentage / 100));
-        }
+      const totalCoproPercentage = coproducers.reduce((acc: number, copro: any) => acc + (Number(copro.percentage) || 0), 0);
+      
+      if (totalCoproPercentage > 0) {
+        const remainderForCopro = pool - affiliatePart;
+        coproductionPart = Math.floor(remainderForCopro * (totalCoproPercentage / 100));
+      } else {
+        coproductionPart = 0;
       }
     }
 
-    const netCompanyValue = pool - coproductionPart; // coproductionPart aqui já inclui afiliado se vier de splits reais
+    const totalTaxasEComissoes = gatewayFee + coproductionPart + affiliatePart;
+    const netCompanyValue = amountCents - totalTaxasEComissoes;
 
     await dbAdmin.collection('admin_sales_report').add({
       orderId: orderData.id,
@@ -568,21 +630,28 @@ async function recordCoproductionCommissions(orderData: any) {
     // Tenta encontrar splits em várias profundidades comuns da API V5/V4 e retornos de webhooks
     const actualSplits = charges[0]?.last_transaction?.splits || 
                          charges[0]?.last_transaction?.split ||
+                         charges[0]?.last_transaction?.split_rules ||
                          charges[0]?.splits || 
                          charges[0]?.split ||
+                         charges[0]?.split_rules ||
                          orderData.splits || 
                          orderData.split || 
+                         orderData.split_rules ||
                          [];
 
     if (actualSplits.length > 0) {
       console.log(`[SPLIT] Usando ${actualSplits.length} splits reais da Pagar.me para registro.`);
       
+      const envMasterId = process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID;
+
       for (const split of actualSplits) {
-        const recipientId = split.recipient_id;
+        const recipientId = split.recipient_id || split.recipient?.id || split.id;
         const commissionValue = split.amount;
 
+        if (!recipientId) continue;
+
         // Ignorar o Master Recipient no relatório de coprodução individual
-        if (recipientId === MASTER_RECIPIENT_ID) continue;
+        if (recipientId === envMasterId) continue;
 
         // Tenta encontrar o UID pelo RecipientId para vínculo correto
         let identifier = recipientId;

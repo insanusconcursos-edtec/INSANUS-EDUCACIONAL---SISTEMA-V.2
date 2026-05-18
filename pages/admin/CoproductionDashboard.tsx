@@ -85,6 +85,11 @@ const CoproductionDashboard: React.FC = () => {
   // Register for push notifications
   usePushNotifications();
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  
+  useEffect(() => {
+    fetch('/api/admin/backfill-sales').catch(console.error);
+  }, []);
+
   const [products, setProducts] = useState<ProductInfo[]>([]);
   const [coproducerUsers, setCoproducerUsers] = useState<CoproducerUser[]>([]);
   const [managedCoproducers, setManagedCoproducers] = useState<Coproducer[]>([]);
@@ -552,6 +557,13 @@ const CoproductionDashboard: React.FC = () => {
   }, [commissions, products, coproducerUsers, managedCoproducers, selectedProductId, dateFilter]);
 
   const globalStats = useMemo(() => {
+    // All-time commissions for accumulated total
+    const allTimeComms = commissions.filter(c => {
+      const matchProduct = selectedProductId === 'all' || c.courseId === selectedProductId;
+      return matchProduct;
+    });
+    const allTimeTotal = allTimeComms.reduce((acc, c) => acc + (Number(c.commissionValue) || 0), 0);
+
     // Current period
     const relevantComms = commissions.filter(c => {
       const matchProduct = selectedProductId === 'all' || c.courseId === selectedProductId;
@@ -583,6 +595,7 @@ const CoproductionDashboard: React.FC = () => {
 
     return {
       total: total / 100,
+      allTimeTotal: allTimeTotal / 100,
       count,
       uniqueCoproducers,
       uniqueProducts,
@@ -877,7 +890,7 @@ const CoproductionDashboard: React.FC = () => {
             </div>
             <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">Comissão Acumulada</p>
             <h3 className="text-2xl font-black text-green-400 tracking-tighter">
-              {formatCurrency(globalStats.total)}
+              {formatCurrency(globalStats.allTimeTotal)}
             </h3>
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                <DollarSign className="w-24 h-24" />
