@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ChevronRight, ChevronDown, Plus, Trash2, 
   Edit2, Check, X, ChevronUp, Link as LinkIcon,
@@ -19,6 +19,7 @@ interface VerticalEdictItemProps {
   linkedGoals?: EdictLinkedGoals;
   metaLookup?: Record<string, Meta>; 
   observation?: string;
+  analysisVideoUrl?: string;
   
   // Study Level Props
   studyLevels?: EdictStudyLevel[];
@@ -28,6 +29,7 @@ interface VerticalEdictItemProps {
   onToggleExpand?: () => void;
   onRename: (newName: string) => void;
   onUpdateObservation?: (newObservation: string) => void;
+  onUpdateAnalysisVideoUrl?: (newUrl: string) => void;
   onDelete: () => void;
   onAddChild?: () => void;
   onManageGroups?: () => void;
@@ -40,15 +42,21 @@ interface VerticalEdictItemProps {
 }
 
 const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
-  name, type, isExpanded, linkedGoals, metaLookup, observation,
+  name, type, isExpanded, linkedGoals, metaLookup, observation, analysisVideoUrl,
   studyLevels, currentLevelId, onLevelChange,
-  onToggleExpand, onRename, onUpdateObservation, onDelete, onAddChild, onManageGroups, onMove, 
+  onToggleExpand, onRename, onUpdateObservation, onUpdateAnalysisVideoUrl, onDelete, onAddChild, onManageGroups, onMove, 
   onLinkGoals, onUnlinkGoal,
   isFirst, isLast, children
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(name);
   const [isEditingObservation, setIsEditingObservation] = useState(false);
+  const [editVideoUrl, setEditVideoUrl] = useState(analysisVideoUrl || '');
+  const [isEditingVideoUrl, setIsEditingVideoUrl] = useState(false);
+
+  useEffect(() => {
+    setEditVideoUrl(analysisVideoUrl || '');
+  }, [analysisVideoUrl]);
 
   const handleSave = () => {
     if (editName.trim()) {
@@ -346,6 +354,26 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Analysis Video URL Input */}
+          {type === 'discipline' && (
+            <div className="mb-3 mt-1">
+               <label className="text-[10px] uppercase font-bold text-zinc-500 flex items-center gap-2 mb-1 pl-1">
+                  <PlayCircle size={10} className="text-brand-red" /> Link da Análise Técnica (PandaVídeo)
+               </label>
+               <input 
+                  type="text"
+                  value={editVideoUrl}
+                  onChange={(e) => setEditVideoUrl(e.target.value)}
+                  onBlur={() => onUpdateAnalysisVideoUrl?.(editVideoUrl)}
+                  placeholder="https://player-vz-..../video"
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-brand-red/50 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder:text-zinc-700 transition-colors"
+               />
+               <p className="text-[9px] text-zinc-600 pl-1 mt-1 font-mono uppercase tracking-widest">
+                 Dica: Cole o link de Embed gerado pela plataforma.
+               </p>
             </div>
           )}
 

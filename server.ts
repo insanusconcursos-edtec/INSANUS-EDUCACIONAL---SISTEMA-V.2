@@ -10,6 +10,7 @@ import { provisionExternalPurchase, revokePurchase } from './src/backend/service
 import { createPagarmeOrder, handlePagarmeWebhook, getPagarmeOrderStatus, requestPagarmeTransfer, getPagarmeRecipientBalance, getPagarmeRecipients } from './src/backend/services/pagarmeService.js';
 import { initOrderNotificationListener } from './src/backend/services/orderNotificationService.js';
 import { initStudyReminderCron } from './src/backend/services/studyReminderService.js';
+import { addWatermarkToPdf } from './src/backend/services/pdfWatermarkService.js';
 
 process.stdout.write(">>>> [SISTEMA] SERVIDOR INICIALIZADO COM SUCESSO <<<<\n");
 
@@ -85,7 +86,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // Middleware para JSON
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 async function setupVite(app: any) {
   // Vite middleware para desenvolvimento
@@ -265,6 +267,27 @@ async function setupVite(app: any) {
       res.json({ logs });
     } catch (e) {
       res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // Rota de Download de PDF (com Marca d'Água)
+  app.post('/api/download-watermarked-pdf', async (req, res) => {
+    try {
+      const { source, uid } = req.body;
+      if (!source || !uid) {
+        return res.status(400).json({ success: false, error: "Missing source or user UID" });
+      }
+
+      console.log(`[PDF DOWNLOAD] Gerando PDF com marca d'água para usuário: ${uid}`);
+
+      const watermarkedPdfBuffer = await addWatermarkToPdf(source, uid);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="material_${Date.now()}.pdf"`);
+      return res.status(200).send(watermarkedPdfBuffer);
+    } catch (error) {
+      console.error("[PDF DOWNLOAD] Error:", error);
+      return res.status(500).json({ success: false, error: "Falha ao gerar o PDF com marca d'água." });
     }
   });
 

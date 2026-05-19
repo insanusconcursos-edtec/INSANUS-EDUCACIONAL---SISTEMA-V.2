@@ -54,6 +54,7 @@ export interface EdictDiscipline {
   topics: EdictTopic[];
   collapsed?: boolean;
   topicGroups?: EdictTopicGroup[];
+  analysisVideoUrl?: string;
 }
 
 export interface EdictStudyLevel {
@@ -351,7 +352,7 @@ export const updateEdictItem = async (
   planId: string,
   type: 'discipline' | 'topic' | 'subtopic',
   ids: { disciplineId: string, topicId?: string, subtopicId?: string },
-  updates: { name?: string, observation?: string }
+  updates: { name?: string, observation?: string, analysisVideoUrl?: string }
 ) => {
   const structure = await getEdict(planId);
   const discipline = structure.disciplines.find(d => d.id === ids.disciplineId);
@@ -359,6 +360,7 @@ export const updateEdictItem = async (
 
   if (type === 'discipline') {
     if (updates.name !== undefined) discipline.name = updates.name;
+    if (updates.analysisVideoUrl !== undefined) discipline.analysisVideoUrl = updates.analysisVideoUrl;
   } else if (type === 'topic' && ids.topicId) {
     const topic = discipline.topics.find(t => t.id === ids.topicId);
     if (topic) {

@@ -5,7 +5,7 @@ import {
   X, Plus, FileText, Trash2, 
   Loader2, AlertCircle, BookOpen, AlertTriangle, StickyNote,
   PanelLeftClose, PanelLeftOpen, ExternalLink, Link as LinkIcon,
-  ChevronDown, Maximize2, Minimize2, MonitorUp
+  ChevronDown, Maximize2, Minimize2, MonitorUp, Download, PenTool
 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { notebookService, EditalNote, NoteType } from '../../../services/notebookService';
@@ -148,6 +148,7 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [noteToMove, setNoteToMove] = useState<EditalNote | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const folders = useMemo(() => notes.filter(n => n.isFolder), [notes]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -586,6 +587,103 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
     }
   };
 
+  const handleDownloadMaterial = async () => {
+    if (!activePdfUrl || !currentUser) return;
+    setIsDownloadingPdf(true);
+    const toastId = toast.loading("Aplicando marca d'água de segurança...");
+    
+    try {
+        const res = await fetch('/api/download-watermarked-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: { type: 'url', url: activePdfUrl }, uid: currentUser.uid })
+        });
+        
+        if (!res.ok) throw new Error("Falha ao gerar");
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Material_${topicTitle.replace(/[^a-zA-Z0-9]/gi, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        toast.success("Download Concluído", { id: toastId });
+    } catch (e) {
+        toast.error("Erro no download seguro do PDF", { id: toastId });
+    } finally {
+        setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadNotes = async () => {
+    // If we're generating notes PDF, we create a temporary hidden div
+    if (!content || !currentUser) {
+        toast.error("Você precisa ter anotações para exportar.");
+        return;
+    }
+    
+    setIsDownloadingPdf(true);
+    const toastId = toast.loading("Gerando PDF em alta definição...");
+
+    try {
+        const printContainer = document.createElement('div');
+        printContainer.innerHTML = `
+            <div style="font-family: sans-serif; color: black; padding: 40px; text-align: left;">
+                <h1 style="color: #ed3237; font-size: 24px; text-transform: uppercase;">${topicTitle}</h1>
+                <h2 style="color: #333; font-size: 18px; margin-bottom: 30px;">Anotações do Aluno${title ? ` - ${title}` : ''}</h2>
+                <div style="font-size: 14px; line-height: 1.6;">
+                    ${content}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(printContainer);
+
+        // Dynamically import html2pdf to prevent hydration errors and keep initial chunk small
+        const html2pdf = (await import('html2pdf.js')).default;
+        
+        const opt = {
+          margin:       0.5,
+          filename:     'notes.pdf',
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2 },
+          jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+        };
+        
+        const pdfBase64 = await html2pdf().from(printContainer).set(opt).outputPdf('datauristring');
+        document.body.removeChild(printContainer);
+        
+        toast.loading("Aplicando proteção ao material...", { id: toastId });
+        
+        const res = await fetch('/api/download-watermarked-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: { type: 'base64', base64: pdfBase64 }, uid: currentUser.uid })
+        });
+        
+        if (!res.ok) throw new Error("Falha ao gerar PDF final");
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Anotacoes_${topicTitle.replace(/[^a-zA-Z0-9]/gi, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        toast.success("Download de Anotações Concluído!", { id: toastId });
+    } catch (e) {
+        toast.error("Erro na exportação do PDF. Verifique se possui anotações.", { id: toastId });
+    } finally {
+        setIsDownloadingPdf(false);
+    }
+  };
+
   if (!isOpen && !isEmbedded) return null;
 
   const isErrorNotebook = type === 'error';
@@ -841,6 +939,16 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
                              <span className="text-[10px] font-black uppercase text-zinc-400">Visualizador de Material</span>
                          </div>
                          <div className="flex items-center gap-2">
+                            <button 
+                                onClick={handleDownloadMaterial}
+                                disabled={isDownloadingPdf}
+                                className="p-1.5 hover:bg-white/10 rounded-lg text-blue-500 hover:text-blue-400 transition-all flex items-center gap-1.5 text-[9px] font-bold uppercase border border-blue-500/20 disabled:opacity-50"
+                                title="Baixar Material (PDF Original)"
+                            >
+                                {isDownloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                <span className="hidden sm:inline">Baixar Material</span>
+                            </button>
+
                             {isNotebookMinimized && (
                               <button 
                                 onClick={() => setIsNotebookMinimized(false)}
@@ -874,9 +982,19 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
                  ? (isNotebookMinimized ? 'hidden' : 'w-full md:w-1/2 hidden md:flex') 
                  : 'w-full flex'
              }`}>
-                {/* Editor Header Actions - Focus Mode Toggle */}
-                {activePdfUrl && !isQuestionsNotebook && !isNotebookMinimized && (
-                   <div className="flex items-center justify-end px-6 pt-4 shrink-0">
+                {/* Editor Header Actions */}
+                <div className="flex items-center justify-end px-6 pt-4 shrink-0 gap-2">
+                   <button 
+                      onClick={handleDownloadNotes}
+                      disabled={isDownloadingPdf}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-emerald-500/20 rounded-lg text-emerald-500 hover:text-emerald-400 transition-all text-[9px] font-black uppercase tracking-widest group"
+                      title="Baixar minhas anotações em PDF"
+                   >
+                     {isDownloadingPdf ? <Loader2 size={12} className="animate-spin" /> : <PenTool size={12} className="group-hover:scale-110 transition-transform" />}
+                     <span>Baixar Anotações</span>
+                   </button>
+
+                   {activePdfUrl && !isQuestionsNotebook && !isNotebookMinimized && (
                       <button 
                         onClick={() => setIsNotebookMinimized(true)}
                         className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-zinc-400 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest group"
@@ -885,8 +1003,8 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
                         <Minimize2 size={14} className="group-hover:scale-110 transition-transform" />
                         Minimizar Editor
                       </button>
-                   </div>
-                )}
+                   )}
+                </div>
 
                 {/* Title Input */}
                 <div className="p-6 pb-2 shrink-0">

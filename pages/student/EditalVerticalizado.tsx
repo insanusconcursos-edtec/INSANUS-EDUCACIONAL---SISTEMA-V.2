@@ -173,7 +173,7 @@ const EditalVerticalizado: React.FC = () => {
   useEffect(() => {
     // Se já temos dados em cache, não recarrega do banco
     if (cachedData) {
-        console.log("♻️ Usando dados do Edital em Memória");
+        console.log("♻️ Usando dados do Edital em Memória (Com Bypass para Análise URL)");
         return;
     }
 

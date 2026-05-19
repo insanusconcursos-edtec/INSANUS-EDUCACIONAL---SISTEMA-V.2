@@ -20,6 +20,7 @@ import {
   deleteStudyLevel,
   updateTopicLevel,
   toggleActiveUserMode, // Importado
+  updateEdictItem,
   EdictStructure,
   EdictTopic,
   EdictDiscipline
@@ -360,6 +361,24 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     }
   };
 
+  const handleUpdateAnalysisVideoUrl = async (disciplineId: string, newUrl: string) => {
+    if (!plan.id) return;
+    try {
+      await updateEdictItem(plan.id, 'discipline', { disciplineId }, { analysisVideoUrl: newUrl });
+      // Otimista
+      if (structure) {
+        const newStructure = deepCloneSafe(structure);
+        const disc = newStructure.disciplines.find((d: any) => d.id === disciplineId);
+        if (disc) {
+          disc.analysisVideoUrl = newUrl;
+        }
+        setStructure(newStructure);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleUpdateObservation = async (type: 'discipline' | 'topic' | 'subtopic', ids: any, newObservation: string) => {
     if (!plan.id) return;
     try {
@@ -602,12 +621,14 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
             isExpanded={expandedItems.includes(discipline.id)}
             onToggleExpand={() => toggleExpand(discipline.id)}
             onRename={(newName) => handleRename('discipline', { disciplineId: discipline.id }, newName)}
+            onUpdateAnalysisVideoUrl={(newUrl) => handleUpdateAnalysisVideoUrl(discipline.id, newUrl)}
             onDelete={() => requestDelete('discipline', { disciplineId: discipline.id }, discipline.name)}
             onAddChild={() => handleAddTopic(discipline.id)}
             onManageGroups={() => setGroupManagerTarget(discipline.id)}
             onMove={(dir) => handleMove('discipline', { disciplineId: discipline.id }, dIndex, dir)}
             isFirst={dIndex === 0}
             isLast={dIndex === structure.disciplines.length - 1}
+            analysisVideoUrl={discipline.analysisVideoUrl}
           >
             {/* TÓPICOS AGRUPADOS */}
             {(discipline.topicGroups || []).map(group => {

@@ -1,6 +1,6 @@
 import React, { memo, useState } from 'react';
 import { 
-  ChevronDown, ChevronUp, CheckCircle2, Layout, ClipboardList, Folder 
+  ChevronDown, ChevronUp, CheckCircle2, Layout, ClipboardList, Folder, PlayCircle
 } from 'lucide-react';
 import { Meta } from '../../../services/metaService';
 import TopicItem from './TopicItem';
@@ -215,9 +215,24 @@ const DisciplineItem = memo(({
                     )}
                     
                     <div className="flex-1">
-                        <h3 className={`text-sm font-black uppercase tracking-tight ${isComplete ? 'text-zinc-400 line-through decoration-zinc-600' : 'text-white'}`}>
-                            {discipline.name}
-                        </h3>
+                        <div className="flex items-center gap-3">
+                            <h3 className={`text-sm font-black uppercase tracking-tight ${isComplete ? 'text-zinc-400 line-through decoration-zinc-600' : 'text-white'}`}>
+                                {discipline.name}
+                            </h3>
+                            {discipline.analysisVideoUrl && typeof discipline.analysisVideoUrl === 'string' && discipline.analysisVideoUrl.trim() !== '' && setActiveVideo && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveVideo(discipline.analysisVideoUrl.trim());
+                                    }}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-md transition-all text-[9px] font-black uppercase tracking-widest shadow-sm"
+                                    title="Assistir Análise Técnica"
+                                >
+                                    <PlayCircle size={12} className="text-brand-red animate-pulse" />
+                                    Análise Técnica
+                                </button>
+                            )}
+                        </div>
                         
                         {/* Discipline Progress Bar (Only for linear variant) */}
                         {variant === 'linear' && (

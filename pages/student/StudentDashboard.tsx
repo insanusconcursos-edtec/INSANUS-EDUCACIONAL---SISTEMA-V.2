@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { 
   LayoutDashboard, Coffee, Loader2, 
-  RefreshCw, CheckCircle2, Clock, X, Check, Trophy, PlusCircle
+  RefreshCw, CheckCircle2, Clock, X, Check, Trophy, PlusCircle, PlayCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { StudentGoalCard, StudentGoal } from '../../components/student/StudentGoalCard';
 import { DelayedGoalsSection } from '../../components/student/dashboard/DelayedGoalsSection';
 import { getDashboardData, toggleGoalStatus, getStudentConfig, getStudentCompletedMetas, getLocalISODate, checkAndUnlockSimulados, getStudentPlans, saveStudentRoutine } from '../../services/studentService';
 import { fetchFullPlanData, scheduleUserSimulado, anticipateAndShiftGoals, generateSchedule, rescheduleOverdueTasks } from '../../services/scheduleService';
+import { isPandaVideo } from '../../utils/videoHelpers';
 import { getAllPlanMetas, Meta } from '../../services/metaService';
 import { EditalNotebookModal } from '../../components/student/tools/EditalNotebookModal';
 import { NoteType } from '../../services/notebookService';
@@ -77,6 +79,7 @@ const StudentDashboard: React.FC = () => {
   // --- MODO FOCO SIMULADO ---
   const [isExamMode, setIsExamMode] = useState(false);
   const [activeSimulado, setActiveSimulado] = useState<StudentGoal | null>(null);
+  const [activeVideo, setActiveVideo] = useState<string | null>(null);
   
   // PASSO 2: NOVO ESTADO DE CONFIRMAÇÃO DE INÍCIO
   const [examToConfirm, setExamToConfirm] = useState<StudentGoal | null>(null);
@@ -1581,6 +1584,42 @@ const StudentDashboard: React.FC = () => {
                             const isNewCycle = goal.isNewCycle;
                             const isNewTopic = goal.isNewTopic;
                             
+                            // Calcula se deve mostrar o vídeo de análise técnica no cabeçalho do novo tópico
+                            let analysisVideoUrlStr: string | undefined = undefined;
+                            let analysisActive = false;
+
+                            if (isNewTopic) {
+                                const discModel = edictStructure?.disciplines?.find(d => d.id === goal.disciplineId || d.name === goal.discipline) 
+                                               || fullPlanData?.disciplines?.find((d: any) => d.id === goal.disciplineId || d.name === goal.discipline);
+                                               
+                                if (discModel?.analysisVideoUrl && discModel.analysisVideoUrl.trim() !== '') {
+                                    analysisVideoUrlStr = discModel.analysisVideoUrl;
+                                    
+                                    // Pega o primeiro tópico cronológico da lista (ordem já vem do Firestore no array 'topics')
+                                    const firstTopic = discModel.topics?.[0];
+                                    
+                                    // Verifica se o aluno já concluiu algo desta disciplina
+                                    let hasProgressData = false;
+                                    if (discModel.topics) {
+                                        discModel.topics.forEach((t: any) => {
+                                            if (t.linkedGoals?.metas) {
+                                                t.linkedGoals.metas.forEach((m: any) => {
+                                                    if (completedMetaIds.has(m.id)) hasProgressData = true;
+                                                });
+                                            }
+                                        });
+                                    }
+
+                                    // Se o ID do tópico atual for igual ao do primeiro (ou nome com upper case match), e progresso for 0
+                                    const isFirstById = firstTopic && goal.topicId && firstTopic.id === goal.topicId;
+                                    const isFirstByName = firstTopic && !goal.topicId && goal.topic && firstTopic.name.trim().toUpperCase() === goal.topic.trim().toUpperCase();
+                                    
+                                    if (isFirstById || isFirstByName || !hasProgressData || (goal.subjectOrder === 0 && goal.taskOrder === 0)) {
+                                        analysisActive = true;
+                                    }
+                                }
+                            }
+                            
                             return (
                                 <React.Fragment key={goal.id}>
                                     {isNewCycle && (
@@ -1598,7 +1637,23 @@ const StudentDashboard: React.FC = () => {
                                             <div className="flex flex-col items-center text-center px-4">
                                                 <span className="text-[9px] font-black text-[var(--plan-theme)] uppercase tracking-[0.2em]">Novo Tópico</span>
                                                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-0.5">{goal.discipline}</span>
-                                                <span className="text-[11px] font-black text-zinc-200 uppercase tracking-tight mt-0.5 leading-tight">{goal.topic}</span>
+                                                <div className="flex items-center justify-center gap-3 mt-1.5">
+                                                    <span className="text-[11px] font-black text-zinc-200 uppercase tracking-tight leading-tight">{goal.topic}</span>
+                                                    
+                                                    {analysisActive && analysisVideoUrlStr && (
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveVideo(analysisVideoUrlStr!);
+                                                            }}
+                                                            className="group flex items-center gap-1.5 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 px-2 py-1 rounded transition-all shadow-sm"
+                                                            title="Assista à Análise Técnica desta Disciplina antes de começar"
+                                                        >
+                                                            <PlayCircle size={12} className="text-brand-red animate-pulse" />
+                                                            <span className="text-[9px] font-black uppercase tracking-widest hidden sm:block">Análise Técnica</span>
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="h-px border-t border-dashed border-[var(--plan-theme)]/30 flex-1"></div>
                                         </div>
@@ -1804,6 +1859,46 @@ const StudentDashboard: React.FC = () => {
             metaLookup={metaLookup}
             initialPdfUrl={notebookModal.initialPdfUrl}
           />
+      )}
+
+      {/* MODAL DE VÍDEO DA ANÁLISE TÉCNICA */}
+      {activeVideo && createPortal(
+          <div className="fixed inset-0 z-[100] flex flex-col bg-black/95 backdrop-blur-md animate-in fade-in duration-300">
+              {/* Header do Modal */}
+              <div className="flex justify-end p-6">
+                  <button 
+                      onClick={() => setActiveVideo(null)}
+                      className="p-3 bg-zinc-900/50 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all border border-zinc-800"
+                  >
+                      <X className="w-6 h-6" />
+                  </button>
+              </div>
+
+              {/* Video Player */}
+              <div className="flex-1 w-full max-w-6xl mx-auto p-4 flex items-center justify-center">
+                  <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-zinc-800 bg-black">
+                      {isPandaVideo(activeVideo) ? (
+                          <iframe 
+                              id={`panda-${activeVideo.split("/").pop()}`} 
+                              src={activeVideo} 
+                              style={{ border: 'none' }} 
+                              allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture" 
+                              allowFullScreen 
+                              className="w-full h-full"
+                          ></iframe>
+                      ) : (
+                          <iframe 
+                              src={activeVideo} 
+                              style={{ border: 'none' }} 
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                              allowFullScreen
+                              className="w-full h-full"
+                          ></iframe>
+                      )}
+                  </div>
+              </div>
+          </div>,
+          document.body
       )}
     </div>
   );
