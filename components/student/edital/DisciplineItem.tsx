@@ -1,6 +1,6 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { 
-  ChevronDown, ChevronUp, CheckCircle2, Layout, ClipboardList 
+  ChevronDown, ChevronUp, CheckCircle2, Layout, ClipboardList, Folder 
 } from 'lucide-react';
 import { Meta } from '../../../services/metaService';
 import TopicItem from './TopicItem';
@@ -10,6 +10,7 @@ interface DisciplineItemProps {
     expandedDisciplines: Set<string>;
     toggleDiscipline: (id: string) => void;
     progress: number;
+    groupProgressStats?: Record<string, number>;
     openNotebook: (id: string, title: string, type: string, goals?: any, nodeData?: any, pdfUrl?: string) => void;
     completedMetaIds: Set<string>;
     activeUserMode: boolean;
@@ -33,7 +34,8 @@ const DisciplineItem = memo(({
     discipline, 
     expandedDisciplines, 
     toggleDiscipline, 
-    progress, 
+    progress,
+    groupProgressStats,
     openNotebook,
     completedMetaIds,
     activeUserMode,
@@ -53,6 +55,129 @@ const DisciplineItem = memo(({
 }: DisciplineItemProps) => {
     const isExpanded = expandedDisciplines.has(discipline.id);
     const isComplete = progress === 100;
+    
+    // Group accordion logic
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    
+    const toggleGroup = (groupId: string) => {
+      setExpandedGroups(prev => {
+        const next = new Set(prev);
+        if (next.has(groupId)) next.delete(groupId);
+        else next.add(groupId);
+        return next;
+      });
+    };
+
+    const renderTopic = (topic: any) => (
+        <TopicItem 
+            key={topic.id}
+            item={topic}
+            completedMetaIds={completedMetaIds}
+            activeUserMode={isReadOnly ? false : activeUserMode}
+            isReadOnly={isReadOnly}
+            metaLookup={metaLookup}
+            planId={planId}
+            disciplineId={discipline.id}
+            disciplineName={discipline.name}
+            studyLevels={structure.studyLevels}
+            onToggleGoal={handleToggleGoal}
+            onBatchToggle={handleBatchToggle}
+            onPlayVideo={setActiveVideo}
+            onOpenNotes={(id, title, goals, pdfUrl) => openNotebook(id, title, 'note', goals, topic, pdfUrl)}
+            onOpenFlashcards={(id, title) => setFlashcardModal?.({ isOpen: true, nodeId: id, nodeTitle: title })}
+            onOpenMindMap={(id, title) => setMindMapModal?.({ isOpen: true, nodeId: id, nodeTitle: title })}
+            highlightGoalId={activeHighlightGoal}
+            activeHighlightTopicId={activeHighlightTopic}
+            expandedTopics={expandedTopics}
+        />
+    );
+
+    const hasGroups = discipline.topicGroups && discipline.topicGroups.length > 0;
+    
+    let renderContent = null;
+    
+    if (discipline.topics.length === 0) {
+        renderContent = (
+            <div className="p-6 text-center text-zinc-600 text-xs font-bold uppercase">
+                Nenhum tópico cadastrado nesta disciplina.
+            </div>
+        );
+    } else {
+        if (hasGroups) {
+            // Render groups first
+            const groupedTopics: Record<string, any[]> = { unassigned: [] };
+            discipline.topicGroups.forEach((g: any) => groupedTopics[g.id] = []);
+            
+            discipline.topics.forEach((t: any) => {
+                if (t.groupId && groupedTopics[t.groupId]) {
+                    groupedTopics[t.groupId].push(t);
+                } else {
+                    groupedTopics.unassigned.push(t);
+                }
+            });
+
+            renderContent = (
+                <div className="divide-y divide-zinc-800/30">
+                    {discipline.topicGroups.map((group: any) => {
+                        const topicsInGroup = groupedTopics[group.id];
+                        if (!topicsInGroup) return null;
+                        const isGroupExpanded = expandedGroups.has(group.id);
+                        const groupProgress = groupProgressStats ? (groupProgressStats[group.id] || 0) : 0;
+                        const isGroupComplete = groupProgress === 100;
+                        
+                        return (
+                            <div key={group.id} className="bg-zinc-950/50">
+                                <div 
+                                    onClick={() => toggleGroup(group.id)}
+                                    className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-zinc-900/50 transition-colors"
+                                >
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <Folder size={16} className={isGroupComplete ? "text-emerald-500" : "text-brand-red"} />
+                                        <div className="flex-1">
+                                            <h4 className={`text-sm font-black uppercase tracking-tight ${isGroupComplete ? 'text-zinc-500 line-through decoration-zinc-700' : 'text-zinc-300'}`}>
+                                                {group.name}
+                                            </h4>
+                                            <div className="flex items-center gap-3 mt-1.5 max-w-[200px]">
+                                                <div className="h-1 flex-1 bg-zinc-800 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full rounded-full transition-all duration-500 ${isGroupComplete ? 'bg-emerald-500' : 'bg-zinc-500'}`}
+                                                        style={{ width: `${groupProgress}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-[9px] font-mono text-zinc-500">{groupProgress}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-zinc-500">
+                                        <span className="text-[10px] font-bold tracking-widest">{topicsInGroup.length} tópicos</span>
+                                        {isGroupExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </div>
+                                </div>
+                                {isGroupExpanded && (
+                                    <div className="pl-6 border-t border-zinc-800/30 divide-y divide-zinc-800/30">
+                                        {topicsInGroup.length > 0 ? (
+                                            topicsInGroup.map(renderTopic)
+                                        ) : (
+                                            <div className="p-4 text-center text-zinc-600 text-[10px] font-bold uppercase tracking-widest">Pasta vazia</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                    {/* Render unassigned topics below groups */}
+                    {groupedTopics.unassigned.map(renderTopic)}
+                </div>
+            );
+        } else {
+            // Normal linear render
+            renderContent = (
+                <div className="divide-y divide-zinc-800/30">
+                    {discipline.topics.map(renderTopic)}
+                </div>
+            );
+        }
+    }
 
     return (
         <div 
@@ -137,37 +262,7 @@ const DisciplineItem = memo(({
             {/* Accordion Content (Topics) */}
             {isExpanded && (
                 <div className="border-t border-zinc-800/50 bg-black/20">
-                    {discipline.topics.length === 0 ? (
-                        <div className="p-6 text-center text-zinc-600 text-xs font-bold uppercase">
-                            Nenhum tópico cadastrado nesta disciplina.
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-zinc-800/30">
-                            {discipline.topics.map((topic: any) => (
-                                <TopicItem 
-                                    key={topic.id}
-                                    item={topic}
-                                    completedMetaIds={completedMetaIds}
-                                    activeUserMode={isReadOnly ? false : activeUserMode}
-                                    isReadOnly={isReadOnly}
-                                    metaLookup={metaLookup}
-                                    planId={planId}
-                                    disciplineId={discipline.id}
-                                    disciplineName={discipline.name}
-                                    studyLevels={structure.studyLevels}
-                                    onToggleGoal={handleToggleGoal}
-                                    onBatchToggle={handleBatchToggle}
-                                    onPlayVideo={setActiveVideo}
-                                    onOpenNotes={(id, title, goals, pdfUrl) => openNotebook(id, title, 'note', goals, topic, pdfUrl)}
-                                    onOpenFlashcards={(id, title) => setFlashcardModal?.({ isOpen: true, nodeId: id, nodeTitle: title })}
-                                    onOpenMindMap={(id, title) => setMindMapModal?.({ isOpen: true, nodeId: id, nodeTitle: title })}
-                                    highlightGoalId={activeHighlightGoal}
-                                    activeHighlightTopicId={activeHighlightTopic}
-                                    expandedTopics={expandedTopics}
-                                />
-                            ))}
-                        </div>
-                    )}
+                    {renderContent}
                 </div>
             )}
         </div>

@@ -601,6 +601,7 @@ const EditalVerticalizado: React.FC = () => {
                     expandedDisciplines={expandedDisciplines}
                     toggleDiscipline={toggleDiscipline}
                     progress={stats.disciplineStats[discipline.id] || 0}
+                    groupProgressStats={stats.groupStats}
                     openNotebook={openNotebook}
                     completedMetaIds={completedMetaIds}
                     activeUserMode={activeUserMode}

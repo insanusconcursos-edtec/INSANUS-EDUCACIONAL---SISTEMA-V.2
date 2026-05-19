@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { 
-  FileText, Plus, Loader2, BarChart2, X, HelpCircle
+  FileText, Plus, Loader2, BarChart2, X, HelpCircle, FolderKanban
 } from 'lucide-react';
 // import { useBlocker } from 'react-router-dom'; // REMOVIDO: Causa erro sem Data Router
 import { Plan } from '../../../services/planService';
@@ -20,7 +20,9 @@ import {
   deleteStudyLevel,
   updateTopicLevel,
   toggleActiveUserMode, // Importado
-  EdictStructure
+  EdictStructure,
+  EdictTopic,
+  EdictDiscipline
 } from '../../../services/edictService';
 import { deepCloneSafe } from '../../../services/firestoreUtils';
 import { getMetas, Meta, MetaType } from '../../../services/metaService';
@@ -31,6 +33,7 @@ import ConfirmationModal from '../../ui/ConfirmationModal';
 import GoalSelectorModal from './GoalSelectorModal';
 import StudyLevelsModal from './StudyLevelsModal';
 import SyncControlPanel from '../sync/SyncControlPanel'; // Botão de Sync
+import { TopicGroupManagerModal } from './TopicGroupManagerModal';
 
 interface VerticalEdictManagerProps {
   plan: Plan;
@@ -65,6 +68,9 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
   // States para Modal de Link
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [linkTarget, setLinkTarget] = useState<{ disciplineId: string; topicId?: string; subtopicId?: string; name: string } | null>(null);
+
+  // States for Topic Group Manager
+  const [groupManagerTarget, setGroupManagerTarget] = useState<string | null>(null);
 
   // States para Modal de Níveis
   const [isLevelsModalOpen, setIsLevelsModalOpen] = useState(false);
@@ -425,6 +431,72 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
 
   // === RENDER ===
 
+  const renderTopicItem = (
+    topic: EdictTopic, 
+    discipline: EdictDiscipline, 
+    tIndex: number, 
+    metaLookup: Record<string, Meta>, 
+    expandedItems: string[], 
+    toggleExpand: (id: string) => void, 
+    structure: EdictStructure, 
+    handleUpdateTopicLevel: (d: string, t: string, l: string) => void, 
+    handleRename: (type: 'topic', ids: any, name: string) => void, 
+    handleUpdateObservation: (type: 'topic'|'subtopic', ids: any, obs: string) => void, 
+    requestDelete: (type: 'topic', ids: any, name: string) => void, 
+    handleAddSubtopic: (d: string, t: string) => void, 
+    handleMove: (type: 'topic', ids: any, i: number, dir: 'up'|'down') => void, 
+    openLinkModal: (ids: any, name: string) => void, 
+    handleUnlinkGoal: (ids: any, goalId: string, type: MetaType) => void
+  ) => (
+    <VerticalEdictItem
+      key={topic.id}
+      id={topic.id}
+      name={topic.name}
+      type="topic"
+      linkedGoals={topic.linkedGoals}
+      metaLookup={metaLookup}
+      isExpanded={expandedItems.includes(topic.id)}
+      
+      // Pass Level Data
+      studyLevels={structure?.studyLevels}
+      currentLevelId={topic.studyLevelId}
+      onLevelChange={(newLevelId) => handleUpdateTopicLevel(discipline.id, topic.id, newLevelId)}
+
+      onToggleExpand={() => toggleExpand(topic.id)}
+      onRename={(newName) => handleRename('topic', { disciplineId: discipline.id, topicId: topic.id }, newName)}
+      onUpdateObservation={(newObs) => handleUpdateObservation('topic', { disciplineId: discipline.id, topicId: topic.id }, newObs)}
+      onDelete={() => requestDelete('topic', { disciplineId: discipline.id, topicId: topic.id }, topic.name)}
+      onAddChild={() => handleAddSubtopic(discipline.id, topic.id)}
+      onMove={(dir) => handleMove('topic', { disciplineId: discipline.id }, tIndex, dir)}
+      onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id }, topic.name)}
+      onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id }, goalId, type)}
+      isFirst={tIndex === 0}
+      isLast={tIndex === discipline.topics.length - 1} // Approximated
+      observation={topic.observation}
+    >
+      {/* SUBTÓPICOS */}
+      {topic.subtopics.map((sub, sIndex) => (
+        <VerticalEdictItem
+          key={sub.id}
+          id={sub.id}
+          name={sub.name}
+          type="subtopic"
+          linkedGoals={sub.linkedGoals}
+          metaLookup={metaLookup}
+          onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
+          onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
+          onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
+          onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sIndex, dir)}
+          onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
+          onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, type)}
+          isFirst={sIndex === 0}
+          isLast={sIndex === topic.subtopics.length - 1}
+          observation={sub.observation}
+        />
+      ))}
+    </VerticalEdictItem>
+  );
+
   if (!plan.isEdictEnabled) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-6 p-10 bg-zinc-900/20 rounded-2xl border border-zinc-800 border-dashed animate-in fade-in">
@@ -532,60 +604,52 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
             onRename={(newName) => handleRename('discipline', { disciplineId: discipline.id }, newName)}
             onDelete={() => requestDelete('discipline', { disciplineId: discipline.id }, discipline.name)}
             onAddChild={() => handleAddTopic(discipline.id)}
+            onManageGroups={() => setGroupManagerTarget(discipline.id)}
             onMove={(dir) => handleMove('discipline', { disciplineId: discipline.id }, dIndex, dir)}
             isFirst={dIndex === 0}
             isLast={dIndex === structure.disciplines.length - 1}
           >
-            {/* TÓPICOS */}
-            {discipline.topics.map((topic, tIndex) => (
-              <VerticalEdictItem
-                key={topic.id}
-                id={topic.id}
-                name={topic.name}
-                type="topic"
-                linkedGoals={topic.linkedGoals}
-                metaLookup={metaLookup}
-                isExpanded={expandedItems.includes(topic.id)}
-                
-                // Pass Level Data
-                studyLevels={structure?.studyLevels}
-                currentLevelId={topic.studyLevelId}
-                onLevelChange={(newLevelId) => handleUpdateTopicLevel(discipline.id, topic.id, newLevelId)}
+            {/* TÓPICOS AGRUPADOS */}
+            {(discipline.topicGroups || []).map(group => {
+              const groupTopics = discipline.topics.filter(t => t.groupId === group.id);
+              if (groupTopics.length === 0) return null;
+              
+              const isGroupExpanded = expandedItems.includes(group.id);
+              
+              return (
+                <div key={group.id} className="border-l-2 border-brand-red/50 ml-4 mt-2 bg-zinc-950/50 rounded-r-xl">
+                  <div 
+                    onClick={() => toggleExpand(group.id)}
+                    className="py-2 px-3 hover:bg-zinc-900/50 rounded-r-lg transition-colors flex items-center justify-between cursor-pointer border-b border-zinc-800/30"
+                  >
+                    <div className="flex items-center gap-2">
+                       <FolderKanban size={14} className="text-brand-red" />
+                       <span className="text-xs font-black text-brand-red uppercase tracking-tight">{group.name}</span>
+                       <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest ml-2">{groupTopics.length} tópicos</span>
+                    </div>
+                  </div>
+                  {isGroupExpanded && (
+                    <div className="pl-2 pb-2">
+                      {groupTopics.map((topic, tIndex) => renderTopicItem(topic, discipline, tIndex, metaLookup, expandedItems, toggleExpand, structure, handleUpdateTopicLevel, handleRename, handleUpdateObservation, requestDelete, handleAddSubtopic, handleMove, openLinkModal, handleUnlinkGoal))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
-                onToggleExpand={() => toggleExpand(topic.id)}
-                onRename={(newName) => handleRename('topic', { disciplineId: discipline.id, topicId: topic.id }, newName)}
-                onUpdateObservation={(newObs) => handleUpdateObservation('topic', { disciplineId: discipline.id, topicId: topic.id }, newObs)}
-                onDelete={() => requestDelete('topic', { disciplineId: discipline.id, topicId: topic.id }, topic.name)}
-                onAddChild={() => handleAddSubtopic(discipline.id, topic.id)}
-                onMove={(dir) => handleMove('topic', { disciplineId: discipline.id }, tIndex, dir)}
-                onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id }, topic.name)}
-                onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id }, goalId, type)}
-                isFirst={tIndex === 0}
-                isLast={tIndex === discipline.topics.length - 1}
-                observation={topic.observation}
-              >
-                {/* SUBTÓPICOS */}
-                {topic.subtopics.map((sub, sIndex) => (
-                  <VerticalEdictItem
-                    key={sub.id}
-                    id={sub.id}
-                    name={sub.name}
-                    type="subtopic"
-                    linkedGoals={sub.linkedGoals}
-                    metaLookup={metaLookup}
-                    onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
-                    onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
-                    onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-                    onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sIndex, dir)}
-                    onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-                    onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, type)}
-                    isFirst={sIndex === 0}
-                    isLast={sIndex === topic.subtopics.length - 1}
-                    observation={sub.observation}
-                  />
-                ))}
-              </VerticalEdictItem>
-            ))}
+            {/* TÓPICOS SEM PASTA */}
+            {(() => {
+              const unassigned = discipline.topics.filter(t => !t.groupId);
+              if (unassigned.length > 0 && (discipline.topicGroups || []).length > 0) {
+                 return (
+                    <div className="mt-4 pt-2 border-t border-zinc-800/50">
+                       <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest pl-4">Outros Tópicos</span>
+                       {unassigned.map((topic, tIndex) => renderTopicItem(topic, discipline, tIndex, metaLookup, expandedItems, toggleExpand, structure, handleUpdateTopicLevel, handleRename, handleUpdateObservation, requestDelete, handleAddSubtopic, handleMove, openLinkModal, handleUnlinkGoal))}
+                    </div>
+                 );
+              }
+              return unassigned.map((topic, tIndex) => renderTopicItem(topic, discipline, tIndex, metaLookup, expandedItems, toggleExpand, structure, handleUpdateTopicLevel, handleRename, handleUpdateObservation, requestDelete, handleAddSubtopic, handleMove, openLinkModal, handleUnlinkGoal));
+            })()}
           </VerticalEdictItem>
         ))}
       </div>
@@ -653,6 +717,17 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
         title={`Excluir ${deleteData?.type === 'discipline' ? 'Disciplina' : 'Item'}?`}
         message={`Deseja excluir "${deleteData?.name}"? ${deleteData?.type !== 'subtopic' ? 'Todos os itens internos também serão removidos.' : ''}`}
       />
+
+      {/* MODAL GERENCIAR GRUPOS DE TOPICOS */}
+      {groupManagerTarget && structure && (
+        <TopicGroupManagerModal 
+          planId={plan.id}
+          discipline={structure.disciplines.find(d => d.id === groupManagerTarget)!}
+          structure={structure}
+          onClose={() => setGroupManagerTarget(null)}
+          onRefresh={(newStructure) => setStructure(newStructure)}
+        />
+      )}
     </div>
   );
 };

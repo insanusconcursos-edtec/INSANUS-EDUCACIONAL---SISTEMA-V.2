@@ -31,6 +31,12 @@ export interface EdictSubtopic {
   studyLevelId?: string | null; // Added for compatibility with EdictTopic
 }
 
+export interface EdictTopicGroup {
+  id: string;
+  name: string;
+  order: number;
+}
+
 export interface EdictTopic {
   id: string;
   name: string;
@@ -39,6 +45,7 @@ export interface EdictTopic {
   collapsed?: boolean;
   studyLevelId?: string | null;
   observation?: string;
+  groupId?: string | null;
 }
 
 export interface EdictDiscipline {
@@ -46,6 +53,7 @@ export interface EdictDiscipline {
   name: string;
   topics: EdictTopic[];
   collapsed?: boolean;
+  topicGroups?: EdictTopicGroup[];
 }
 
 export interface EdictStudyLevel {

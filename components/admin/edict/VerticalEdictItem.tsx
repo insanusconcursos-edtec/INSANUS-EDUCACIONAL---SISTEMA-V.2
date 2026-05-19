@@ -3,7 +3,7 @@ import {
   ChevronRight, ChevronDown, Plus, Trash2, 
   Edit2, Check, X, ChevronUp, Link as LinkIcon,
   PlayCircle, FileText, ListChecks, Book, Edit3, RefreshCw, Unlink,
-  StickyNote
+  StickyNote, FolderKanban
 } from 'lucide-react';
 import { EdictLinkedGoals, EdictStudyLevel } from '../../../services/edictService';
 import { Meta, MetaType } from '../../../services/metaService';
@@ -30,6 +30,7 @@ interface VerticalEdictItemProps {
   onUpdateObservation?: (newObservation: string) => void;
   onDelete: () => void;
   onAddChild?: () => void;
+  onManageGroups?: () => void;
   onMove: (direction: 'up' | 'down') => void;
   onLinkGoals?: () => void; 
   onUnlinkGoal?: (goalId: string, type: MetaType) => void;
@@ -41,7 +42,7 @@ interface VerticalEdictItemProps {
 const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
   name, type, isExpanded, linkedGoals, metaLookup, observation,
   studyLevels, currentLevelId, onLevelChange,
-  onToggleExpand, onRename, onUpdateObservation, onDelete, onAddChild, onMove, 
+  onToggleExpand, onRename, onUpdateObservation, onDelete, onAddChild, onManageGroups, onMove, 
   onLinkGoals, onUnlinkGoal,
   isFirst, isLast, children
 }) => {
@@ -278,10 +279,20 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
             </button>
           )}
 
+          {onManageGroups && type === 'discipline' && (
+            <button 
+              onClick={onManageGroups}
+              className={`p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded flex items-center gap-1 ml-2`}
+              title="Criar Grupo/Pasta"
+            >
+              <FolderKanban size={14} />
+            </button>
+          )}
+
           {onAddChild && (
             <button 
               onClick={onAddChild}
-              className={`p-1.5 ${styles.iconColor} hover:bg-zinc-800 rounded`}
+              className={`p-1.5 ${styles.iconColor} hover:bg-zinc-800 rounded ml-1`}
               title={type === 'discipline' ? "Adicionar Tópico" : "Adicionar Subtópico"}
             >
               <Plus size={14} />

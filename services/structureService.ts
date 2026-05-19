@@ -18,18 +18,26 @@ import { db } from './firebase';
 import { Folder, Cycle, CycleSystem, touchPlan } from './planService';
 export { touchPlan };
 
+export interface TopicGroup {
+  id: string;
+  name: string;
+  order: number;
+}
+
 export interface Discipline {
   id?: string;
   name: string;
   order: number;
   folderId?: string | null; // Novo campo para organização
   createdAt?: any;
+  topicGroups?: TopicGroup[];
 }
 
 export interface Topic {
   id?: string;
   name: string;
   order: number;
+  groupId?: string | null;
   createdAt?: any;
 }
 
@@ -219,6 +227,12 @@ export const batchUpdateDisciplines = async (
   await touchPlan(planId);
 };
 
+export const updateDisciplineTopicGroups = async (planId: string, disciplineId: string, topicGroups: TopicGroup[]) => {
+  const discRef = doc(db, 'plans', planId, 'disciplines', disciplineId);
+  await updateDoc(discRef, { topicGroups });
+  await touchPlan(planId);
+};
+
 // === TOPICS (Subcollection of Disciplines) ===
 
 export const getTopics = async (planId: string, disciplineId: string): Promise<Topic[]> => {
@@ -245,6 +259,20 @@ export const addTopic = async (planId: string, disciplineId: string, name: strin
 
 export const deleteTopic = async (planId: string, disciplineId: string, topicId: string) => {
   await deleteDoc(doc(db, 'plans', planId, 'disciplines', disciplineId, 'topics', topicId));
+  await touchPlan(planId);
+};
+
+export const batchUpdateTopicGroup = async (
+  planId: string,
+  disciplineId: string,
+  updates: { topicId: string; groupId: string | null }[]
+) => {
+  const batch = writeBatch(db);
+  updates.forEach(u => {
+    const ref = doc(db, 'plans', planId, 'disciplines', disciplineId, 'topics', u.topicId);
+    batch.update(ref, { groupId: u.groupId });
+  });
+  await batch.commit();
   await touchPlan(planId);
 };
 

@@ -460,6 +460,7 @@ const PlanEditor: React.FC = () => {
                         onMove={handleMoveTopic}
                         onSelectTopic={setSelectedTopic}
                         onUpdateTopic={handleUpdateTopicLocal}
+                        onRefresh={() => window.location.reload()}
                     />
                 )}
             </div>
