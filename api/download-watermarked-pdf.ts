@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { addWatermarkToPdf } from '../src/backend/services/pdfWatermarkService';
+import { addWatermarkToPdf } from '../src/backend/services/pdfWatermarkService.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
