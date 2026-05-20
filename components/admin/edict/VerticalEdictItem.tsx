@@ -36,6 +36,7 @@ interface VerticalEdictItemProps {
   onMove: (direction: 'up' | 'down') => void;
   onLinkGoals?: () => void; 
   onUnlinkGoal?: (goalId: string, type: MetaType) => void;
+  numbering?: string;
   isFirst: boolean;
   isLast: boolean;
   children?: React.ReactNode;
@@ -45,7 +46,7 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
   name, type, isExpanded, linkedGoals, metaLookup, observation, analysisVideoUrl,
   studyLevels, currentLevelId, onLevelChange,
   onToggleExpand, onRename, onUpdateObservation, onUpdateAnalysisVideoUrl, onDelete, onAddChild, onManageGroups, onMove, 
-  onLinkGoals, onUnlinkGoal,
+  onLinkGoals, onUnlinkGoal, numbering,
   isFirst, isLast, children
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -188,6 +189,7 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
           
           {isEditing ? (
             <div className="flex items-center gap-1 flex-1">
+              {numbering && <span className="text-zinc-600 font-mono text-[10px] shrink-0">{numbering}</span>}
               <input 
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
@@ -204,13 +206,16 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
             </div>
           ) : (
             <div className="flex flex-col">
-              <span 
-                  onClick={() => setIsEditing(true)}
-                  className={`${styles.text} ${styles.hoverText} truncate cursor-text transition-colors`}
-                  title="Clique para editar"
-              >
-                  {name}
-              </span>
+              <div className="flex items-center gap-2">
+                {numbering && <span className="text-zinc-600 font-mono text-[10px] shrink-0">{numbering}</span>}
+                <span 
+                    onClick={() => setIsEditing(true)}
+                    className={`${styles.text} ${styles.hoverText} truncate cursor-text transition-colors`}
+                    title="Clique para editar"
+                >
+                    {name}
+                </span>
+              </div>
             </div>
           )}
         </div>

@@ -154,6 +154,20 @@ const TopicList: React.FC<TopicListProps> = ({
     else groupedTopics.unassigned.push(t);
   });
 
+  // Calculate hierarchical numbering map
+  const topicNumbering: Record<string, string> = {};
+  let currentCount = 0;
+  topicGroups.forEach(g => {
+    (groupedTopics[g.id] || []).forEach(t => {
+      currentCount++;
+      topicNumbering[t.id!] = `${currentCount}.`;
+    });
+  });
+  groupedTopics.unassigned.forEach(t => {
+     currentCount++;
+     topicNumbering[t.id!] = `${currentCount}.`;
+  });
+
   const renderTopicItem = (topic: Topic, index: number, isGrouped: boolean = false) => (
     <div 
         key={topic.id}
@@ -161,7 +175,7 @@ const TopicList: React.FC<TopicListProps> = ({
         className={`group bg-zinc-950 border border-zinc-800 hover:border-brand-red/50 hover:bg-zinc-900 p-4 rounded-xl flex items-center justify-between transition-all hover:translate-x-1 cursor-pointer ${editingTopicId === topic.id ? 'border-brand-red bg-zinc-900' : ''}`}
     >
         <div className="flex items-center gap-4 flex-1">
-            <span className="text-zinc-600 font-mono text-xs">{(index + 1).toString().padStart(2, '0')}</span>
+            <span className="text-zinc-600 font-mono text-xs">{topicNumbering[topic.id!] || (index + 1).toString().padStart(2, '0')}</span>
             {editingTopicId === topic.id ? (
                 <div className="flex-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     <input 

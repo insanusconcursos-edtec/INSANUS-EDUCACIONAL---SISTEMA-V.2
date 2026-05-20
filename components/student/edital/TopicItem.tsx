@@ -43,6 +43,7 @@ interface TopicItemProps {
   activeHighlightTopicId?: string | null;
   expandedTopics?: Set<string>;
   isReadOnly?: boolean;
+  numbering?: string;
 }
 
 const TopicItem: React.FC<TopicItemProps> = memo(({ 
@@ -64,7 +65,8 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
   highlightGoalId,
   activeHighlightTopicId,
   expandedTopics,
-  isReadOnly = false
+  isReadOnly = false,
+  numbering
 }) => {
   const { currentUser } = useAuth();
   const { openSpacedReviewModal } = useSpacedReviewModal();
@@ -388,6 +390,7 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
         {/* Title */}
         <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
+                {numbering && <span className="text-zinc-500 font-mono text-[10px] shrink-0">{numbering}</span>}
                 <h4 className={`text-sm font-medium truncate ${isFullyComplete ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
                     {item.name}
                 </h4>
@@ -569,30 +572,34 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
             {renderLinkedGoals()}
 
             {/* 3. Subtopics Recursive Render */}
-            {hasSubtopics && item.subtopics?.map(sub => (
-                <TopicItem 
-                    key={sub.id} 
-                    item={sub} 
-                    depth={depth + 1} 
-                    // Pass EFFECTIVE IDs down to children to maintain visual state
-                    completedMetaIds={effectiveCompletedIds}
-                    activeUserMode={activeUserMode}
-                    metaLookup={metaLookup}
-                    planId={planId}
-                    disciplineId={disciplineId}
-                    disciplineName={disciplineName}
-                    studyLevels={studyLevels}
-                    onToggleGoal={onToggleGoal}
-                    onBatchToggle={onBatchToggle} // PROPAGATE BATCH TOGGLE DOWN
-                    onPlayVideo={onPlayVideo}
-                    onOpenNotes={onOpenNotes}
-                    onOpenFlashcards={onOpenFlashcards}
-                    onOpenMindMap={onOpenMindMap}
-                    highlightGoalId={highlightGoalId}
-                    activeHighlightTopicId={activeHighlightTopicId}
-                    isReadOnly={isReadOnly}
-                />
-            ))}
+            {hasSubtopics && item.subtopics?.map((sub, sIndex) => {
+                const subNumbering = numbering ? `${numbering.replace('.', '')}.${sIndex + 1}` : `${sIndex + 1}`;
+                return (
+                    <TopicItem 
+                        key={sub.id} 
+                        item={sub} 
+                        depth={depth + 1} 
+                        numbering={subNumbering}
+                        // Pass EFFECTIVE IDs down to children to maintain visual state
+                        completedMetaIds={effectiveCompletedIds}
+                        activeUserMode={activeUserMode}
+                        metaLookup={metaLookup}
+                        planId={planId}
+                        disciplineId={disciplineId}
+                        disciplineName={disciplineName}
+                        studyLevels={studyLevels}
+                        onToggleGoal={onToggleGoal}
+                        onBatchToggle={onBatchToggle} // PROPAGATE BATCH TOGGLE DOWN
+                        onPlayVideo={onPlayVideo}
+                        onOpenNotes={onOpenNotes}
+                        onOpenFlashcards={onOpenFlashcards}
+                        onOpenMindMap={onOpenMindMap}
+                        highlightGoalId={highlightGoalId}
+                        activeHighlightTopicId={activeHighlightTopicId}
+                        isReadOnly={isReadOnly}
+                    />
+                );
+            })}
 
             {/* 4. Empty State Check */}
             {progressStats.total === 0 && !hasSubtopics && !hasObservation && (

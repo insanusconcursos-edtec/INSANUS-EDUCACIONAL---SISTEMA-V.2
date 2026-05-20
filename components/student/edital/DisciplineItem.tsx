@@ -68,10 +68,35 @@ const DisciplineItem = memo(({
       });
     };
 
+    // Calculate consistent numbering for topics across groups/unassigned
+    const topicNumbering: Record<string, string> = {};
+    let currentTopicCount = 0;
+    
+    if (discipline.topicGroups && discipline.topicGroups.length > 0) {
+        discipline.topicGroups.forEach((group: any) => {
+            const groupTopics = discipline.topics.filter((t: any) => t.groupId === group.id);
+            groupTopics.forEach((topic: any) => {
+                currentTopicCount++;
+                topicNumbering[topic.id] = `${currentTopicCount}.`;
+            });
+        });
+        
+        const unassignedTopics = discipline.topics.filter((t: any) => !t.groupId);
+        unassignedTopics.forEach((topic: any) => {
+            currentTopicCount++;
+            topicNumbering[topic.id] = `${currentTopicCount}.`;
+        });
+    } else {
+        discipline.topics.forEach((topic: any, i: number) => {
+            topicNumbering[topic.id] = `${i + 1}.`;
+        });
+    }
+
     const renderTopic = (topic: any) => (
         <TopicItem 
             key={topic.id}
             item={topic}
+            numbering={topicNumbering[topic.id]}
             completedMetaIds={completedMetaIds}
             activeUserMode={isReadOnly ? false : activeUserMode}
             isReadOnly={isReadOnly}

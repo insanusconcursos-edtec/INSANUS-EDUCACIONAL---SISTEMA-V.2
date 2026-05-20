@@ -465,13 +465,15 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     handleAddSubtopic: (d: string, t: string) => void, 
     handleMove: (type: 'topic', ids: any, i: number, dir: 'up'|'down') => void, 
     openLinkModal: (ids: any, name: string) => void, 
-    handleUnlinkGoal: (ids: any, goalId: string, type: MetaType) => void
+    handleUnlinkGoal: (ids: any, goalId: string, type: MetaType) => void,
+    numbering?: string
   ) => (
     <VerticalEdictItem
       key={topic.id}
       id={topic.id}
       name={topic.name}
       type="topic"
+      numbering={numbering}
       linkedGoals={topic.linkedGoals}
       metaLookup={metaLookup}
       isExpanded={expandedItems.includes(topic.id)}
@@ -494,25 +496,29 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
       observation={topic.observation}
     >
       {/* SUBTÓPICOS */}
-      {topic.subtopics.map((sub, sIndex) => (
-        <VerticalEdictItem
-          key={sub.id}
-          id={sub.id}
-          name={sub.name}
-          type="subtopic"
-          linkedGoals={sub.linkedGoals}
-          metaLookup={metaLookup}
-          onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
-          onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
-          onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-          onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sIndex, dir)}
-          onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-          onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, type)}
-          isFirst={sIndex === 0}
-          isLast={sIndex === topic.subtopics.length - 1}
-          observation={sub.observation}
-        />
-      ))}
+      {topic.subtopics.map((sub, sIndex) => {
+        const subNumbering = numbering ? `${numbering.replace('.', '')}.${sIndex + 1}` : `${sIndex + 1}`;
+        return (
+          <VerticalEdictItem
+            key={sub.id}
+            id={sub.id}
+            name={sub.name}
+            type="subtopic"
+            numbering={subNumbering}
+            linkedGoals={sub.linkedGoals}
+            metaLookup={metaLookup}
+            onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
+            onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
+            onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
+            onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sIndex, dir)}
+            onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
+            onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, type)}
+            isFirst={sIndex === 0}
+            isLast={sIndex === topic.subtopics.length - 1}
+            observation={sub.observation}
+          />
+        );
+      })}
     </VerticalEdictItem>
   );
 
@@ -612,11 +618,30 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
           </div>
         )}
 
-        {structure?.disciplines.map((discipline, dIndex) => (
-          <VerticalEdictItem
-            key={discipline.id}
-            id={discipline.id}
-            name={discipline.name}
+        {structure?.disciplines.map((discipline, dIndex) => {
+          // Calculate consistent numbering for topics across groups/unassigned
+          const topicNumbering: Record<string, string> = {};
+          let currentTopicCount = 0;
+          
+          (discipline.topicGroups || []).forEach(group => {
+            const groupTopics = discipline.topics.filter(t => t.groupId === group.id);
+            groupTopics.forEach(topic => {
+              currentTopicCount++;
+              topicNumbering[topic.id] = `${currentTopicCount}.`;
+            });
+          });
+          
+          const unassignedTopics = discipline.topics.filter(t => !t.groupId);
+          unassignedTopics.forEach(topic => {
+            currentTopicCount++;
+            topicNumbering[topic.id] = `${currentTopicCount}.`;
+          });
+
+          return (
+            <VerticalEdictItem
+              key={discipline.id}
+              id={discipline.id}
+              name={discipline.name}
             type="discipline"
             isExpanded={expandedItems.includes(discipline.id)}
             onToggleExpand={() => toggleExpand(discipline.id)}
@@ -651,7 +676,24 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
                   </div>
                   {isGroupExpanded && (
                     <div className="pl-2 pb-2">
-                      {groupTopics.map((topic, tIndex) => renderTopicItem(topic, discipline, tIndex, metaLookup, expandedItems, toggleExpand, structure, handleUpdateTopicLevel, handleRename, handleUpdateObservation, requestDelete, handleAddSubtopic, handleMove, openLinkModal, handleUnlinkGoal))}
+                      {groupTopics.map((topic, tIndex) => renderTopicItem(
+                        topic, 
+                        discipline, 
+                        tIndex, 
+                        metaLookup, 
+                        expandedItems, 
+                        toggleExpand, 
+                        structure, 
+                        handleUpdateTopicLevel, 
+                        handleRename, 
+                        handleUpdateObservation, 
+                        requestDelete, 
+                        handleAddSubtopic, 
+                        handleMove, 
+                        openLinkModal, 
+                        handleUnlinkGoal,
+                        topicNumbering[topic.id]
+                      ))}
                     </div>
                   )}
                 </div>
@@ -665,14 +707,49 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
                  return (
                     <div className="mt-4 pt-2 border-t border-zinc-800/50">
                        <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest pl-4">Outros Tópicos</span>
-                       {unassigned.map((topic, tIndex) => renderTopicItem(topic, discipline, tIndex, metaLookup, expandedItems, toggleExpand, structure, handleUpdateTopicLevel, handleRename, handleUpdateObservation, requestDelete, handleAddSubtopic, handleMove, openLinkModal, handleUnlinkGoal))}
+                       {unassigned.map((topic, tIndex) => renderTopicItem(
+                          topic, 
+                          discipline, 
+                          tIndex, 
+                          metaLookup, 
+                          expandedItems, 
+                          toggleExpand, 
+                          structure, 
+                          handleUpdateTopicLevel, 
+                          handleRename, 
+                          handleUpdateObservation, 
+                          requestDelete, 
+                          handleAddSubtopic, 
+                          handleMove, 
+                          openLinkModal, 
+                          handleUnlinkGoal,
+                          topicNumbering[topic.id]
+                        ))}
                     </div>
                  );
               }
-              return unassigned.map((topic, tIndex) => renderTopicItem(topic, discipline, tIndex, metaLookup, expandedItems, toggleExpand, structure, handleUpdateTopicLevel, handleRename, handleUpdateObservation, requestDelete, handleAddSubtopic, handleMove, openLinkModal, handleUnlinkGoal));
+              return unassigned.map((topic, tIndex) => renderTopicItem(
+                topic, 
+                discipline, 
+                tIndex, 
+                metaLookup, 
+                expandedItems, 
+                toggleExpand, 
+                structure, 
+                handleUpdateTopicLevel, 
+                handleRename, 
+                handleUpdateObservation, 
+                requestDelete, 
+                handleAddSubtopic, 
+                handleMove, 
+                openLinkModal, 
+                handleUnlinkGoal,
+                topicNumbering[topic.id]
+              ));
             })()}
           </VerticalEdictItem>
-        ))}
+        );
+      })}
       </div>
 
       {/* MODAL CRIAR DISCIPLINA */}
