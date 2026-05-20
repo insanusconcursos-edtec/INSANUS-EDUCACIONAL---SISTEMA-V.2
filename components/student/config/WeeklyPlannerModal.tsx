@@ -278,6 +278,7 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
     });
     
     onSave(routineMinutes);
+    // Note: The parent component will handle the actual generation call if needed
     onClose();
   };
 
@@ -474,7 +475,7 @@ const WeeklyPlannerModal: React.FC<WeeklyPlannerModalProps> = ({
           onClick={calculateRoutine}
           className="bg-brand-red hover:bg-red-600 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-brand-red/20 flex items-center gap-2"
         >
-          <Check size={16} /> Salvar Planejamento
+          <Check size={16} /> Salvar e Gerar Cronograma
         </button>
       </header>
 

@@ -384,7 +384,7 @@ const TopicList: React.FC<TopicListProps> = ({
         <div className="absolute inset-0 bg-black/90 flex flex-col z-50 animate-in fade-in duration-200">
           <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
             <div>
-              <h3 className="text-lg font-black text-white">Vincular a "{linkingGroup.name}"</h3>
+              <h3 className="text-lg font-black text-white">Vincular a &quot;{linkingGroup.name}&quot;</h3>
               <p className="text-xs text-zinc-400">Selecione os tópicos para esta pasta</p>
             </div>
             <button onClick={() => setLinkingGroup(null)} className="p-2 text-zinc-400 hover:text-white"><X size={20} /></button>

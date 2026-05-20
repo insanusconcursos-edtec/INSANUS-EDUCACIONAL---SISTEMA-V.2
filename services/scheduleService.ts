@@ -90,14 +90,9 @@ export const getScheduleLimitDate = (currentDate: Date): Date => {
   const limitDate = new Date(currentDate);
   const dayOfWeek = limitDate.getDay(); // 0 (Sun) to 6 (Sat)
   
-  // Rule 2: Se hoje for SÁBADO (6), agendar até o PRÓXIMO sábado (hoje + 7 dias)
-  if (dayOfWeek === 6) {
-    limitDate.setDate(limitDate.getDate() + 7);
-  } else {
-    // Rule 1: Agendar até o Sábado da semana atual
-    const daysUntilSaturday = 6 - dayOfWeek;
-    limitDate.setDate(limitDate.getDate() + daysUntilSaturday);
-  }
+  // Agendar apenas até o Sábado da semana atual
+  const daysUntilSaturday = 6 - dayOfWeek;
+  limitDate.setDate(limitDate.getDate() + daysUntilSaturday);
   
   limitDate.setHours(23, 59, 59, 999);
   return limitDate;
@@ -540,19 +535,36 @@ export const generateSchedule = async (
   const currentDate = new Date();
   const limitDate = getScheduleLimitDate(currentDate);
   
+  // FASE 2.4: Carregamento de Tarefas Concluídas para Cálculo de Gap e Conservação
+  const existingSchedule = await getRangeSchedule(userId, currentDate, limitDate);
+  const completedDurationsByDate: Record<string, number> = {};
+  
+  Object.entries(existingSchedule).forEach(([dateKey, items]) => {
+    const completedItemsOfThisPlan = items.filter((item: any) => 
+      item.planId === planId && item.status === 'completed'
+    );
+    const sum = completedItemsOfThisPlan.reduce((acc, curr) => acc + (curr.duration || 0), 0);
+    completedDurationsByDate[dateKey] = sum;
+  });
+
   const getMinutesForDate = (date: Date, isFirstDay: boolean = false): number => {
     const dayOfWeek = date.getDay(); 
+    const dateStr = getLocalDataString(date);
     const allocatedRoutine = Number(effectiveRoutine[dayOfWeek as keyof StudentRoutine]) || 0;
+    const completedTime = completedDurationsByDate[dateStr] || 0;
+    
+    // Sobra do dia = Routine - Tempo já gasto em metas concluídas do plano hoje
+    const availableRoutine = Math.max(0, allocatedRoutine - completedTime);
     
     if (isFirstDay) {
       const now = new Date();
       const endOfDay = new Date(now);
       endOfDay.setHours(23, 59, 59, 999);
       const minutesLeftToday = Math.floor((endOfDay.getTime() - now.getTime()) / 60000);
-      return Math.min(allocatedRoutine, Math.max(0, minutesLeftToday));
+      return Math.min(availableRoutine, Math.max(0, minutesLeftToday));
     }
     
-    return allocatedRoutine;
+    return availableRoutine;
   };
 
   const minutesRemainingInDay = getMinutesForDate(currentDate, true);
@@ -888,8 +900,10 @@ export const generateSchedule = async (
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.items && Array.isArray(data.items)) {
-        // Preserva metas que NÃO pertencem ao plano que está sendo gerado
-        existingItems = data.items.filter((item: any) => item.planId !== planId);
+        // Preserva metas que NÃO pertencem ao plano OU que estão concluídas
+        existingItems = data.items.filter((item: any) => 
+            item.planId !== planId || item.status === 'completed'
+        );
       }
     }
 
@@ -1221,10 +1235,13 @@ export const anticipateFutureGoals = async (userId: string) => {
     return Promise.resolve();
 }
 
-export const resetStudentSchedule = async (userId: string, planId: string) => {
+export const resetStudentSchedule = async (userId: string, planId: string, startDate?: Date) => {
   const schedulesRef = collection(db, 'users', userId, 'schedules');
-  // Fetch all documents as we don't know which ones contain items for this plan
-  const snapshot = await getDocs(schedulesRef);
+  const startStr = getLocalDataString(startDate || new Date());
+  
+  // Apenas agendamentos de hoje/futuro ou a partir da data informada
+  const q = query(schedulesRef, where(documentId(), '>=', startStr));
+  const snapshot = await getDocs(q);
 
   if (snapshot.empty) return;
 
@@ -1234,15 +1251,15 @@ export const resetStudentSchedule = async (userId: string, planId: string) => {
   snapshot.docs.forEach(document => {
     const data = document.data();
     if (data.items && Array.isArray(data.items)) {
-      // Filtra mantendo apenas os itens que NÃO são deste plano
-      const remainingItems = data.items.filter((item: any) => item.planId !== planId);
+      // REGRA: Remove apenas metas que NÃO estão concluídas e pertencem a este plano
+      const remainingItems = data.items.filter((item: any) => 
+        !(item.planId === planId && item.status !== 'completed')
+      );
       
       if (remainingItems.length === 0) {
-        // Se o dia ficar vazio, deletamos o documento inteiro
         batch.delete(document.ref);
         operationCount++;
       } else if (remainingItems.length < data.items.length) {
-        // Se removemos algumas metas mas sobraram outras, atualizamos o array
         batch.update(document.ref, cleanObject({ items: remainingItems }));
         operationCount++;
       }

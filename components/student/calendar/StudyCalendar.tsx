@@ -1,10 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Layout, Loader2, PauseCircle, Grid, X, PlayCircle, ChevronDown, Trophy, RefreshCw } from 'lucide-react';
-import { ScheduledEvent, generateSchedule, fetchFullPlanData } from '../../../services/scheduleService';
+import { ChevronLeft, ChevronRight, Layout, PauseCircle, Grid, X, PlayCircle, ChevronDown, Loader2, Trophy } from 'lucide-react';
+import { ScheduledEvent, fetchFullPlanData } from '../../../services/scheduleService';
 import { getStudentConfig, getStudentCompletedMetas } from '../../../services/studentService';
-import toast from 'react-hot-toast';
 
 // Type Config for Visuals (Fallback)
 const TYPE_CONFIG: Record<string, { label: string; color: string; }> = {
@@ -239,7 +238,7 @@ export const StudyCalendar: React.FC<StudyCalendarProps> = ({ userId, isReadOnly
   // Rolling Window State
   const [lastScheduledDate, setLastScheduledDate] = useState<string | null>(null);
   const [isPlanCompleted, setIsPlanCompleted] = useState(false);
-  const [isGeneratingNext, setIsGeneratingNext] = useState(false);
+
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
 
   const getISODate = (date: Date) => {
@@ -368,13 +367,18 @@ export const StudyCalendar: React.FC<StudyCalendarProps> = ({ userId, isReadOnly
                 const dayItems = [...spacedReviews, ...normalTasks];
 
                 const itemsWithFlags = dayItems.map((item) => {
-                    const isAbsoluteStartOfCycle = item.disciplineOrder === 0 && item.subjectOrder === 0 && item.taskOrder === 0;
-                    const isNewTopic = !hasPreviousItem || item.topicId !== lastTopicId;
-                    const isNewCycle = (hasPreviousItem && item.cycleId !== lastCycleId) || isAbsoluteStartOfCycle;
+                    const isFreeStudy = item.isFreeStudy || item.type === 'free_study';
+                    const isSpacedReview = item.isSpacedReview || (item.type === 'review' && !!item.originalEventId);
+                    
+                    const isAbsoluteStartOfCycle = !isFreeStudy && !isSpacedReview && item.disciplineOrder === 0 && item.subjectOrder === 0 && item.taskOrder === 0;
+                    const isNewTopic = !isFreeStudy && !isSpacedReview && (!hasPreviousItem || item.topicId !== lastTopicId);
+                    const isNewCycle = !isFreeStudy && !isSpacedReview && ((hasPreviousItem && item.cycleId !== lastCycleId) || isAbsoluteStartOfCycle);
 
-                    lastTopicId = item.topicId || null;
-                    lastCycleId = item.cycleId || null;
-                    hasPreviousItem = true;
+                    if (!isFreeStudy && !isSpacedReview) {
+                        lastTopicId = item.topicId || null;
+                        lastCycleId = item.cycleId || null;
+                        hasPreviousItem = true;
+                    }
 
                     return { ...item, isNewTopic, isNewCycle };
                 });
@@ -439,20 +443,6 @@ export const StudyCalendar: React.FC<StudyCalendarProps> = ({ userId, isReadOnly
            date.getFullYear() === today.getFullYear();
   };
 
-  const handleGenerateNextWeeks = async () => {
-      if (!userId || !currentPlanId || isReadOnly) return;
-      setIsGeneratingNext(true);
-      try {
-          await generateSchedule(userId, currentPlanId);
-          toast.success("Próximas semanas geradas com sucesso!");
-          setCurrentDate(new Date(currentDate)); 
-      } catch (error) {
-          console.error("Erro ao gerar próximas semanas:", error);
-          toast.error("Erro ao gerar próximas semanas.");
-      } finally {
-          setIsGeneratingNext(false);
-      }
-  };
 
   const getDayName = (date: Date) => date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
   const getDayNumber = (date: Date) => date.getDate().toString().padStart(2, '0');
@@ -530,28 +520,6 @@ export const StudyCalendar: React.FC<StudyCalendarProps> = ({ userId, isReadOnly
         </div>
       </div>
 
-      {/* CTA ROLLING WINDOW */}
-      {lastScheduledDate && !isPlanCompleted && !isReadOnly && new Date(lastScheduledDate) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) && (
-        <div className="mb-4 bg-gradient-to-r from-yellow-500/20 to-transparent border border-yellow-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/20 text-yellow-500 rounded-full">
-                    <Trophy size={16} />
-                </div>
-                <div>
-                    <h3 className="text-white font-black text-xs uppercase tracking-tighter">Ciclo Concluído!</h3>
-                    <p className="text-zinc-500 text-[10px] uppercase tracking-widest">Gere as próximas semanas para continuar.</p>
-                </div>
-            </div>
-            <button 
-                onClick={handleGenerateNextWeeks}
-                disabled={isGeneratingNext}
-                className="w-full md:w-auto px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-[10px] rounded-lg uppercase tracking-wider transition-all disabled:opacity-50 flex items-center gap-2"
-            >
-                {isGeneratingNext ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                Gerar Próximas Semanas
-            </button>
-        </div>
-      )}
 
       {/* MENSAGEM DE CRONOGRAMA NÃO GERADO */}
       {currentPlanId && !lastScheduledDate && !loading && (

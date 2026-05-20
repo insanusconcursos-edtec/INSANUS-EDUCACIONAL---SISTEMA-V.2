@@ -132,6 +132,8 @@ const StudentConfigPage: React.FC = () => {
 
   const handlePlannerSave = (newRoutine: Record<number, number>) => {
     setRoutine(newRoutine as any);
+    // Directly trigger the save and generate flow as per centralized logic request
+    handleSave(newRoutine as any);
   };
 
   const calculateWeeklyHours = () => {
@@ -148,9 +150,11 @@ const StudentConfigPage: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (overrideRoutine?: StudentRoutine) => {
     if (!currentUser || !selectedPlanId) return;
 
+    const effectiveRoutine = overrideRoutine || routine;
+    
     // NOVO: Verificação de bloqueio
     const selectedPlan = plans.find(p => p.id === selectedPlanId);
     if (selectedPlan?.isGenerationBlocked && !userData?.allowManualGeneration) {
@@ -168,7 +172,7 @@ const StudentConfigPage: React.FC = () => {
       // 1. Save User Preferences
       await saveStudentRoutine(currentUser.uid, {
         currentPlanId: selectedPlanId,
-        routine,
+        routine: effectiveRoutine,
         studyProfile,
         savedRoutines,
         activeRoutineId
@@ -176,7 +180,7 @@ const StudentConfigPage: React.FC = () => {
 
       // 2. Generate Schedule (Includes Fetching & Saving)
       setGeneratingMessage("Gerando cronograma inteligente...");
-      const schedule = await generateSchedule(currentUser.uid, selectedPlanId, studyProfile, routine);
+      const schedule = await generateSchedule(currentUser.uid, selectedPlanId, studyProfile, effectiveRoutine);
 
       console.log("Schedule generated:", schedule.length, "items");
 

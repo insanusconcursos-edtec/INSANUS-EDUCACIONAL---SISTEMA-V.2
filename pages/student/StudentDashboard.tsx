@@ -388,13 +388,16 @@ const StudentDashboard: React.FC = () => {
         let hasPreviousItem = false;
 
         const regularWithFlags = sortedRegular.map(goal => {
-            const isAbsoluteStartOfCycle = goal.disciplineOrder === 0 && goal.subjectOrder === 0 && goal.taskOrder === 0;
-            const isNewTopic = !hasPreviousItem || goal.topicId !== lastTopicId;
-            const isNewCycle = (hasPreviousItem && goal.cycleId !== lastCycleId) || isAbsoluteStartOfCycle;
+            const isSpaced = goal.isSpacedReview;
+            const isAbsoluteStartOfCycle = !isSpaced && goal.disciplineOrder === 0 && goal.subjectOrder === 0 && goal.taskOrder === 0;
+            const isNewTopic = !isSpaced && (!hasPreviousItem || goal.topicId !== lastTopicId);
+            const isNewCycle = !isSpaced && ((hasPreviousItem && goal.cycleId !== lastCycleId) || isAbsoluteStartOfCycle);
             
-            lastTopicId = goal.topicId || null;
-            lastCycleId = goal.cycleId || null;
-            hasPreviousItem = true;
+            if (!isSpaced) {
+                lastTopicId = goal.topicId || null;
+                lastCycleId = goal.cycleId || null;
+                hasPreviousItem = true;
+            }
             
             return { ...goal, isNewTopic, isNewCycle };
         });

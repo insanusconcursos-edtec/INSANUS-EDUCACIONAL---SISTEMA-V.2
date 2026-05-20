@@ -136,7 +136,7 @@ export const TopicGroupManagerModal: React.FC<TopicGroupManagerProps> = ({
           /* Linker View */
           <div className="flex-1 overflow-hidden flex flex-col p-6">
             <div className="mb-4">
-              <h3 className="text-lg font-black text-white">Vincular Tópicos a "{linkingGroup.name}"</h3>
+              <h3 className="text-lg font-black text-white">Vincular Tópicos a &quot;{linkingGroup.name}&quot;</h3>
               <p className="text-xs text-zinc-400">Selecione os tópicos que pertencem a esta pasta.</p>
             </div>
             <div className="flex-1 overflow-y-auto bg-zinc-900/50 rounded-xl border border-zinc-800 p-2 space-y-1">
