@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Pause, Play, CheckCircle2, 
@@ -7,24 +7,21 @@ import {
 } from 'lucide-react';
 import { useStudyContext } from '../../../contexts/StudyContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 
 export const FloatingStudyTimer: React.FC = () => {
   const { 
     activeGoal, status, formattedTime, 
     pause, resume, finish,
-    isFloating, setIsFloating,
-    isMaterialActive
+    isFloating, setIsFloating
   } = useStudyContext();
   
-  const location = useLocation();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
-  // Automatic Trigger: If status is running/paused and user leaves dashboard OR a material is open
-  const isAtDashboard = location.pathname.includes('/app/dashboard');
-  const isPublicPage = location.pathname === '/login' || location.pathname === '/';
+  // Basic Page Check
+  const isPublicPage = window.location.pathname === '/login' || window.location.pathname === '/';
   
   useEffect(() => {
     if (!currentUser) {
@@ -32,14 +29,14 @@ export const FloatingStudyTimer: React.FC = () => {
       return;
     }
 
-    const shouldFloat = (status === 'running' || status === 'paused') && (!isAtDashboard || isMaterialActive);
+    const shouldFloat = (status === 'running' || status === 'paused');
     
     if (shouldFloat) {
       setIsFloating(true);
     } else {
       setIsFloating(false);
     }
-  }, [status, isAtDashboard, isMaterialActive, setIsFloating, currentUser]);
+  }, [status, setIsFloating, currentUser]);
 
   if (!currentUser || isPublicPage) return null;
   if (!activeGoal || status === 'idle' || status === 'completed') return null;

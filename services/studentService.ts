@@ -27,7 +27,7 @@ const cleanObject = (obj: Record<string, any> | any[] | null | undefined): any =
 import { Student } from './userService';
 import { Plan } from './planService';
 import { Meta } from './metaService';
-import { ScheduledEvent, generateSpacedReviews, computeSimuladoPrerequisites, fetchFullPlanData } from './scheduleService';
+import { ScheduledEvent, generateSpacedReviews, computeSimuladoPrerequisites, fetchFullPlanData, getStudentCompletedMetas, StudentRoutine, StudyProfile } from './scheduleService';
 
 // === FUNÇÃO AUXILIAR DE DATA LOCAL (CORREÇÃO DE FUSO HORÁRIO) ===
 // Garante que a data YYYY-MM-DD seja sempre referente ao relógio do usuário, não UTC.
@@ -41,18 +41,6 @@ export interface StudentPlan extends Plan {
   accessId: string;
   expiryDate: string | Timestamp | null;
   isScholarship?: boolean;
-}
-
-export interface StudentRoutine {
-  [key: number]: number; // 0 (Sun) - 6 (Sat) -> minutes
-}
-
-export interface StudyProfile {
-  level: 'beginner' | 'intermediate' | 'advanced' | 'insane';
-  semiActiveClass: boolean;   // Double time for Video Lessons
-  semiActiveMaterial: boolean; // Double time for PDF/Reading
-  semiActiveLaw: boolean;      // Double time for Law/Reading
-  smartMergeTolerance?: number; // Tolerância para estender meta (minutos)
 }
 
 // === OPERATIONS ===
@@ -200,76 +188,76 @@ export const toggleGoalStatus = async (
   };
 
   // 1. Try finding by eventId (Standard Flow)
-  // Try Today First
+  // Search in ALL schedules to ensure sync even for future goals marked in Edital
+  const schedulesRef = collection(db, 'users', uid, 'schedules');
+  const snapshot = await getDocs(schedulesRef);
+  
   let found = false;
-  const todayRef = doc(db, 'users', uid, 'schedules', todayStr);
-  const todaySnap = await getDoc(todayRef);
+  const canonicalId = String(eventId).trim();
 
-  if (todaySnap.exists()) {
-      const items = todaySnap.data().items as ScheduledEvent[];
-      const targetIndex = items.findIndex((i, index) => {
-        const iId = i.id || `${todayStr}-${i.metaId || 'nometa'}-${i.part || 1}-${index}`;
-        return iId === eventId;
-      });
+  for (const docSnap of snapshot.docs) {
+      const items = (docSnap.data().items || []) as ScheduledEvent[];
+      const docDateStr = docSnap.data().date;
       
-      if (targetIndex !== -1) {
-          await processUpdate(todayRef, items, targetIndex);
-          found = true;
-      }
-  }
-
-  // If not found today, search past docs (Heavy, but necessary for overdue completion)
-  if (!found) {
-    const schedulesRef = collection(db, 'users', uid, 'schedules');
-    const q = query(schedulesRef, where('date', '<', todayStr)); // Past docs only
-    const snapshot = await getDocs(q);
-
-    for (const docSnap of snapshot.docs) {
-        const items = docSnap.data().items as ScheduledEvent[];
-        const docDateStr = docSnap.data().date;
-        const targetIndex = items.findIndex((i, index) => {
+      let itemsModified = false;
+      const updatedItems = items.map((i, index) => {
           const iId = i.id || `${docDateStr}-${i.metaId || 'nometa'}-${i.part || 1}-${index}`;
-          return iId === eventId;
-        });
-        
-        if (targetIndex !== -1) {
-            await processUpdate(docSnap.ref, items, targetIndex);
-            found = true;
-            break; 
-        }
-    }
-  }
-
-  // 2. FALLBACK: Se não encontrou em nenhum calendário, mas é uma conclusão manual via Edital
-  if (!found) {
-      const canonicalId = String(eventId).trim(); // No Edital, o eventId passado é o ID da Meta
-      
-      // Persiste a conclusão na fonte da verdade do edital
-      const progressRef = doc(db, `users/${uid}/plans/${planId}/edital_progress`, canonicalId);
-      await setDoc(progressRef, cleanObject({ 
-        metaId: canonicalId,
-        completed: newStatus === 'completed', 
-        status: newStatus,
-        completedAt: newStatus === 'completed' ? new Date().toISOString() : null,
-        manuallyCompleted: isManual
-      }), { merge: true });
-
-      if (newStatus === 'completed') {
-          // Trigger Spaced Review Logic se os dados da meta foram passados
-          if (goalData && goalData.reviewConfig?.active) {
-              const intervals = goalData.reviewConfig.intervals;
-              if (intervals) {
-                  await generateSpacedReviews(uid, planId, { 
-                      ...goalData, 
-                      metaId: goalData.id || String(goalData.id),
-                      spacedReviewIntervals: intervals 
-                  }, todayStr);
+          // Match by composite ID OR Meta ID (for direct Edital completion)
+          if (iId === eventId || i.metaId === canonicalId || i.taskId === canonicalId) {
+              if (i.status !== newStatus) {
+                  found = true;
+                  itemsModified = true;
+                  return { ...i, status: newStatus, recordedMinutes: (newStatus === 'completed' && typeof i.recordedMinutes !== 'number') ? 0 : i.recordedMinutes };
               }
           }
-
-          // Trigger Simulado Unlock Check
-          await checkAndUnlockSimulados(uid, planId);
+          return i;
+      });
+      
+      if (itemsModified) {
+          await updateDoc(docSnap.ref, cleanObject({ items: updatedItems }));
+          
+          // Trigger Spaced Review and Simulado Unlock for completed items in this doc
+          if (newStatus === 'completed') {
+              const matchedItem = updatedItems.find((i, index) => {
+                  const iId = i.id || `${docDateStr}-${i.metaId || 'nometa'}-${i.part || 1}-${index}`;
+                  return iId === eventId || i.metaId === canonicalId || i.taskId === canonicalId;
+              });
+              
+              if (matchedItem) {
+                  const intervals = matchedItem.spacedReviewIntervals || (matchedItem.reviewConfig?.active ? matchedItem.reviewConfig.intervals : null);
+                  if (intervals && !matchedItem.isSpacedReview) {
+                      await generateSpacedReviews(uid, planId, { ...matchedItem, spacedReviewIntervals: intervals }, todayStr);
+                  }
+                  await checkAndUnlockSimulados(uid, planId, matchedItem.cycleId);
+              }
+          }
       }
+  }
+
+  // 2. Persiste sempre na fonte da verdade do edital (Garante redundância e Edital Sync)
+  const progressRef = doc(db, `users/${uid}/plans/${planId}/edital_progress`, canonicalId);
+  await setDoc(progressRef, cleanObject({ 
+    metaId: canonicalId,
+    completed: newStatus === 'completed', 
+    status: newStatus,
+    completedAt: newStatus === 'completed' ? new Date().toISOString() : null,
+    manuallyCompleted: isManual
+  }), { merge: true });
+
+  // Se for uma conclusão manual via Edital e não tinha sido encontrada em schedules,
+  // ainda podemos precisar dessas triggers
+  if (!found && newStatus === 'completed') {
+      if (goalData && goalData.reviewConfig?.active) {
+          const intervals = goalData.reviewConfig.intervals;
+          if (intervals) {
+              await generateSpacedReviews(uid, planId, { 
+                  ...goalData, 
+                  metaId: goalData.id || String(goalData.id),
+                  spacedReviewIntervals: intervals 
+              }, todayStr);
+          }
+      }
+      await checkAndUnlockSimulados(uid, planId);
   }
 };
 
@@ -507,8 +495,21 @@ export const getDashboardData = async (uid: string): Promise<{
     }));
   };
 
-  const enrichedOverdue = await enrichWithMeta(overdueEvents);
-  const enrichedToday = await enrichWithMeta(todayEvents);
+  // 4. Merge results from edital_progress to ensure Dashboard/Schedule sync
+  const completedMetaIds = await getStudentCompletedMetas(uid, currentPlanId);
+  
+  const mergeProgress = (events: ScheduledEvent[]) => {
+    return events.map(event => {
+      const mId = String(event.metaId || event.taskId || event.id).trim();
+      if (completedMetaIds.has(mId)) {
+        return { ...event, status: 'completed' as const, isCompleted: true };
+      }
+      return event;
+    });
+  };
+
+  const enrichedOverdue = await enrichWithMeta(mergeProgress(overdueEvents));
+  const enrichedToday = await enrichWithMeta(mergeProgress(todayEvents));
 
   // Check for any future pending goals for this plan
   let hasFuturePendingGoals = false;
@@ -563,52 +564,6 @@ export const resetUnlockedSimulados = async (uid: string, planId: string) => {
   }
 };
 
-/**
- * Retrieves all completed meta IDs for a specific plan.
- * Used to calculate progress in the Vertical Edict.
- * UPDATED: Merges results from `schedules` AND `edital_progress`.
- */
-export const getStudentCompletedMetas = async (uid: string, planId: string): Promise<Set<string>> => {
-  const completedIds = new Set<string>();
-  
-    // 2. Query Schedule Collection (Standard Completions)
-    const schedulesRef = collection(db, 'users', uid, 'schedules');
-    const snapshotSchedule = await getDocs(schedulesRef);
-
-    snapshotSchedule.docs.forEach(docSnap => {
-      const items = (docSnap.data().items || []) as any[];
-      // Filtra apenas os itens deste plano
-      const planItems = items.filter(i => i.planId === planId);
-      
-      planItems.forEach(ev => {
-        const mId = String(ev.metaId || ev.taskId || ev.id).trim();
-        if (ev.status === 'completed' && mId) {
-          completedIds.add(mId);
-        }
-      });
-    });
-
-  // 2. Query Edital Progress Collection (Manual Completions & Overrides)
-  const progressRef = collection(db, 'users', uid, 'plans', planId, 'edital_progress');
-  const snapshotProgress = await getDocs(progressRef);
-
-  snapshotProgress.docs.forEach(docSnap => {
-    const data = docSnap.data();
-    const isCompleted = data.completed === true || data.status === 'completed';
-    const mId = String(data.metaId || docSnap.id).trim();
-    
-    if (mId) {
-      if (isCompleted) {
-        completedIds.add(mId);
-      } else {
-        // Se explicitamente marcado como não concluído no edital_progress, remove (Sync total)
-        completedIds.delete(mId);
-      }
-    }
-  });
-
-  return completedIds;
-};
 
 export const checkAndUnlockSimulados = async (uid: string, planId: string, cycleId?: string, providedFullPlan?: Plan, providedCompletedIdsSet?: Set<string>) => {
   try {

@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Layout, PauseCircle, Grid, X, PlayCircle, ChevronDown, Loader2, Trophy } from 'lucide-react';
-import { ScheduledEvent, fetchFullPlanData } from '../../../services/scheduleService';
-import { getStudentConfig, getStudentCompletedMetas } from '../../../services/studentService';
+import { ScheduledEvent, fetchFullPlanData, getStudentCompletedMetas } from '../../../services/scheduleService';
+import { getStudentConfig } from '../../../services/studentService';
 
 // Type Config for Visuals (Fallback)
 const TYPE_CONFIG: Record<string, { label: string; color: string; }> = {

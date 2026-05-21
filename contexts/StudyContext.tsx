@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { StudentGoal } from '../components/student/StudentGoalCard';
-import { registerStudySession, updateGoalRecordedTime } from '../services/studentService';
+import { registerStudySession, updateGoalRecordedTime, toggleGoalStatus } from '../services/studentService';
 import { getLocalISODate } from '../services/scheduleService';
 import { useAuth } from './AuthContext';
 
@@ -88,6 +88,7 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setStatus('running');
     setSeconds(0);
     lastSavedSeconds.current = 0;
+    setIsFloating(true);
   }, [activeGoal, status, seconds, saveSessionTime]);
 
   const pause = useCallback(async () => {
@@ -97,15 +98,8 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const resume = useCallback(() => {
     setStatus('running');
+    setIsFloating(true);
   }, []);
-
-  const finish = useCallback(async () => {
-    const finalSeconds = seconds;
-    setStatus('completed');
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    await saveSessionTime(finalSeconds);
-    return finalSeconds;
-  }, [seconds, saveSessionTime]);
 
   const reset = useCallback(() => {
     setActiveGoal(null);
@@ -119,6 +113,47 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         intervalRef.current = null;
     }
   }, []);
+
+  const finish = useCallback(async () => {
+    if (!currentUser || !activeGoal || !activeGoal.planId) return 0;
+    
+    const finalSeconds = seconds;
+    const goalId = activeGoal.id;
+    const planId = activeGoal.planId;
+    
+    setStatus('completed');
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    
+    // 1. Salva o tempo acumulado da sessão no banco (recordedTime)
+    await saveSessionTime(finalSeconds);
+    
+    // 2. Persistência de Conclusão Real (Database Sync)
+    // Garantimos que a meta mude de status em todas as coleções (Schedule e Edital Progress)
+    try {
+      await toggleGoalStatus(
+        currentUser.uid,
+        planId,
+        goalId,
+        'pending', // Status de origem
+        true, // isManual (conclusão direta pelo botão)
+        'completed' // Target Status (Garante conclusão)
+      );
+
+      // Despacha um evento global para que outros componentes (Header, Dashboard) 
+      // saibam que precisam atualizar seus contadores e estados locais.
+      window.dispatchEvent(new CustomEvent('study-goal-finished', { 
+        detail: { goalId, planId, status: 'completed' } 
+      }));
+
+    } catch (error) {
+      console.error("[StudyContext] Erro ao persistir conclusão:", error);
+    } finally {
+      // Limpa os estados de meta ativa para garantir um fechamento de relógio limpo.
+      reset();
+    }
+
+    return finalSeconds;
+  }, [seconds, saveSessionTime, currentUser, activeGoal, reset]);
 
   // Monitor Auth State: Reset absolutely on logout
   useEffect(() => {

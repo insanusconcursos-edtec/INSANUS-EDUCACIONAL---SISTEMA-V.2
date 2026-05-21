@@ -46,8 +46,8 @@ const PlanControlPanel: React.FC<PlanControlPanelProps> = ({ planId, isPaused, o
     if (!currentUser) return;
     setIsResetting(true);
     try {
-        // 1. Wipe Schedule
-        await resetStudentSchedule(currentUser.uid, planId);
+        // 1. Wipe Schedule (Pass true for wipeAll to clear past and completed items)
+        await resetStudentSchedule(currentUser.uid, planId, undefined, true);
         
         // 2. Reset Stats
         await resetPlanStats(currentUser.uid, planId);

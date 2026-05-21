@@ -9,8 +9,8 @@ import {
 import toast from 'react-hot-toast';
 import { StudentGoalCard, StudentGoal } from '../../components/student/StudentGoalCard';
 import { DelayedGoalsSection } from '../../components/student/dashboard/DelayedGoalsSection';
-import { getDashboardData, toggleGoalStatus, getStudentConfig, getStudentCompletedMetas, getLocalISODate, checkAndUnlockSimulados, getStudentPlans, saveStudentRoutine } from '../../services/studentService';
-import { fetchFullPlanData, scheduleUserSimulado, anticipateAndShiftGoals, generateSchedule, rescheduleOverdueTasks } from '../../services/scheduleService';
+import { getDashboardData, toggleGoalStatus, getStudentConfig, getLocalISODate, checkAndUnlockSimulados, getStudentPlans, saveStudentRoutine } from '../../services/studentService';
+import { fetchFullPlanData, scheduleUserSimulado, anticipateAndShiftGoals, generateSchedule, rescheduleOverdueTasks, getStudentCompletedMetas } from '../../services/scheduleService';
 import { isPandaVideo } from '../../utils/videoHelpers';
 import { getAllPlanMetas, Meta } from '../../services/metaService';
 import { EditalNotebookModal } from '../../components/student/tools/EditalNotebookModal';
@@ -243,9 +243,9 @@ const StudentDashboard: React.FC = () => {
     return promise;
   };
 
-  const fetchSchedule = async () => {
+  const fetchSchedule = async (silent = false) => {
     if (!currentUser) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
         const { planId, overdue: overdueData, today: todayData, lastScheduledDate: fetchedLastDateRaw, hasFuturePendingGoals: fetchedHasFutureRaw } = await getDashboardData(currentUser.uid);
         
@@ -600,6 +600,44 @@ const StudentDashboard: React.FC = () => {
   useEffect(() => {
     fetchSchedule();
   }, [currentUser]);
+
+  // Listener para atualização instantânea via Timer (Sync Global)
+  useEffect(() => {
+    const handleGlobalSync = (e: any) => {
+      const { goalId, status, planId: eventPlanId } = e.detail || {};
+      console.log(`🔄 [Dashboard] Refresh detectado via Global Sync (Timer). GoalId: ${goalId}, Status: ${status}`);
+      
+      if (goalId && status === 'completed') {
+        // Atualização Otimista Imediata para os contadores e cartões
+        const updater = (goals: StudentGoal[]) => goals.map(g => 
+          g.id === goalId ? { ...g, isCompleted: true } : g
+        );
+        
+        setTodayGoals(updater);
+        setOverdueReviews(updater);
+        setOverdueGeneral(updater);
+        setCompletedMetaIds(prev => {
+          const next = new Set(prev);
+          next.add(goalId);
+          return next;
+        });
+      }
+
+      // Sincronização em background COM SILÊNCIO TOTAL (igual à conclusão manual)
+      if (currentUser && currentPlanId && eventPlanId === currentPlanId) {
+        getStudentCompletedMetas(currentUser.uid, currentPlanId).then(freshIds => {
+           setCompletedMetaIds(freshIds);
+           if (cachedData) {
+             setCachedData(prev => prev ? { ...prev, completedMetaIds: freshIds } : null);
+           }
+           checkAndUnlockSimulados(currentUser.uid, currentPlanId, undefined, undefined, freshIds);
+        });
+      }
+    };
+
+    window.addEventListener('study-goal-finished', handleGlobalSync);
+    return () => window.removeEventListener('study-goal-finished', handleGlobalSync);
+  }, [currentUser, currentPlanId, cachedData]);
 
   // --- NOTIFICATION LOGIC FOR LIVE EVENTS ---
   useEffect(() => {
@@ -1510,7 +1548,7 @@ const StudentDashboard: React.FC = () => {
         onReplan={handleReplanDelays}
         isReplanning={isReplanning}
         onToggleComplete={handleToggleComplete}
-        onRefresh={fetchSchedule}
+        onRefresh={() => fetchSchedule(true)}
         onPdfClick={handleOpenMaterial}
         renderNotebookNode={renderEmbeddedNotebook}
       />
@@ -1564,7 +1602,7 @@ const StudentDashboard: React.FC = () => {
                                     key={goal.id}
                                     goal={goal} 
                                     onToggleComplete={(g) => handleToggleComplete(g)}
-                                    onRefresh={fetchSchedule}
+                                    onRefresh={() => fetchSchedule(true)}
                                     onPdfClick={handleOpenMaterial}
                                     renderNotebookNode={renderEmbeddedNotebook}
                                 />
@@ -1664,7 +1702,7 @@ const StudentDashboard: React.FC = () => {
                                     <StudentGoalCard 
                                         goal={goal} 
                                         onToggleComplete={(g) => handleToggleComplete(g)}
-                                        onRefresh={fetchSchedule}
+                                        onRefresh={() => fetchSchedule(true)}
                                         onPdfClick={handleOpenMaterial}
                                         renderNotebookNode={renderEmbeddedNotebook}
                                         onStart={goal.type === 'simulado' ? handleStartSimulado : undefined}

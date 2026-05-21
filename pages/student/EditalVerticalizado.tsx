@@ -7,7 +7,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getEdict, EdictStructure } from '../../services/edictService';
-import { getStudentConfig, getStudentCompletedMetas, toggleGoalStatus } from '../../services/studentService';
+import { getStudentConfig, toggleGoalStatus } from '../../services/studentService';
 import { getPlanById } from '../../services/planService';
 import { getAllPlanMetas, Meta } from '../../services/metaService';
 import TopicItem from '../../components/student/edital/TopicItem';
@@ -15,7 +15,7 @@ import DisciplineItem from '../../components/student/edital/DisciplineItem';
 import { useEditalProgress } from '../../hooks/useEditalProgress';
 import { useSpacedReviewModal } from '../../contexts/SpacedReviewModalContext';
 import { courseReviewService } from '../../services/courseReviewService';
-import { fetchFullPlanData } from '../../services/scheduleService';
+import { fetchFullPlanData, getStudentCompletedMetas } from '../../services/scheduleService';
 import { PlanHeroBanner } from '../../components/student/PlanHeroBanner';
 import { EditalNotebookModal } from '../../components/student/tools/EditalNotebookModal';
 import { EditalFlashcardsModal } from '../../components/student/tools/EditalFlashcardsModal';

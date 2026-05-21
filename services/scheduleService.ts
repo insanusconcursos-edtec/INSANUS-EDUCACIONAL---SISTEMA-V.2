@@ -1,7 +1,18 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, doc, writeBatch, getDoc, documentId, orderBy, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { Plan, getPlanById } from './planService';
-import { StudentRoutine, StudyProfile, getStudentCompletedMetas } from './studentService';
+
+export interface StudentRoutine {
+  [key: number]: number; // 0 (Sun) - 6 (Sat) -> minutes
+}
+
+export interface StudyProfile {
+  level: 'beginner' | 'intermediate' | 'advanced' | 'insane';
+  semiActiveClass: boolean;   // Double time for Video Lessons
+  semiActiveMaterial: boolean; // Double time for PDF/Reading
+  semiActiveLaw: boolean;      // Double time for Law/Reading
+  smartMergeTolerance?: number; // Tolerância para estender meta (minutos)
+}
 import { getDisciplines, getTopics } from './structureService';
 import { getMetas } from './metaService';
 import { toPlainObject } from './firestoreUtils';
@@ -947,12 +958,34 @@ export const getRangeSchedule = async (userId: string, startDate: Date, endDate:
     const snapshot = await getDocs(q);
     const scheduleMap: Record<string, ScheduledEvent[]> = {};
 
-    snapshot.forEach(doc => {
-        const data = doc.data();
+    // Fetch completed metas to ensure sync with Edital
+    // We assume the caller might want specific plan sync if data is available, 
+    // but usually getRangeSchedule is for a specific user.
+    // To be safe and efficient, we'll try to find a planId from the first item if not provided.
+    let planIdForSync: string | null = null;
+
+    snapshot.forEach(docSnap => {
+        const data = docSnap.data();
         if (data.items && Array.isArray(data.items)) {
-            scheduleMap[doc.id] = data.items;
+            if (!planIdForSync && data.items.length > 0) {
+                planIdForSync = data.items[0].planId;
+            }
+            scheduleMap[docSnap.id] = data.items;
         }
     });
+
+    if (planIdForSync) {
+        const completedIds = await getStudentCompletedMetas(userId, planIdForSync);
+        Object.keys(scheduleMap).forEach(date => {
+            scheduleMap[date] = scheduleMap[date].map(item => {
+                const mId = String(item.metaId || item.taskId || item.id).trim();
+                if (completedIds.has(mId)) {
+                    return { ...item, status: 'completed' as const, completed: true };
+                }
+                return item;
+            });
+        });
+    }
 
     return scheduleMap;
 };
@@ -1162,6 +1195,53 @@ export const mergeGoalExtension = async (userId: string, planId: string, event: 
     console.log("mergeGoalExtension completed");
 };
 
+/**
+ * Retrieves all completed meta IDs for a specific plan.
+ * Used to calculate progress in the Vertical Edict.
+ * UPDATED: Merges results from `schedules` AND `edital_progress`.
+ */
+export const getStudentCompletedMetas = async (uid: string, planId: string): Promise<Set<string>> => {
+  const completedIds = new Set<string>();
+  
+    // 2. Query Schedule Collection (Standard Completions)
+    const schedulesRef = collection(db, 'users', uid, 'schedules');
+    const snapshotSchedule = await getDocs(schedulesRef);
+
+    snapshotSchedule.docs.forEach(docSnap => {
+      const items = (docSnap.data().items || []) as any[];
+      // Filtra apenas os itens deste plano
+      const planItems = items.filter(i => i.planId === planId);
+      
+      planItems.forEach(ev => {
+        const mId = String(ev.metaId || ev.taskId || ev.id).trim();
+        if (ev.status === 'completed' && mId) {
+          completedIds.add(mId);
+        }
+      });
+    });
+
+  // 2. Query Edital Progress Collection (Manual Completions & Overrides)
+  const progressRef = collection(db, 'users', uid, 'plans', planId, 'edital_progress');
+  const snapshotProgress = await getDocs(progressRef);
+
+  snapshotProgress.docs.forEach(docSnap => {
+    const data = docSnap.data();
+    const isCompleted = data.completed === true || data.status === 'completed';
+    const mId = String(data.metaId || docSnap.id).trim();
+    
+    if (mId) {
+      if (isCompleted) {
+        completedIds.add(mId);
+      } else {
+        // Se explicitamente marcado como não concluído no edital_progress, remove (Sync total)
+        completedIds.delete(mId);
+      }
+    }
+  });
+
+  return completedIds;
+};
+
 export const fetchFullPlanData = async (planId: string) => {
     try {
         const plan = await getPlanById(planId);
@@ -1235,12 +1315,19 @@ export const anticipateFutureGoals = async (userId: string) => {
     return Promise.resolve();
 }
 
-export const resetStudentSchedule = async (userId: string, planId: string, startDate?: Date) => {
+export const resetStudentSchedule = async (userId: string, planId: string, startDate?: Date, wipeAll: boolean = false) => {
   const schedulesRef = collection(db, 'users', userId, 'schedules');
-  const startStr = getLocalDataString(startDate || new Date());
   
-  // Apenas agendamentos de hoje/futuro ou a partir da data informada
-  const q = query(schedulesRef, where(documentId(), '>=', startStr));
+  let q;
+  if (wipeAll) {
+    // Busca TODOS os agendamentos para limpar o histórico e atrasos também
+    q = query(schedulesRef);
+  } else {
+    const startStr = getLocalDataString(startDate || new Date());
+    // Apenas agendamentos de hoje/futuro ou a partir da data informada
+    q = query(schedulesRef, where(documentId(), '>=', startStr));
+  }
+  
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) return;
@@ -1251,10 +1338,15 @@ export const resetStudentSchedule = async (userId: string, planId: string, start
   snapshot.docs.forEach(document => {
     const data = document.data();
     if (data.items && Array.isArray(data.items)) {
-      // REGRA: Remove apenas metas que NÃO estão concluídas e pertencem a este plano
-      const remainingItems = data.items.filter((item: any) => 
-        !(item.planId === planId && item.status !== 'completed')
-      );
+      // REGRA: Remove apenas metas que pertencem a este plano
+      // Se wipeAll for true, remove inclusive as concluídas. Se false, preserva as concluídas.
+      const remainingItems = data.items.filter((item: any) => {
+        const isTarget = item.planId === planId;
+        if (!isTarget) return true; // Mantém itens de outros planos
+        
+        if (wipeAll) return false; // Se wipeAll, remove TUDO deste plano
+        return item.status === 'completed'; // Se não for wipeAll, mantém apenas concluídas
+      });
       
       if (remainingItems.length === 0) {
         batch.delete(document.ref);
