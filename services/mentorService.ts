@@ -43,10 +43,11 @@ export const uploadMentorPhoto = async (file: File): Promise<string> => {
   return await getDownloadURL(snapshot.ref);
 };
 
-export const createMentor = async (name: string, photoUrl: string) => {
+export const createMentor = async (name: string, photoUrl: string, assignedMentor?: 'kelsen' | 'borges') => {
   await addDoc(collection(db, 'mentors'), {
     name,
     photoUrl,
+    assignedMentor: assignedMentor || null,
     createdAt: serverTimestamp()
   });
 };

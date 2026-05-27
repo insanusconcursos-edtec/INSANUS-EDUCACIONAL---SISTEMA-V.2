@@ -20,11 +20,12 @@ const CreateMentorModal = ({
 }: { 
   isOpen: boolean; 
   onClose: () => void; 
-  onSave: (name: string, photoUrl: string) => Promise<void>; 
+  onSave: (name: string, photoUrl: string, assignedMentor?: 'kelsen' | 'borges') => Promise<void>; 
   editingMentor?: Mentor | null;
 }) => {
   const [name, setName] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
+  const [assignedMentor, setAssignedMentor] = useState<'kelsen' | 'borges' | undefined>(undefined);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -32,9 +33,11 @@ const CreateMentorModal = ({
     if (editingMentor) {
       setName(editingMentor.name);
       setPhotoUrl(editingMentor.photoUrl);
+      setAssignedMentor(editingMentor.assignedMentor);
     } else {
       setName('');
       setPhotoUrl('');
+      setAssignedMentor(undefined);
     }
   }, [editingMentor, isOpen]);
 
@@ -62,7 +65,7 @@ const CreateMentorModal = ({
 
     setLoading(true);
     try {
-      await onSave(name, photoUrl);
+      await onSave(name, photoUrl, assignedMentor);
       onClose();
     } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -100,16 +103,45 @@ const CreateMentorModal = ({
             <span className="text-[10px] font-bold text-zinc-500 uppercase">Foto do Mentor</span>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-400 uppercase">Nome do Mentor</label>
-            <div className="relative">
-              <User size={14} className="absolute left-3 top-3 text-zinc-600" />
-              <input 
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="EX: MENTOR BRUNO"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 pl-9 pr-4 text-xs text-white placeholder-zinc-700 focus:border-brand-red focus:outline-none font-bold uppercase"
-              />
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase">Nome do Mentor</label>
+              <div className="relative">
+                <User size={14} className="absolute left-3 top-3 text-zinc-600" />
+                <input 
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="EX: MENTOR BRUNO"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 pl-9 pr-4 text-xs text-white placeholder-zinc-700 focus:border-brand-red focus:outline-none font-bold uppercase"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase">Categoria (Aba no Atendimento)</label>
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setAssignedMentor(undefined)}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${!assignedMentor ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  Nenhuma
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignedMentor('kelsen')}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${assignedMentor === 'kelsen' ? 'bg-red-500/20 text-red-500 border border-red-500/30' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  Kelsen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignedMentor('borges')}
+                  className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${assignedMentor === 'borges' ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  Borges
+                </button>
+              </div>
             </div>
           </div>
 
@@ -147,11 +179,11 @@ const MentorManager: React.FC<MentorManagerProps> = ({ hideHeader = false }) => 
     return () => unsubscribe();
   }, []);
 
-  const handleSave = async (name: string, photoUrl: string) => {
+  const handleSave = async (name: string, photoUrl: string, assignedMentor?: 'kelsen' | 'borges') => {
     if (editingMentor) {
-      await updateMentor(editingMentor.id, { name, photoUrl });
+      await updateMentor(editingMentor.id, { name, photoUrl, assignedMentor });
     } else {
-      await createMentor(name, photoUrl);
+      await createMentor(name, photoUrl, assignedMentor);
     }
   };
 

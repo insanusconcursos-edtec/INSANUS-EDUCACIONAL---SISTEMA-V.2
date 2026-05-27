@@ -153,19 +153,28 @@ export const subscribeToMessages = (callId: string, callback: (messages: Message
 };
 
 export const subscribeToCalls = (
-  mentorId: string, 
   callback: (calls: Call[]) => void,
-  planId?: string
+  options: {
+    mentorId?: string;
+    planId?: string;
+    assignedMentor?: 'all' | 'kelsen' | 'borges';
+  } = {}
 ) => {
   const callsRef = collection(db, 'calls');
   const constraints = [];
   
+  const { mentorId, planId, assignedMentor } = options;
+
   if (mentorId) {
     constraints.push(where('mentorId', '==', mentorId));
   }
   
   if (planId) {
     constraints.push(where('planId', '==', planId));
+  }
+
+  if (assignedMentor && assignedMentor !== 'all') {
+    constraints.push(where('assignedMentor', '==', assignedMentor));
   }
   
   constraints.push(orderBy('lastMessageTime', 'desc'));
@@ -178,6 +187,10 @@ export const subscribeToCalls = (
       ...doc.data()
     } as Call));
     callback(calls);
+  }, (error) => {
+    console.error("Error in subscribeToCalls:", error);
+    // Return empty list on error to avoid stuck loading
+    callback([]);
   });
 };
 

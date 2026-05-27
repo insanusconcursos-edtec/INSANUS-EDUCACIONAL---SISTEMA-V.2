@@ -2,7 +2,7 @@
 import { doc, getDoc, updateDoc, writeBatch, collection, query, where, getDocs, Timestamp, increment, orderBy, limit, setDoc, documentId, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
-const cleanObject = (obj: Record<string, any> | any[] | null | undefined): any => {
+export const cleanObject = (obj: Record<string, any> | any[] | null | undefined): any => {
   if (obj === null || typeof obj !== 'object') return obj;
   
   if (Array.isArray(obj)) {
@@ -71,6 +71,22 @@ export const registerStudySession = async (uid: string, planId: string, minutes:
 };
 
 /**
+ * Atualiza o estado persistente do cronômetro ativo do aluno no Firestore.
+ * Usado para garantir que o temporizador possa ser recuperado após recarregar a página.
+ */
+export const updateActiveTimer = async (uid: string, timerState: any) => {
+  if (!uid) return;
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      activeTimer: timerState ? cleanObject(timerState) : null
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar temporizador ativo:", error);
+  }
+};
+
+/**
  * Atualiza o tempo gravado em uma meta específica (ScheduledEvent) dentro do documento do dia.
  * Isso permite calcular corretamente o "Tempo Restante" do dia.
  */
@@ -97,21 +113,21 @@ export const updateGoalRecordedTime = async (uid: string, date: string, goalId: 
         // Salva de volta no banco
         await updateDoc(scheduleRef, cleanObject({ items }));
         console.log(`[Goal Timer] Atualizado: +${minutesToAdd.toFixed(2)} min na meta ${goalId} do dia ${date}`);
-      } else if (goalId === 'free_study' || goalId.includes('free_study')) {
+      } else if (goalId === 'free_study' || goalId.includes('free') || goalId.includes('study')) {
         // Fallback para estudo livre se não achar pelo ID exato
-        const freeStudyIndex = items.findIndex((i: any) => i.id === 'free_study' || i.type === 'free_study');
+        const freeStudyIndex = items.findIndex((i: any) => i.id === 'free_study' || i.type === 'free_study' || i.id === goalId);
         
         if (freeStudyIndex !== -1) {
           items[freeStudyIndex].recordedMinutes = (items[freeStudyIndex].recordedMinutes || 0) + minutesToAdd;
         } else {
           // Cria o item genérico se não existir
           items.push({
-            id: 'free_study',
+            id: goalId || 'free_study',
             type: 'free_study',
             title: 'Estudo Livre',
             recordedMinutes: minutesToAdd,
             planId: items[0]?.planId || '',
-            status: 'completed',
+            status: 'pending', // CORREÇÃO: Deve iniciar como pending, não completed
             discipline: 'Geral',
             topic: 'Estudo Livre',
             disciplineId: 'free_study',

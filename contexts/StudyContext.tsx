@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { StudentGoal } from '../components/student/StudentGoalCard';
-import { registerStudySession, updateGoalRecordedTime, toggleGoalStatus } from '../services/studentService';
+import { registerStudySession, updateGoalRecordedTime, toggleGoalStatus, updateActiveTimer } from '../services/studentService';
 import { getLocalISODate } from '../services/scheduleService';
 import { useAuth } from './AuthContext';
 
@@ -26,13 +26,14 @@ interface StudyContextType {
 const StudyContext = createContext<StudyContextType | undefined>(undefined);
 
 export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const [activeGoal, setActiveGoal] = useState<StudentGoal | null>(null);
   const [status, setStatus] = useState<TimerStatus>('idle');
   const [seconds, setSeconds] = useState(0);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [accumulatedSeconds, setAccumulatedSeconds] = useState(0);
   const [isFloating, setIsFloating] = useState(false);
   const [isMaterialActive, setIsMaterialActive] = useState(false);
-  const intervalRef = useRef<number | null>(null);
   const lastSavedSeconds = useRef(0);
 
   const formatTime = (totalSeconds: number) => {
@@ -45,19 +46,61 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return `${pad(minutes)}:${pad(secs)}`;
   };
 
+  // Restaurar cronômetro persistente do Firestore ao carregar
   useEffect(() => {
-    if (status === 'running') {
-      intervalRef.current = window.setInterval(() => {
-        setSeconds((prev) => prev + 1);
+    if (userData?.activeTimer && status === 'idle') {
+      const { goal, startTime: remoteStart, accumulatedSeconds: remoteAccumulated, status: remoteStatus } = userData.activeTimer;
+      setActiveGoal(goal);
+      setStartTime(remoteStart);
+      setAccumulatedSeconds(remoteAccumulated);
+      setStatus(remoteStatus);
+      
+      if (remoteStatus === 'running' || remoteStatus === 'paused') {
+        setIsFloating(true);
+      }
+    }
+  }, [userData, status]);
+
+  // Lógica de cronômetro imune a throttling (Uso de Timestamp Absoluto)
+  useEffect(() => {
+    let interval: any;
+
+    if (status === 'running' && startTime) {
+      // Cálculo inicial imediato para evitar pulo de 1s
+      const initialDiff = Math.floor((Date.now() - startTime) / 1000);
+      setSeconds(accumulatedSeconds + initialDiff);
+
+      interval = setInterval(() => {
+        const now = Date.now();
+        const diffInSeconds = Math.floor((now - startTime) / 1000);
+        setSeconds(accumulatedSeconds + diffInSeconds);
       }, 1000);
     } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      setSeconds(accumulatedSeconds);
     }
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (interval) clearInterval(interval);
     };
-  }, [status]);
+  }, [status, startTime, accumulatedSeconds]);
+
+  // Recalcular ao ganhar foco ou trocar visibilidade
+  useEffect(() => {
+    const handleSync = () => {
+      if (document.visibilityState === 'visible' && status === 'running' && startTime) {
+        const now = Date.now();
+        const diffInSeconds = Math.floor((now - startTime) / 1000);
+        setSeconds(accumulatedSeconds + diffInSeconds);
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleSync);
+    window.addEventListener('focus', handleSync);
+    return () => {
+      window.removeEventListener('visibilitychange', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, [status, startTime, accumulatedSeconds]);
 
   const saveSessionTime = useCallback(async (currentSeconds: number) => {
     if (!currentUser || !activeGoal || !activeGoal.planId) return;
@@ -84,45 +127,88 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (activeGoal && status !== 'idle') {
        saveSessionTime(seconds);
     }
+    const now = Date.now();
     setActiveGoal(goal);
     setStatus('running');
+    setStartTime(now);
+    setAccumulatedSeconds(0);
     setSeconds(0);
     lastSavedSeconds.current = 0;
     setIsFloating(true);
-  }, [activeGoal, status, seconds, saveSessionTime]);
+
+    if (currentUser) {
+      updateActiveTimer(currentUser.uid, {
+        goal,
+        startTime: now,
+        accumulatedSeconds: 0,
+        status: 'running'
+      });
+    }
+  }, [activeGoal, status, seconds, saveSessionTime, currentUser]);
 
   const pause = useCallback(async () => {
+    const now = Date.now();
+    const diffInSeconds = startTime ? Math.floor((now - startTime) / 1000) : 0;
+    const newAccumulated = accumulatedSeconds + diffInSeconds;
+    
     setStatus('paused');
-    await saveSessionTime(seconds);
-  }, [seconds, saveSessionTime]);
+    setStartTime(null);
+    setAccumulatedSeconds(newAccumulated);
+    setSeconds(newAccumulated);
+    
+    await saveSessionTime(newAccumulated);
+
+    if (currentUser) {
+      updateActiveTimer(currentUser.uid, {
+        goal: activeGoal,
+        startTime: null,
+        accumulatedSeconds: newAccumulated,
+        status: 'paused'
+      });
+    }
+  }, [startTime, accumulatedSeconds, saveSessionTime, currentUser, activeGoal]);
 
   const resume = useCallback(() => {
+    const now = Date.now();
     setStatus('running');
+    setStartTime(now);
     setIsFloating(true);
-  }, []);
+
+    if (currentUser) {
+      updateActiveTimer(currentUser.uid, {
+        goal: activeGoal,
+        startTime: now,
+        accumulatedSeconds: accumulatedSeconds,
+        status: 'running'
+      });
+    }
+  }, [currentUser, activeGoal, accumulatedSeconds]);
 
   const reset = useCallback(() => {
     setActiveGoal(null);
     setStatus('idle');
     setSeconds(0);
+    setStartTime(null);
+    setAccumulatedSeconds(0);
     lastSavedSeconds.current = 0;
     setIsFloating(false);
     setIsMaterialActive(false);
-    if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+
+    if (currentUser) {
+      updateActiveTimer(currentUser.uid, null);
     }
-  }, []);
+  }, [currentUser]);
 
   const finish = useCallback(async () => {
     if (!currentUser || !activeGoal || !activeGoal.planId) return 0;
     
-    const finalSeconds = seconds;
+    const now = Date.now();
+    const diffInSeconds = startTime ? Math.floor((now - startTime) / 1000) : 0;
+    const finalSeconds = accumulatedSeconds + diffInSeconds;
     const goalId = activeGoal.id;
     const planId = activeGoal.planId;
     
     setStatus('completed');
-    if (intervalRef.current) clearInterval(intervalRef.current);
     
     // 1. Salva o tempo acumulado da sessão no banco (recordedTime)
     await saveSessionTime(finalSeconds);
@@ -153,7 +239,7 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     return finalSeconds;
-  }, [seconds, saveSessionTime, currentUser, activeGoal, reset]);
+  }, [startTime, accumulatedSeconds, saveSessionTime, currentUser, activeGoal, reset]);
 
   // Monitor Auth State: Reset absolutely on logout
   useEffect(() => {

@@ -613,7 +613,7 @@ export const generateSchedule = async (
                       planId: planId,
                       date: dayStr,
                       title: 'ESTUDO LIVRE',
-                      type: 'lesson',
+                      type: 'free_study',
                       disciplineId: 'free_study',
                       disciplineName: 'ESTUDO LIVRE',
                       duration: duration,

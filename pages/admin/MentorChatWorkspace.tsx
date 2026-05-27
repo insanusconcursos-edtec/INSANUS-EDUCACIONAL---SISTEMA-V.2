@@ -64,12 +64,16 @@ const MentorChatWorkspace: React.FC<MentorChatWorkspaceProps> = ({ planId }) => 
 
   // Subscribe to all calls (for admin/mentor workspace)
   useEffect(() => {
-    const unsubscribe = subscribeToCalls('', (updatedCalls) => {
+    setLoading(true);
+    const unsubscribe = subscribeToCalls((updatedCalls) => {
       setCalls(updatedCalls);
       setLoading(false);
-    }, planId);
+    }, { 
+      planId, 
+      assignedMentor: mentorFilter 
+    });
     return () => unsubscribe();
-  }, [planId]);
+  }, [planId, mentorFilter]);
 
   // Subscribe to messages when a call is selected
   useEffect(() => {
