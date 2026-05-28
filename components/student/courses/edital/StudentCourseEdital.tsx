@@ -29,7 +29,7 @@ const formatShortDate = (dateStr: string) => {
 // ==========================================
 // 1. ACORDEÃO DO TÓPICO (AUTOSSUFICIENTE)
 // ==========================================
-function StudentTopicAccordion({ topic, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId }: any) {
+function StudentTopicAccordion({ topic, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId, numberingPrefix = "" }: any) {
   
   const { openSpacedReviewModal } = useSpacedReviewModal();
   // NOVA LÓGICA: Verifica se ESTE é o tópico exato que deve piscar
@@ -331,10 +331,56 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                     <CheckCircle2 size={18} />
                 </button>
 
-                <h4 className={`font-bold text-xs uppercase transition-colors ${isCompleted ? 'text-gray-400 line-through decoration-green-900/50' : isFocused ? 'text-yellow-500' : 'text-gray-200'}`}>
-                    {topic.name}
+                <h4 className={`font-bold text-xs uppercase transition-colors flex items-center gap-1 ${isCompleted ? 'text-gray-400 line-through decoration-green-900/50' : isFocused ? 'text-yellow-500' : 'text-gray-200'}`}>
+                    {numberingPrefix && <span className="text-gray-500">{numberingPrefix}</span>}
+                    <span>{topic.name}</span>
                 </h4>
             </div>
+
+            {/* BOTÕES INLINE À DIREITA */}
+            {!(topic.subtopics && topic.subtopics.length > 0) && (
+              <div className="flex items-center gap-2">
+                {(topic.contentData?.mindMap?.length > 0 || topic.mindMap || studentContent.mindmap) ? (
+                  <button 
+                      onClick={(e) => { e.stopPropagation(); onOpenEditor('MAP', topic, !!studentContent.mindmap); }} 
+                      disabled={isProcessingStudent}
+                      title="Mapa Mental"
+                      className="flex items-center justify-center w-8 h-8 rounded bg-[#1a1d24] border border-gray-800 hover:border-purple-500/50 hover:bg-purple-900/20 text-purple-400 transition-colors"
+                  >
+                      {isProcessingStudent ? <Loader2 size={14} className="animate-spin" /> : <BrainCircuit size={14} />}
+                  </button>
+                ) : (
+                  <button 
+                      onClick={(e) => { e.stopPropagation(); onOpenEditor('MAP', topic, true); }} 
+                      disabled={isProcessingStudent}
+                      title="Criar Mapa Mental"
+                      className="flex items-center justify-center w-8 h-8 rounded bg-[#1a1d24] border border-gray-800 hover:border-purple-500/50 hover:bg-purple-900/10 text-gray-500 hover:text-purple-400 transition-colors"
+                  >
+                      {isProcessingStudent ? <Loader2 size={14} className="animate-spin" /> : <BrainCircuit size={14} />}
+                  </button>
+                )}
+
+                {(topic.contentData?.flashcards?.length > 0 || topic.flashcards || studentContent.flashcards) ? (
+                  <button 
+                      onClick={(e) => { e.stopPropagation(); onOpenEditor('FLASHCARD', topic, !!studentContent.flashcards); }} 
+                      disabled={isProcessingStudent}
+                      title="Flashcards"
+                      className="flex items-center justify-center w-8 h-8 rounded bg-[#1a1d24] border border-gray-800 hover:border-pink-500/50 hover:bg-pink-900/20 text-pink-400 transition-colors"
+                  >
+                      {isProcessingStudent ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}
+                  </button>
+                ) : (
+                  <button 
+                      onClick={(e) => { e.stopPropagation(); onOpenEditor('FLASHCARD', topic, true); }} 
+                      disabled={isProcessingStudent}
+                      title="Criar Flashcards"
+                      className="flex items-center justify-center w-8 h-8 rounded bg-[#1a1d24] border border-gray-800 hover:border-pink-500/50 hover:bg-pink-900/10 text-gray-500 hover:text-pink-400 transition-colors"
+                  >
+                      {isProcessingStudent ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ÁREA DE REVISÕES VISUAIS (Badge System) */}
@@ -479,54 +525,12 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                     </>
                   );
               })()}
-
-              {/* MAPAS MENTAIS */}
-              <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-[#1a1d24] border border-gray-800 rounded-lg gap-3 mt-2">
-                  <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-900/20 text-purple-500 flex items-center justify-center shrink-0"><BrainCircuit size={16} /></div>
-                      <div>
-                          <span className="text-[9px] text-gray-500 font-bold uppercase block mb-0.5">Ferramenta de Resumo</span>
-                          <span className="text-xs text-white font-bold block">Mapas Mentais</span>
-                      </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                      {(topic.contentData?.mindMap?.length > 0 || topic.mindMap) && (
-                          <button onClick={() => onOpenEditor('MAP', topic, false)} className="flex items-center gap-2 px-3 py-1.5 border border-purple-900/50 bg-purple-900/10 hover:bg-purple-900/20 text-purple-400 rounded text-xs font-medium transition-colors">
-                              Ver Mapa do Professor
-                          </button>
-                      )}
-                      <button onClick={() => onOpenEditor('MAP', topic, true)} disabled={isProcessingStudent} className="flex items-center gap-2 px-3 py-1.5 border border-purple-900/50 bg-black hover:bg-purple-900/20 text-purple-400 rounded text-xs font-medium transition-colors">
-                          {isProcessingStudent ? '...' : (studentContent.mindmap ? 'Editar Meu Mapa' : '+ Criar Mapa Mental')}
-                      </button>
-                  </div>
-              </div>
-
-              {/* FLASHCARDS */}
-              <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-[#1a1d24] border border-gray-800 rounded-lg gap-3 mb-2">
-                  <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-pink-900/20 text-pink-500 flex items-center justify-center shrink-0"><Layers size={16} /></div>
-                      <div>
-                          <span className="text-[9px] text-gray-500 font-bold uppercase block mb-0.5">Ferramenta de Flashcard</span>
-                          <span className="text-xs text-white font-bold block">Flashcards</span>
-                      </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                      {(topic.contentData?.flashcards?.length > 0 || topic.flashcards) && (
-                          <button onClick={() => onOpenEditor('FLASHCARD', topic, false)} className="flex items-center gap-2 px-3 py-1.5 border border-pink-900/50 bg-pink-900/10 hover:bg-pink-900/20 text-pink-400 rounded text-xs font-medium transition-colors">
-                              Praticar Flashcards (Prof)
-                          </button>
-                      )}
-                      <button onClick={() => onOpenEditor('FLASHCARD', topic, true)} disabled={isProcessingStudent} className="flex items-center gap-2 px-3 py-1.5 border border-pink-900/50 bg-black hover:bg-pink-900/20 text-pink-400 rounded text-xs font-medium transition-colors">
-                          {isProcessingStudent ? '...' : (studentContent.flashcards ? 'Editar Meus Cards' : '+ Criar Flashcards')}
-                      </button>
-                  </div>
-              </div>
             </div>
 
             {/* SUBTÓPICOS RECURSIVOS (A CHAVE DA SOLUÇÃO) */}
             {topic.subtopics && topic.subtopics.length > 0 && (
               <div className="mt-4 space-y-2 border-l border-gray-800 pl-3">
-                  {topic.subtopics.map((sub: any) => (
+                  {topic.subtopics.map((sub: any, idx: number) => (
                     <StudentTopicAccordion 
                        key={sub.id} 
                        topic={sub} 
@@ -538,6 +542,7 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                        onToggleTopic={onToggleTopic}
                        focusTopicId={focusTopicId}
                        planId={planId}
+                       numberingPrefix={`${numberingPrefix ? numberingPrefix.replace('.', '') : ''}.${idx + 1}.`}
                     />
                   ))}
               </div>
@@ -746,7 +751,7 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
         {isOpen && discipline.topics && (
           <div className="p-4 pt-0 border-t border-gray-800/50 bg-black/20">
             <div className="pl-4 border-l-2 border-gray-800 mt-4 space-y-3">
-              {discipline.topics.map((topic: any) => (
+              {discipline.topics.map((topic: any, index: number) => (
                 <StudentTopicAccordion 
                    key={topic.id} 
                    topic={topic} 
@@ -758,6 +763,7 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
                    completedTopics={completedTopics}
                    onToggleTopic={onToggleTopic}
                    focusTopicId={focusTopicId}
+                   numberingPrefix={`${index + 1}.`}
                 />
               ))}
             </div>
