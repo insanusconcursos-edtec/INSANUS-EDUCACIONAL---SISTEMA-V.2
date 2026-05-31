@@ -1196,6 +1196,35 @@ app.use((err: any, req: any, res: any, next: any) => {
   res.status(500).json({ success: false, error: 'Erro interno no servidor' });
 });
 
+async function cleanupExistingDuplicates() {
+  try {
+    const { dbAdmin } = getAdminConfig();
+    const snapshot = await dbAdmin.collection('coproduction_commissions').get();
+    
+    const seen = new Set<string>();
+    let deleteCount = 0;
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const key = `${data.orderId}_${data.coproducerId}`;
+      
+      if (seen.has(key)) {
+        await doc.ref.delete();
+        deleteCount++;
+      } else {
+        seen.add(key);
+      }
+    }
+    if (deleteCount > 0) {
+      console.log(`[CLEANUP] Removidos ${deleteCount} registros de comissão de coprodução duplicados para restabelecer integridade.`);
+    } else {
+      console.log(`[CLEANUP] Nenhum registro duplicado em coproduction_commissions encontrado.`);
+    }
+  } catch (err: any) {
+    console.error('[CLEANUP ERROR] Falha ao limpar duplicatas do banco:', err.message);
+  }
+}
+
 async function startServer() {
   try {
     process.stdout.write(">>>> [BOOT] SINAL DE VIDA RECEBIDO <<<<\n");
@@ -1205,9 +1234,10 @@ async function startServer() {
 
     await setupVite(app);
     
-    // Inicializar listeners de segundo plano
+    // Inicializar listeners de segundo plano e limpar duplicados
     initOrderNotificationListener();
     initStudyReminderCron();
+    await cleanupExistingDuplicates();
 
     if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
       app.listen(PORT, '0.0.0.0', () => {

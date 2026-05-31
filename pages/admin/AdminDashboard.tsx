@@ -15,7 +15,10 @@ import {
   ArrowRightCircle,
   Clock,
   RefreshCw,
-  Lock
+  Lock,
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -64,6 +67,14 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState<{ available: number; waiting_funds: number; transferred?: number; recipient_name?: string } | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
+
+  // Filtros avançados para as transações detalhadas
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilterType, setDateFilterType] = useState<'all' | 'today' | '7days' | '30days' | '90days' | 'custom'>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [pageSize, setPageSize] = useState<number | 'all'>(15);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchData = async () => {
     try {
@@ -159,6 +170,95 @@ const AdminDashboard: React.FC = () => {
     if (selectedProductIds.length === 0) return reports;
     return reports.filter(r => selectedProductIds.includes(r.courseId));
   }, [reports, selectedProductIds]);
+
+  // Filtrado por produtos selecionados e período de data selecionado
+  const filteredReportsByDate = useMemo(() => {
+    let result = reports;
+    if (selectedProductIds.length > 0) {
+      result = result.filter(r => selectedProductIds.includes(r.courseId));
+    }
+
+    const now = new Date();
+    const todayStart = startOfDay(now);
+
+    if (dateFilterType === 'today') {
+      result = result.filter(r => parseISO(r.createdAt) >= todayStart);
+    } else if (dateFilterType === '7days') {
+      const limit = subDays(todayStart, 7);
+      result = result.filter(r => parseISO(r.createdAt) >= limit);
+    } else if (dateFilterType === '30days') {
+      const limit = subDays(todayStart, 30);
+      result = result.filter(r => parseISO(r.createdAt) >= limit);
+    } else if (dateFilterType === '90days') {
+      const limit = subDays(todayStart, 90);
+      result = result.filter(r => parseISO(r.createdAt) >= limit);
+    } else if (dateFilterType === 'custom') {
+      if (startDate) {
+        const start = startOfDay(parseISO(startDate));
+        result = result.filter(r => parseISO(r.createdAt) >= start);
+      }
+      if (endDate) {
+        // Garante que pega até o final do dia selecionado
+        const end = startOfDay(subDays(parseISO(endDate), -1));
+        result = result.filter(r => parseISO(r.createdAt) < end);
+      }
+    }
+    return result;
+  }, [reports, selectedProductIds, dateFilterType, startDate, endDate]);
+
+  // Filtrado pelo termo de busca (Nome, e-mail, CPF, orderId ou nome do produto)
+  const searchFilteredReports = useMemo(() => {
+    if (!searchTerm.trim()) return filteredReportsByDate;
+
+    const cleanSearch = searchTerm.toLowerCase().trim();
+    const cleanSearchNumbers = cleanSearch.replace(/\D/g, '');
+
+    return filteredReportsByDate.filter(r => {
+      const customerName = (r.customerData?.name || (r as any).customer?.name || '').toLowerCase();
+      const customerEmail = (r.customerData?.email || (r as any).customer?.email || '').toLowerCase();
+      const customerPhone = (r.customerData?.phone || (r as any).customer?.phone || '').replace(/\D/g, '');
+      const customerCpf = (r.customerData?.cpf || (r as any).customer?.document || (r as any).customer?.document_number || '').replace(/\D/g, '');
+      const rOrderId = (r.orderId || '').toLowerCase();
+      const rProductName = (r.courseName || '').toLowerCase();
+
+      return (
+        customerName.includes(cleanSearch) ||
+        customerEmail.includes(cleanSearch) ||
+        rOrderId.includes(cleanSearch) ||
+        rProductName.includes(cleanSearch) ||
+        (cleanSearchNumbers && (customerPhone.includes(cleanSearchNumbers) || customerCpf.includes(cleanSearchNumbers)))
+      );
+    });
+  }, [filteredReportsByDate, searchTerm]);
+
+  // Totais retornados para o filtro de busca atual
+  const queryTotals = useMemo(() => {
+    return searchFilteredReports.reduce((acc, curr) => {
+      const { netCompanyValue } = calculateDeductions(curr);
+      return {
+        gross: acc.gross + (curr.grossValue || 0),
+        net: acc.net + netCompanyValue,
+        count: acc.count + 1
+      };
+    }, { gross: 0, net: 0, count: 0 });
+  }, [searchFilteredReports, calculateDeductions]);
+
+  // Paginação
+  const paginatedReports = useMemo(() => {
+    if (pageSize === 'all') return searchFilteredReports;
+    const startIndex = (currentPage - 1) * pageSize;
+    return searchFilteredReports.slice(startIndex, startIndex + pageSize);
+  }, [searchFilteredReports, currentPage, pageSize]);
+
+  const totalPages = useMemo(() => {
+    if (pageSize === 'all') return 1;
+    return Math.ceil(searchFilteredReports.length / pageSize);
+  }, [searchFilteredReports, pageSize]);
+
+  // Resetar página ao mudar filtros ou busca
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedProductIds, dateFilterType, startDate, endDate, pageSize]);
 
   // Statistics calculations
   const stats = useMemo(() => {
@@ -584,12 +684,158 @@ const AdminDashboard: React.FC = () => {
 
       {/* Recents Table (Bonus for detail) */}
       <div className="bg-brand-black/40 border border-white/5 rounded-[2.5rem] overflow-hidden">
-        <div className="p-8 border-b border-white/5 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white flex items-center gap-3">
-            <CreditCard className="w-5 h-5 text-emerald-500" />
-            Últimas Transações Detalhadas
-          </h2>
+        <div className="p-8 border-b border-white/5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 bg-white/[0.01]">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-3">
+              <CreditCard className="w-5 h-5 text-emerald-500" />
+              Histórico de Transações Detalhadas
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">Busque e filtre por qualquer período, produto ou dados do comprador</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Itens por pág:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPageSize(val === 'all' ? 'all' : Number(val));
+                }}
+                className="bg-brand-black border border-white/10 hover:border-emerald-500/30 text-white rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-emerald-500/50 transition-all cursor-pointer"
+              >
+                <option value={5}>5 itens</option>
+                <option value={10}>10 itens</option>
+                <option value={15}>15 itens</option>
+                <option value={30}>30 itens</option>
+                <option value={50}>50 itens</option>
+                <option value="all">Ver Todas ({searchFilteredReports.length})</option>
+              </select>
+            </div>
+          </div>
         </div>
+
+        {/* CONTROLS AREA */}
+        <div className="px-8 pt-6 pb-2 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Search client input */}
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="w-4 h-4 text-gray-500 group-hover:text-emerald-500/50 transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Pesquisar por nome do cliente, e-mail, CPF ou ID da compra..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-brand-black border border-white/10 group-hover:border-emerald-500/30 rounded-2xl pl-11 pr-10 py-3 text-sm text-white placeholder:text-gray-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all font-medium"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center hover:text-red-500 text-gray-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Date period selector */}
+            <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/5">
+              {[
+                { value: 'all', label: 'Tudo' },
+                { value: 'today', label: 'Hoje' },
+                { value: '7days', label: '7 Dias' },
+                { value: '30days', label: '30 Dias' },
+                { value: '90days', label: '90 Dias' },
+                { value: 'custom', label: 'Personalizado' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setDateFilterType(opt.value as any)}
+                  className={`flex-1 min-w-[60px] text-center px-2 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${
+                    dateFilterType === opt.value
+                      ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Date Picker inputs */}
+          <AnimatePresence>
+            {dateFilterType === 'custom' && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-1 overflow-hidden"
+              >
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Data Inicial</label>
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Data Final</label>
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/20"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Current Search Totals / Quick Summary Bar */}
+          <div className="bg-emerald-500/[0.02] border border-emerald-500/10 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Faturamento Bruto</span>
+                <span className="text-sm font-extrabold text-white font-mono mt-0.5">{formatCurrency(queryTotals.gross)}</span>
+              </div>
+              <div className="border-r border-white/5 h-8 hidden sm:block" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Líquido Consol.</span>
+                <span className={`text-sm font-extrabold font-mono mt-0.5 ${queryTotals.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatCurrency(queryTotals.net)}
+                </span>
+              </div>
+              <div className="border-r border-white/5 h-8 hidden sm:block" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Quantidade</span>
+                <span className="text-sm font-extrabold text-gray-300 font-mono mt-0.5">{queryTotals.count} vendas</span>
+              </div>
+            </div>
+
+            {/* Clear Filters Helper */}
+            {(searchTerm || dateFilterType !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setDateFilterType('all');
+                  setStartDate('');
+                  setEndDate('');
+                }}
+                className="px-3 py-1.5 rounded-xl border border-red-500/10 bg-red-500/5 text-red-500/70 hover:text-red-500 hover:bg-red-500/10 text-[9px] font-black uppercase tracking-wider transition-all"
+              >
+                Limpar Filtros de Busca
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* TABLE BODY */}
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -605,7 +851,7 @@ const AdminDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredReports.slice(0, 5).map((r) => {
+              {paginatedReports.map((r) => {
                 const {
                   gatewayFee: safeGatewayFee,
                   coproductionPart: safeCoproductionPart,
@@ -614,6 +860,9 @@ const AdminDashboard: React.FC = () => {
                 } = calculateDeductions(r);
 
                 const baseCalculo = r.grossValue - safeGatewayFee;
+
+                const rawCpf = r.customerData?.cpf || (r as any).customer?.document || (r as any).customer?.document_number || '';
+                const formattedCpf = rawCpf ? rawCpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '';
 
                 return (
                   <tr key={r.id} className="hover:bg-white/[0.02] transition-colors group">
@@ -624,6 +873,9 @@ const AdminDashboard: React.FC = () => {
                     <td className="px-8 py-5">
                       <p className="text-sm font-medium text-gray-300">{r.customerData?.name || (r as any).customer?.name || 'N/A'}</p>
                       <p className="text-xs text-gray-500">{r.customerData?.email || (r as any).customer?.email || 'N/A'}</p>
+                      {formattedCpf && (
+                        <p className="text-[10px] font-mono text-gray-500 mt-1 uppercase tracking-tight">CPF: {formattedCpf}</p>
+                      )}
                     </td>
                     <td className="px-8 py-5 font-mono text-sm text-gray-400">
                       {formatCurrency(r.grossValue)}
@@ -662,14 +914,64 @@ const AdminDashboard: React.FC = () => {
               })}
             </tbody>
           </table>
-          {filteredReports.length === 0 && (
+          {paginatedReports.length === 0 && (
             <div className="p-12 text-center text-gray-600 font-medium italic">
-              Nenhuma transação registrada ainda.
+              Nenhuma transação localizada nos filtros e busca atuais.
             </div>
           )}
         </div>
+
+        {/* PAGINATION PANEL */}
+        {totalPages > 1 && (
+          <div className="p-6 border-t border-white/5 bg-white/[0.01] flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              Mostrando <span className="text-white font-black">{Math.min(searchFilteredReports.length, (currentPage - 1) * (pageSize === 'all' ? searchFilteredReports.length : pageSize) + 1)}</span> a <span className="text-white font-black">{Math.min(searchFilteredReports.length, currentPage * (pageSize === 'all' ? searchFilteredReports.length : pageSize))}</span> de <span className="text-emerald-500 font-black">{searchFilteredReports.length}</span> compras
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2.5 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 rounded-xl text-white transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1 px-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((p, idx, arr) => {
+                    const showEllipsisBefore = idx > 0 && p - arr[idx - 1] > 1;
+                    return (
+                      <React.Fragment key={p}>
+                        {showEllipsisBefore && <span className="text-gray-600 px-1">...</span>}
+                        <button
+                          onClick={() => setCurrentPage(p)}
+                          className={`min-w-[36px] h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                            currentPage === p
+                              ? 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                              : 'text-gray-400 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-2.5 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5 rounded-xl text-white transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-      
+
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }

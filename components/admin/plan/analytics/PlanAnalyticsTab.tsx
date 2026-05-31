@@ -37,7 +37,7 @@ import { getStudents, Student } from '../../../../services/userService';
 import { getEdict, EdictStructure } from '../../../../services/edictService';
 import { getAllPlanMetas, Meta } from '../../../../services/metaService';
 import { useEditalProgress } from '../../../../hooks/useEditalProgress';
-import { collection, getDocs, query, where, documentId, doc, getDoc, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, documentId, doc, getDoc, setDoc, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../../../../services/firebase';
 import { toPlainObject } from '../../../../services/firestoreUtils';
 import { StudyCalendar } from '../../../../components/student/calendar/StudyCalendar';
@@ -124,6 +124,7 @@ export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, link
   const [isSyncing, setIsSyncing] = useState(false);
   const [chartMode, setChartMode] = useState<'quantity' | 'percentage' | 'autodiagnosis'>('quantity');
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+  const [isManageBlockedDisciplinesOpen, setIsManageBlockedDisciplinesOpen] = useState(false);
 
   // NOVO: Garantir que o selectedStudent reflita os dados em tempo real da lista allStudents
   const activeStudent = useMemo(() => {
@@ -883,6 +884,14 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                           <Lock size={12} className={activeStudent?.allowManualGeneration ? 'animate-pulse' : ''} />
                           {activeStudent?.allowManualGeneration ? 'Geração Manual: Liberada' : 'Geração Manual: Bloqueada'}
                        </button>
+
+                       <button 
+                          onClick={() => setIsManageBlockedDisciplinesOpen(true)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-yellow-500/35 bg-yellow-400/10 text-yellow-400 hover:bg-yellow-400 hover:text-black transition-all text-[10px] font-black uppercase tracking-widest shadow-lg shadow-yellow-400/5"
+                       >
+                          <ListTodo size={12} />
+                          Gerenciar Disciplinas do Plano
+                       </button>
                     </div>
                   </div>
                 </div>
@@ -1488,6 +1497,189 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
           </div>
         </div>
       )}
+
+      {isManageBlockedDisciplinesOpen && activeStudent && edictStructure && (
+        <ManageBlockedDisciplinesModal
+          student={activeStudent}
+          planId={planId}
+          disciplines={edictStructure.disciplines}
+          onClose={() => setIsManageBlockedDisciplinesOpen(false)}
+          onSave={async (blockedList) => {
+            try {
+              const planUserRef = doc(db, 'users', activeStudent.uid, 'plans', planId);
+              await setDoc(planUserRef, { blockedDisciplines: blockedList }, { merge: true });
+              toast.success('Regra de disciplinas atualizada com sucesso!', { icon: '🛡️' });
+              setIsManageBlockedDisciplinesOpen(false);
+            } catch (e) {
+              console.error('Error saving blocked disciplines', e);
+              toast.error('Erro ao salvar parametrização de disciplinas.');
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+interface ManageBlockedDisciplinesModalProps {
+  student: Student;
+  planId: string;
+  disciplines: { id: string; name: string }[];
+  onClose: () => void;
+  onSave: (blockedList: string[]) => Promise<void>;
+}
+
+const ManageBlockedDisciplinesModal: React.FC<ManageBlockedDisciplinesModalProps> = ({
+  student,
+  planId,
+  disciplines,
+  onClose,
+  onSave
+}) => {
+  const [blocked, setBlocked] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchBlocked = async () => {
+      try {
+        const docRef = doc(db, 'users', student.uid, 'plans', planId);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          setBlocked(snap.data().blockedDisciplines || []);
+        }
+      } catch (err) {
+        console.error('Error fetching student plan blocked disciplines:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBlocked();
+  }, [student.uid, planId]);
+
+  const handleToggle = (disciplineId: string) => {
+    setBlocked(prev => {
+      if (prev.includes(disciplineId)) {
+        return prev.filter(id => id !== disciplineId);
+      } else {
+        return [...prev, disciplineId];
+      }
+    });
+  };
+
+  const handleConfirmSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(blocked);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-lg bg-zinc-950 border border-zinc-850 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="p-6 border-b border-zinc-900 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-black text-white uppercase tracking-tighter flex items-center gap-2">
+              <Lock size={18} className="text-yellow-400" />
+              Bloquear Disciplinas do Plano
+            </h3>
+            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
+              Aluno: {student.name}
+            </p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-white transition-all transform active:scale-95"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Warning Bar */}
+        <div className="px-6 py-3 bg-zinc-900/40 border-b border-zinc-900 text-[10px] text-zinc-400 font-medium leading-relaxed">
+          Disciplinas desativadas/bloqueadas serão <strong className="text-yellow-400">totalmente ignoradas</strong> pelo motor de geração e atualização automática de cronogramas para este aluno.
+        </div>
+
+        {/* List of disciplines */}
+        <div className="p-6 flex-1 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-zinc-800">
+          {loading ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-3">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-yellow-400"></div>
+              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Carregando permissões...</span>
+            </div>
+          ) : disciplines.length === 0 ? (
+            <div className="py-12 text-center text-zinc-650 font-bold uppercase text-xs">
+              Nenhuma disciplina cadastrada neste Edital/Ciclo.
+            </div>
+          ) : (
+            disciplines.map(disc => {
+              const isBlocked = blocked.includes(disc.id) || blocked.includes(disc.name);
+              const isActive = !isBlocked;
+              return (
+                <div 
+                  key={disc.id}
+                  className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                    isBlocked 
+                      ? 'border-red-500/20 bg-red-500/5 shadow-[inset_0_0_12px_rgba(239,68,68,0.02)]' 
+                      : 'border-zinc-900 bg-zinc-900/20 hover:border-zinc-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl border ${isBlocked ? 'bg-red-500/10 border-red-500/20 text-red-500' : 'bg-zinc-950 border-zinc-805 text-zinc-500'}`}>
+                      <Lock size={14} className={isBlocked ? 'animate-pulse' : ''} />
+                    </div>
+                    <div>
+                      <span className={`text-xs font-black uppercase tracking-tight ${isBlocked ? 'text-zinc-500 line-through' : 'text-white'}`}>
+                        {disc.name}
+                      </span>
+                      <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-0.5">
+                        {isBlocked ? 'Bloqueada p/ Estudante' : 'Ativa no Ciclo'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Toggle Switch representing Active State */}
+                  <button
+                    onClick={() => handleToggle(disc.id)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      isActive ? 'bg-emerald-500' : 'bg-zinc-800'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        isActive ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-zinc-900 flex gap-3">
+          <button 
+            disabled={saving}
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl border border-zinc-850 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-bold uppercase text-xs tracking-widest transition-all"
+          >
+            Cancelar
+          </button>
+          <button 
+            disabled={saving || loading}
+            onClick={handleConfirmSave}
+            className="flex-1 py-3 rounded-xl bg-yellow-400 hover:bg-yellow-300 disabled:bg-zinc-800 disabled:text-zinc-650 text-black font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-yellow-400/10 flex items-center justify-center gap-2"
+          >
+            {saving ? 'Gravando...' : 'Salvar Filtro'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

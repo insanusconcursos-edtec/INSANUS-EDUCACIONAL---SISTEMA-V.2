@@ -330,59 +330,9 @@ export const handlePagarmeWebhook = async (payload: any) => {
         status: 'paid',
         updatedAt: new Date().toISOString()
       });
-      // 1. GATILHO EM TEMPO REAL: itere sobre o array 'split' contido no documento
-      const orderSnapshot = await orderRef.get();
-      if (orderSnapshot.exists) {
-        const orderDocData = orderSnapshot.data();
-        const splits = orderDocData?.split || [];
-        const envMasterId = process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID;
-
-        // Tentar obter informações do produto
-        const productId = orderData.metadata?.courseId || orderData.metadata?.productId || orderData.items?.[0]?.code;
-        let courseName = 'Produto';
-        if (productId) {
-          const tictoDoc = await dbAdmin.collection('ticto_products').doc(productId).get();
-          if (tictoDoc.exists) courseName = tictoDoc.data()?.name || courseName;
-          else {
-            const prodDoc = await dbAdmin.collection('products').doc(productId).get();
-            if (prodDoc.exists) courseName = prodDoc.data()?.name || courseName;
-          }
-        }
-
-        for (const s of splits) {
-          const recipientId = s.recipient_id || s.recipient?.id || s.id;
-          if (!recipientId || recipientId === envMasterId) continue;
-          
-          let userId = null;
-          try {
-            const userLookup = await dbAdmin.collection('users')
-              .where('pagarmeRecipientId', '==', recipientId)
-              .limit(1)
-              .get();
-            if (!userLookup.empty) {
-              userId = userLookup.docs[0].id;
-            }
-          } catch (e) {
-            console.error('[GATILHO] Erro buscar UID:', e);
-          }
-
-          // Crie um documento correspondente dentro da coleção correta (coproduction_commissions)
-          await dbAdmin.collection('coproduction_commissions').add({
-            commissionValue: s.amount,
-            grossValue: orderDocData.transaction_amount || orderData.amount,
-            recipientId: recipientId,
-            coproducerId: userId || recipientId,
-            orderId: orderData.id,
-            courseName: courseName,
-            createdAt: new Date().toISOString(),
-            status: 'paid',
-            type: 'coproduction'
-          });
-          console.log(`[GATILHO] Transação gerada para ${userId || recipientId}`);
-        }
-      }
+      console.log(`[PAGARME WEBHOOK] Status da ordem ${orderData.id} atualizado para pago.`);
     } catch (err) {
-      console.error('[Push Trigger] Erro ao atualizar status da ordem ou gerar transactions:', err);
+      console.error('[Push Trigger] Erro ao atualizar status da ordem:', err);
     }
 
     const email = orderData.customer?.email;
@@ -452,6 +402,18 @@ async function recordAffiliateCommission(orderData: any) {
     if (customer.phones?.mobile_phone) {
       const mp = customer.phones.mobile_phone;
       phone = `+${mp.country_code}${mp.area_code}${mp.number}`;
+    }
+
+    // Verificar duplicidade antes de registrar (Idempotência)
+    const checkExisting = await dbAdmin.collection('affiliate_commissions')
+      .where('orderId', '==', orderData.id)
+      .where('affiliateId', '==', affiliateId)
+      .limit(1)
+      .get();
+
+    if (!checkExisting.empty) {
+      console.log(`[AFFILIATE LOG] Comissão da ordem ${orderData.id} para o afiliado ${affiliateId} já foi gravada. Ignorando duplicidade.`);
+      return;
     }
 
     await dbAdmin.collection('affiliate_commissions').add({
@@ -570,6 +532,17 @@ async function recordAdminSalesReport(orderData: any) {
     const totalTaxasEComissoes = gatewayFee + coproductionPart + affiliatePart;
     const netCompanyValue = amountCents - totalTaxasEComissoes;
 
+    // Verificar duplicidade antes de registrar (Idempotência)
+    const checkExisting = await dbAdmin.collection('admin_sales_report')
+      .where('orderId', '==', orderData.id)
+      .limit(1)
+      .get();
+
+    if (!checkExisting.empty) {
+      console.log(`[ADMIN REPORT LOG] Relatório de vendas para ordem ${orderData.id} já foi registrado. Ignorando duplicidade.`);
+      return;
+    }
+
     await dbAdmin.collection('admin_sales_report').add({
       orderId: orderData.id,
       courseId: productId,
@@ -669,6 +642,18 @@ async function recordCoproductionCommissions(orderData: any) {
         }
 
         if (commissionValue > 0) {
+          // Verificar duplicidade antes de registrar (Idempotência)
+          const checkExisting = await dbAdmin.collection('coproduction_commissions')
+            .where('orderId', '==', orderData.id)
+            .where('coproducerId', '==', identifier)
+            .limit(1)
+            .get();
+
+          if (!checkExisting.empty) {
+            console.log(`[SPLIT LOG] Comissão da ordem ${orderData.id} para o coprodutor ${identifier} já existe. Pulando para obter idempotência.`);
+            continue;
+          }
+
           // Captura dados do cliente para o relatório
           const customer = orderData.customer || {};
           let phone = metadata.userPhone || customer.phones?.mobile_phone?.number || 'N/A';
@@ -735,6 +720,18 @@ async function recordCoproductionCommissions(orderData: any) {
       if (identifier && percentage > 0) {
         const commissionValue = Math.floor(poolForCopro * (percentage / 100));
         
+        // Verificar duplicidade antes de registrar (Idempotência)
+        const checkExisting = await dbAdmin.collection('coproduction_commissions')
+          .where('orderId', '==', orderData.id)
+          .where('coproducerId', '==', identifier)
+          .limit(1)
+          .get();
+
+        if (!checkExisting.empty) {
+          console.log(`[SPLIT LOG] [FALLBACK] Comissão da ordem ${orderData.id} para o coprodutor ${identifier} já existe. Pulando para obter idempotência.`);
+          continue;
+        }
+
         // Captura dados do cliente para o relatório fallback
         const customer = orderData.customer || {};
         let phone = metadata.userPhone || customer.phones?.mobile_phone?.number || 'N/A';

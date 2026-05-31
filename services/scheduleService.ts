@@ -437,9 +437,31 @@ export const generateSchedule = async (
 
   const sortedCycles = (planData.cycles || []).sort((a, b) => (a.order || 0) - (b.order || 0));
 
+  // CARREGAR DISCIPLINAS BLOQUEADAS INDIVIDUALMENTE PELO ALUNO
+  let blockedDisciplines: string[] = [];
+  try {
+    const studentUserPlanRef = doc(db, 'users', userId, 'plans', planId);
+    const studentUserPlanSnap = await getDoc(studentUserPlanRef);
+    if (studentUserPlanSnap.exists()) {
+      blockedDisciplines = studentUserPlanSnap.data().blockedDisciplines || [];
+    }
+  } catch (error) {
+    console.error('Error fetching student-plan blocked disciplines in generator:', error);
+  }
+
   const disciplinesQuery = query(collection(db, 'plans', planId, 'disciplines'), orderBy('order'));
   const disciplinesSnap = await getDocs(disciplinesQuery);
-  const sortedDisciplines = disciplinesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let sortedDisciplines = disciplinesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // REGRA DE NEGÓCIO: Filtrar disciplinas bloqueadas para que o gerador as ignore por completo
+  if (blockedDisciplines.length > 0) {
+    const normalizedBlocked = blockedDisciplines.map(d => String(d).toLowerCase().trim());
+    sortedDisciplines = sortedDisciplines.filter(disc => {
+      const discId = disc.id.toLowerCase().trim();
+      const discName = ((disc as any).name || (disc as any).title || '').toLowerCase().trim();
+      return !normalizedBlocked.includes(discId) && !normalizedBlocked.includes(discName);
+    });
+  }
 
   const sortedTopics: any[] = [];
   const sortedTasks: any[] = [];
