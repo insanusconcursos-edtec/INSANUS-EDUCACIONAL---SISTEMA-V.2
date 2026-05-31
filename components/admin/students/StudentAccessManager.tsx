@@ -819,17 +819,20 @@ const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, 
     }
 
     return (
-        <div className={`group relative bg-zinc-950 border ${colors.border} p-4 rounded-xl transition-all shadow-sm`}>
-            <div className="flex justify-between items-start mb-3">
-                <h4 className="text-sm font-black text-white uppercase tracking-tight line-clamp-1 pr-4">
+        <div className={`group relative bg-zinc-950 border ${colors.border} p-4 rounded-xl transition-all shadow-sm`} title={access.title}>
+            <div className="flex justify-between items-start mb-3 gap-2">
+                <h4 
+                    className="text-sm font-black text-white uppercase tracking-tight line-clamp-3 pr-4 break-words"
+                    title={access.title}
+                >
                     {access.title}
                 </h4>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                     <div className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${status === 'ATIVO' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/10' : 'border-red-500/30 text-red-500 bg-red-500/10'}`}>
                         {status}
                     </div>
                     {access.isScholarship && (
-                        <span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">
+                        <span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-[10px] font-bold px-2 py-0.5 rounded shrink-0">
                             BOLSISTA
                         </span>
                     )}
