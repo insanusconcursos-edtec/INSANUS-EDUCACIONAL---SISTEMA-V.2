@@ -143,6 +143,56 @@ export const updateStudent = async (uid: string, data: Partial<Student>) => {
 };
 
 /**
+ * Updates student's login email on Firebase Authentication & Firestore synchronously using the backend Admin SDK.
+ */
+export const updateStudentEmailAdmin = async (uid: string, novoEmail: string): Promise<void> => {
+  const response = await fetch('/api/admin/students/update-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uid, novoEmail }),
+  });
+
+  const text = await response.text();
+  let resData;
+  try {
+    resData = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Erro ao processar resposta do servidor.');
+  }
+
+  if (!response.ok || !resData.success) {
+    throw new Error(resData.error || 'Erro ao sincronizar e-mail do aluno.');
+  }
+};
+
+/**
+ * Updates student's password on Firebase Authentication synchronously using the backend Admin SDK.
+ */
+export const updateStudentPasswordAdmin = async (uid: string, novaSenha: string): Promise<void> => {
+  const response = await fetch('/api/admin/students/update-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uid, novaSenha }),
+  });
+
+  const text = await response.text();
+  let resData;
+  try {
+    resData = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Erro ao processar resposta do servidor.');
+  }
+
+  if (!response.ok || !resData.success) {
+    throw new Error(resData.error || 'Erro ao atualizar senha do aluno.');
+  }
+};
+
+/**
  * Sends a password reset email
  */
 export const sendPasswordReset = async (email: string) => {

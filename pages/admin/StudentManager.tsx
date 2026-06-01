@@ -2,12 +2,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { 
   Plus, Search, Filter, Trash2, Edit, Key, Lock,
-  MessageCircle, ShieldCheck, ShieldAlert, AlertTriangle 
+  MessageCircle, ShieldCheck, ShieldAlert, AlertTriangle,
+  Eye, EyeOff, X
 } from 'lucide-react';
 import { 
   getStudents, 
   createStudent, 
   updateStudent, 
+  updateStudentEmailAdmin,
+  updateStudentPasswordAdmin,
   deleteStudent,
   sendPasswordReset,
   Student, 
@@ -53,6 +56,15 @@ const StudentManager: React.FC = () => {
   const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
   const [studentToReset, setStudentToReset] = useState<Student | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+
+  // Email Password Reset State
+  const [emailResetModalOpen, setEmailResetModalOpen] = useState(false);
+  const [studentToEmailReset, setStudentToEmailReset] = useState<Student | null>(null);
+  const [isSendingEmailReset, setIsSendingEmailReset] = useState(false);
 
   // === DATA FETCHING ===
   const fetchData = useCallback(async () => {
@@ -84,9 +96,20 @@ const StudentManager: React.FC = () => {
 
   const handleCreateOrUpdate = async (data: CreateStudentData) => {
     if (editingStudent) {
-        await updateStudent(editingStudent.uid, data);
+        // Se o e-mail mudou, realiza a atualização síncrona usando o Admin SDK primeiro
+        if (editingStudent.email && data.email && editingStudent.email.trim().toLowerCase() !== data.email.trim().toLowerCase()) {
+            await updateStudentEmailAdmin(editingStudent.uid, data.email);
+        }
+        
+        // Atualiza os demais campos cadastrais
+        await updateStudent(editingStudent.uid, {
+            name: data.name.toUpperCase(),
+            whatsapp: data.whatsapp || '',
+        });
+        toast.success("Aluno atualizado com sucesso!");
     } else {
         await createStudent(data);
+        toast.success("Aluno cadastrado com sucesso!");
     }
     await fetchData();
   };
@@ -100,45 +123,65 @@ const StudentManager: React.FC = () => {
     setManagingAccessStudent(student);
   };
 
-  const handleToggleManualGeneration = async (student: Student) => {
-    const newValue = !student.allowManualGeneration;
-    try {
-        await updateStudent(student.uid, { allowManualGeneration: newValue });
-        setStudents(prev => prev.map(s => s.uid === student.uid ? { ...s, allowManualGeneration: newValue } : s));
-        toast.success(
-            newValue 
-                ? `Geração manual LIBERADA para ${student.name}` 
-                : `Geração manual BLOQUEADA para ${student.name}`,
-            { icon: newValue ? '🔓' : '🔒' }
-        );
-    } catch (error) {
-        toast.error("Erro ao atualizar permissão");
-    }
-  };
-
   const handleRequestPasswordReset = (student: Student, e: React.MouseEvent) => {
     e.stopPropagation();
     setStudentToReset(student);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setShowNewPassword(false);
+    setShowConfirmNewPassword(false);
     setResetPasswordModalOpen(true);
   };
 
   const handleConfirmPasswordReset = async () => {
     if (!studentToReset) return;
+    if (!newPassword || newPassword.length < 6) {
+        toast.error("A senha deve ter no mínimo 6 caracteres.");
+        return;
+    }
+    if (newPassword !== confirmNewPassword) {
+        toast.error("As senhas não conferem.");
+        return;
+    }
+
     setIsResetting(true);
     try {
-        await sendPasswordReset(studentToReset.email);
-        toast.success(`E-mail de recuperação enviado para ${studentToReset.email}`, {
-          duration: 5000,
-          icon: '📧'
-        });
+        await updateStudentPasswordAdmin(studentToReset.uid, newPassword);
+        toast.success("Senha alterada com sucesso!");
         setResetPasswordModalOpen(false);
         setStudentToReset(null);
     } catch (error: unknown) {
         console.error(error);
-        const message = error instanceof Error ? error.message : "Erro desconhecido";
+        const message = error instanceof Error ? error.message : "Erro ao atualizar a senha.";
         toast.error(`Erro: ${message}`);
     } finally {
         setIsResetting(false);
+    }
+  };
+
+  const handleRequestEmailReset = (student: Student, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStudentToEmailReset(student);
+    setEmailResetModalOpen(true);
+  };
+
+  const handleConfirmEmailReset = async () => {
+    if (!studentToEmailReset) return;
+    setIsSendingEmailReset(true);
+    try {
+        await sendPasswordReset(studentToEmailReset.email);
+        toast.success(`E-mail de recuperação enviado para ${studentToEmailReset.email}`, {
+          duration: 5000,
+          icon: '📧'
+        });
+        setEmailResetModalOpen(false);
+        setStudentToEmailReset(null);
+    } catch (error: unknown) {
+        console.error(error);
+        const message = error instanceof Error ? error.message : "Erro ao enviar e-mail de redefinição.";
+        toast.error(`Erro: ${message}`);
+    } finally {
+        setIsSendingEmailReset(false);
     }
   };
 
@@ -459,27 +502,25 @@ const StudentManager: React.FC = () => {
                                         title="Gerenciar Acessos"
                                         onClick={() => handleManageAccess(student)}
                                     >
+                                        <ShieldCheck size={14} />
+                                    </button>
+
+                                    {/* Manual password reset (Key) */}
+                                    <button 
+                                        type="button"
+                                        className="p-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all"
+                                        title="Redefinir Senha Manualmente"
+                                        onClick={(e) => handleRequestPasswordReset(student, e)}
+                                    >
                                         <Key size={14} />
                                     </button>
 
-                                    <button 
-                                        className={`p-2 border rounded-lg transition-all ${
-                                            student.allowManualGeneration 
-                                                ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-500' 
-                                                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
-                                        }`}
-                                        title={student.allowManualGeneration ? "Bloquear Geração Manual" : "Liberar Geração Manual"}
-                                        onClick={() => handleToggleManualGeneration(student)}
-                                    >
-                                        <Lock size={14} className={student.allowManualGeneration ? 'animate-pulse' : ''} />
-                                    </button>
-                                    
-                                    {/* Password Reset Button (Fixed with Modal) */}
+                                    {/* Password Reset Email Button (Lock, Yellow/Amber styled) */}
                                     <button 
                                         type="button"
-                                        className="p-2 bg-zinc-900 hover:bg-amber-900/20 border border-zinc-800 hover:border-amber-900/50 rounded-lg text-zinc-400 hover:text-amber-500 transition-all"
-                                        title="Enviar Redefinição de Senha"
-                                        onClick={(e) => handleRequestPasswordReset(student, e)}
+                                        className="p-2 bg-zinc-900 hover:bg-amber-950/30 border border-zinc-800 hover:border-amber-500/30 rounded-lg text-amber-500 hover:text-amber-400 transition-all"
+                                        title="Enviar Redefinição de Senha por E-mail"
+                                        onClick={(e) => handleRequestEmailReset(student, e)}
                                     >
                                         <Lock size={14} />
                                     </button>
@@ -528,6 +569,103 @@ const StudentManager: React.FC = () => {
       {/* PASSWORD RESET MODAL */}
       {resetPasswordModalOpen && studentToReset && (
         <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-[160px] bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto" onMouseDown={() => setResetPasswordModalOpen(false)}>
+            <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden mb-8 animate-in zoom-in-95 duration-200" onMouseDown={e => e.stopPropagation()}>
+                
+                {/* Header */}
+                <div className="p-5 border-b border-zinc-900 bg-zinc-900/50 flex items-center justify-between">
+                  <h2 className="text-xl font-black text-white uppercase tracking-tighter">
+                    Redefinir Senha Manualmente
+                  </h2>
+                  <button onClick={() => setResetPasswordModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); handleConfirmPasswordReset(); }} className="p-6 space-y-4">
+                    <p className="text-zinc-400 text-xs">
+                        Defina uma nova senha para o aluno <strong className="text-white uppercase">{studentToReset.name}</strong> ({studentToReset.email})
+                    </p>
+
+                    {/* Nova Senha */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest pl-1">Nova Senha</label>
+                        <div className="relative">
+                            <Lock size={16} className="absolute left-3 top-3 text-zinc-600" />
+                            <input 
+                                type={showNewPassword ? 'text' : 'password'}
+                                value={newPassword}
+                                onChange={e => setNewPassword(e.target.value)}
+                                placeholder="Mínimo 6 caracteres"
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 pl-10 pr-10 text-sm text-white placeholder-zinc-700 focus:outline-none focus:border-brand-red font-mono"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                className="absolute right-3 top-3 text-zinc-500 hover:text-white transition-colors focus:outline-none"
+                            >
+                                {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                        {newPassword && newPassword.length < 6 && (
+                            <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider mt-1 pl-1">
+                                A senha deve ter no mínimo 6 caracteres.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Confirmar Nova Senha */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest pl-1">Confirmar Nova Senha</label>
+                        <div className="relative">
+                            <Lock size={16} className="absolute left-3 top-3 text-zinc-600" />
+                            <input 
+                                type={showConfirmNewPassword ? 'text' : 'password'}
+                                value={confirmNewPassword}
+                                onChange={e => setConfirmNewPassword(e.target.value)}
+                                placeholder="Confirme a nova senha"
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 pl-10 pr-10 text-sm text-white placeholder-zinc-700 focus:outline-none focus:border-brand-red font-mono"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                                className="absolute right-3 top-3 text-zinc-500 hover:text-white transition-colors focus:outline-none"
+                            >
+                                {showConfirmNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                        {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
+                            <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider mt-1 pl-1">
+                                As senhas não conferem.
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="pt-4 flex gap-3">
+                        <button 
+                            type="button"
+                            onClick={() => setResetPasswordModalOpen(false)}
+                            className="flex-1 py-3 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold uppercase text-xs tracking-widest transition-all"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            type="submit"
+                            disabled={isResetting || !newPassword || newPassword.length < 6 || newPassword !== confirmNewPassword}
+                            className="flex-1 py-3 rounded-xl bg-brand-red hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-brand-red/20 flex items-center justify-center gap-2"
+                        >
+                            {isResetting ? 'Atualizando...' : 'Atualizar Senha'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* EMAIL PASSWORD RESET MODAL */}
+      {emailResetModalOpen && studentToEmailReset && (
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-[160px] bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto" onMouseDown={() => setEmailResetModalOpen(false)}>
             <div className="w-full max-w-md bg-zinc-950 border border-amber-500/30 rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200 mb-8" onMouseDown={e => e.stopPropagation()}>
                 <div className="flex flex-col items-center text-center gap-4">
                     <div className="p-3 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
@@ -535,29 +673,29 @@ const StudentManager: React.FC = () => {
                     </div>
                     
                     <h3 className="text-xl font-black text-white uppercase tracking-tighter">
-                        Redefinir Senha?
+                        Enviar Redefinição?
                     </h3>
                     
-                    <p className="text-zinc-400 text-sm leading-relaxed">
-                        Você está prestes a enviar um e-mail de redefinição de senha para o aluno <strong className="text-white">{studentToReset.name}</strong> ({studentToReset.email}).
+                    <p className="text-zinc-400 text-sm leading-relaxed text-center">
+                        Você está prestes a enviar um e-mail de redefinição de senha para o aluno <strong className="text-white uppercase">{studentToEmailReset.name}</strong> ({studentToEmailReset.email}).
                         <br/><br/>
-                        O aluno receberá um link para criar uma nova senha.
+                        O aluno receberá um link automático para criar uma nova senha.
                     </p>
 
                     <div className="flex gap-3 w-full mt-2">
                         <button 
-                            onClick={() => setResetPasswordModalOpen(false)} 
-                            disabled={isResetting}
+                            onClick={() => setEmailResetModalOpen(false)} 
+                            disabled={isSendingEmailReset}
                             className="flex-1 py-3 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold uppercase text-xs tracking-widest transition-all"
                         >
                             Cancelar
                         </button>
                         <button 
-                            onClick={handleConfirmPasswordReset} 
-                            disabled={isResetting}
+                            onClick={handleConfirmEmailReset} 
+                            disabled={isSendingEmailReset}
                             className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
                         >
-                            {isResetting ? 'Enviando...' : 'Enviar E-mail'}
+                            {isSendingEmailReset ? 'Enviando...' : 'Enviar E-mail'}
                         </button>
                     </div>
                 </div>

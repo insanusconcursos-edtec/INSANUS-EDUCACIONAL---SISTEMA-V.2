@@ -582,6 +582,74 @@ async function setupVite(app: any) {
     }
   });
 
+  // Rota de Sincronização e Atualização do E-mail do Aluno (Admin)
+  app.post('/api/admin/students/update-email', async (req, res) => {
+    try {
+      const { dbAdmin, authAdmin } = getAdminConfig();
+      const { uid, novoEmail } = req.body;
+
+      if (!uid || !novoEmail) {
+        return res.status(400).json({ success: false, error: "UID e novo e-mail são obrigatórios." });
+      }
+
+      const emailTrimmed = String(novoEmail).trim().toLowerCase();
+
+      // 1. Atualizar no Firebase Authentication primeiro
+      try {
+        await authAdmin.updateUser(uid, {
+          email: emailTrimmed
+        });
+      } catch (authError: any) {
+        console.error("Erro ao atualizar e-mail no Auth do Firebase:", authError);
+        if (authError.code === 'auth/email-already-exists' || (authError.message && authError.message.includes('already exists'))) {
+          return res.status(400).json({ success: false, error: "Este e-mail já está em uso por outro usuário." });
+        }
+        return res.status(400).json({ success: false, error: authError.message || "Erro no sistema de autenticação." });
+      }
+
+      // 2. Se a atualização no Authentication for bem-sucedida, atualizar Firestore
+      await dbAdmin.collection('users').doc(uid).update({
+        email: emailTrimmed
+      });
+
+      return res.status(200).json({ success: true, message: "E-mail atualizado com sucesso no Auth e Firestore." });
+    } catch (error: any) {
+      console.error("Erro na rota de atualização do e-mail do aluno:", error);
+      return res.status(500).json({ success: false, error: error.message || "Erro interno do servidor." });
+    }
+  });
+
+  // Rota de Redefinição Manual de Senha do Aluno (Admin)
+  app.post('/api/admin/students/update-password', async (req, res) => {
+    try {
+      const { authAdmin } = getAdminConfig();
+      const { uid, novaSenha } = req.body;
+
+      if (!uid || !novaSenha) {
+        return res.status(400).json({ success: false, error: "UID e nova senha são obrigatórios." });
+      }
+
+      if (String(novaSenha).length < 6) {
+        return res.status(400).json({ success: false, error: "A senha deve ter no mínimo 6 caracteres." });
+      }
+
+      // Atualizar no Firebase Authentication
+      try {
+        await authAdmin.updateUser(uid, {
+          password: novaSenha
+        });
+      } catch (authError: any) {
+        console.error("Erro ao atualizar senha no Auth do Firebase:", authError);
+        return res.status(400).json({ success: false, error: authError.message || "Erro no sistema de autenticação." });
+      }
+
+      return res.status(200).json({ success: true, message: "Senha atualizada com sucesso no Auth." });
+    } catch (error: any) {
+      console.error("Erro na rota de redefinição de senha do aluno:", error);
+      return res.status(500).json({ success: false, error: error.message || "Erro interno do servidor." });
+    }
+  });
+
   // Rota de Coprodutores (Admin)
   app.get('/api/admin/coproducers', async (req, res) => {
     try {
