@@ -335,6 +335,17 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
 
     if (metasToRender.length === 0) return null;
 
+    // Apply custom defined metas order if present
+    if (item.metasOrder && item.metasOrder.length > 0) {
+      metasToRender.sort((a, b) => {
+        const indexA = item.metasOrder!.indexOf(a.id!);
+        const indexB = item.metasOrder!.indexOf(b.id!);
+        const valA = indexA === -1 ? Infinity : indexA;
+        const valB = indexB === -1 ? Infinity : indexB;
+        return valA - valB;
+      });
+    }
+
     return (
         <div className="flex flex-col gap-2 mt-2 mb-2 animate-in slide-in-from-left-2 duration-300">
             {metasToRender.map(meta => {

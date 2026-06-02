@@ -9,6 +9,8 @@ interface SubModuleItemProps {
   onEdit: () => void;
   onDelete: () => void;
   onAddLesson: () => void;
+  onAddSubFolder?: () => void;
+  children?: React.ReactNode;
   
   // --- NOVAS PROPS ---
   isOpen: boolean;        // Recebe estado do pai
@@ -32,7 +34,7 @@ interface SubModuleItemProps {
 }
 
 export const SubModuleItem: React.FC<SubModuleItemProps> = ({ 
-  subModule, lessons, onEdit, onDelete, onAddLesson, 
+  subModule, lessons, onEdit, onDelete, onAddLesson, onAddSubFolder, children,
   isOpen, onToggle,
   onEditLesson, onDeleteLesson, onMoveLesson, onManageLesson,
   selectedLessonIds = [], onToggleLessonSelection,
@@ -72,7 +74,7 @@ export const SubModuleItem: React.FC<SubModuleItemProps> = ({
                 {lessons.length} aulas
             </span>
         </div>
-
+ 
         {/* Ações da Pasta (Editar/Excluir/Add Aula) */}
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
             {/* BOTÕES DE ORDENAÇÃO */}
@@ -96,6 +98,9 @@ export const SubModuleItem: React.FC<SubModuleItemProps> = ({
                 </button>
             </div>
 
+            <button onClick={onAddSubFolder} className="px-3 py-1.5 bg-yellow-600/10 hover:bg-yellow-600/20 text-yellow-500 text-[10px] uppercase font-bold rounded border border-yellow-600/20 transition-colors" title="Adicionar Subpasta">
+                + Subpasta
+            </button>
             <button onClick={onAddLesson} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-[10px] uppercase font-bold rounded border border-gray-700 transition-colors" title="Adicionar Aula na Pasta">
                 + Aula
             </button>
@@ -108,31 +113,16 @@ export const SubModuleItem: React.FC<SubModuleItemProps> = ({
         </div>
       </div>
 
-      {/* Conteúdo (Aulas) - Controlado pelo isOpen */}
+      {/* Conteúdo (Aulas/Pastas mistas) - Controlado pelo isOpen */}
       {isOpen && (
         <div className="border-t border-gray-800 bg-black/20 p-2 space-y-2 animate-in slide-in-from-top-2 fade-in duration-200">
-            {lessons.length === 0 && (
-                <div className="text-center py-4 text-gray-600 text-xs italic">Nenhuma aula nesta pasta.</div>
+            {children ? (
+                <div className="pl-6 space-y-2 border-l border-zinc-800 ml-2">
+                    {children}
+                </div>
+            ) : (
+                <div className="text-center py-4 text-gray-600 text-xs italic">Nenhum item nesta pasta.</div>
             )}
-            {lessons.map((lesson, index) => (
-                <LessonItem 
-                    key={lesson.id} 
-                    lesson={lesson}
-                    // Repassar funções de edição/delete para a aula
-                    onEdit={() => onEditLesson && onEditLesson(lesson)}
-                    onDelete={() => onDeleteLesson && onDeleteLesson(lesson)}
-                    onMove={() => onMoveLesson && onMoveLesson(lesson)}
-                    onManageContent={() => onManageLesson && onManageLesson(lesson)}
-                    onReorderUp={() => onReorderLesson && onReorderLesson(index, 'up')}
-                    onReorderDown={() => onReorderLesson && onReorderLesson(index, 'down')}
-                    isFirst={index === 0}
-                    isLast={index === lessons.length - 1}
-
-                    // Props de Seleção
-                    isSelected={selectedLessonIds.includes(lesson.id)}
-                    onToggleSelection={onToggleLessonSelection}
-                />
-            ))}
         </div>
       )}
     </div>

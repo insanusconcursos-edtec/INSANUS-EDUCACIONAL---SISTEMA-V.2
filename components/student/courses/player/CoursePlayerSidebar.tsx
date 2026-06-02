@@ -35,7 +35,7 @@ export function CoursePlayerSidebar({
   const navigationGroups = useMemo(() => {
     // 1. Mapeia os grupos
     const grps = structure.groups.sort((a, b) => (a.order || 0) - (b.order || 0)).map(group => {
-      const groupFolders = structure.subModules.filter(s => s.groupId === group.id);
+      const groupFolders = structure.subModules.filter(s => s.groupId === group.id && !s.parentId);
       const groupLessons = structure.lessons.filter(l => !l.subModuleId && l.groupId === group.id);
       
       return {
@@ -49,7 +49,7 @@ export function CoursePlayerSidebar({
     });
 
     // 2. Filtra órfãos
-    const orphanFolders = structure.subModules.filter(s => !s.groupId);
+    const orphanFolders = structure.subModules.filter(s => !s.groupId && !s.parentId);
     const orphanLessons = structure.lessons.filter(l => !l.subModuleId && !l.groupId);
     
     const orphans = [
@@ -103,6 +103,8 @@ export function CoursePlayerSidebar({
                 activeLessonId={activeLessonId}
                 onSelectLesson={onSelectLesson}
                 completedLessons={completedLessons}
+                allSubModules={structure.subModules}
+                allLessons={structure.lessons}
               />
             );
           } else {
@@ -128,6 +130,8 @@ export function CoursePlayerSidebar({
             onSelectLesson={onSelectLesson}
             completedLessons={completedLessons}
             getLessonsInFolder={getLessonsInFolder}
+            allSubModules={structure.subModules}
+            allLessons={structure.lessons}
           />
         ))}
 
@@ -152,6 +156,8 @@ interface GroupAccordionProps {
   onSelectLesson: (lesson: CourseLesson) => void;
   completedLessons: string[];
   getLessonsInFolder: (folderId: string) => CourseLesson[];
+  allSubModules?: CourseSubModule[];
+  allLessons?: CourseLesson[];
 }
 
 const GroupAccordion: React.FC<GroupAccordionProps> = ({ 
@@ -159,26 +165,42 @@ const GroupAccordion: React.FC<GroupAccordionProps> = ({
   activeLessonId, 
   onSelectLesson, 
   completedLessons,
-  getLessonsInFolder
+  getLessonsInFolder,
+  allSubModules = [],
+  allLessons = []
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Abre automaticamente se a aula ativa estiver dentro deste grupo
+  // Abre automaticamente se a aula ativa estiver dentro deste grupo (ou em suas subpastas)
   useEffect(() => {
     const hasActiveLesson = group.items.some(item => {
       if (item.type === 'lesson') return item.id === activeLessonId;
-      if (item.type === 'folder') return getLessonsInFolder(item.id).some(l => l.id === activeLessonId);
+      if (item.type === 'folder') {
+        const hasActiveInThisOrChildren = (fId: string): boolean => {
+          if (allLessons.some(l => l.subModuleId === fId && l.id === activeLessonId)) return true;
+          const subs = allSubModules.filter(s => s.parentId === fId);
+          return subs.some(s => hasActiveInThisOrChildren(s.id));
+        };
+        return hasActiveInThisOrChildren(item.id);
+      }
       return false;
     });
     if (hasActiveLesson) setIsOpen(true);
-  }, [activeLessonId, group.items, getLessonsInFolder]);
+  }, [activeLessonId, group.items, allSubModules, allLessons]);
 
-  // Cálculo de Progresso do Grupo
+  // Cálculo de Progresso do Grupo (incluindo subpastas recursivamente)
   const groupAulas = useMemo(() => {
     const aulasDirect = group.items.filter(i => i.type === 'lesson').map(i => i.data);
-    const aulasInFolders = group.items.filter(i => i.type === 'folder').flatMap(i => getLessonsInFolder(i.id));
+    
+    const getAllFolderLessons = (fId: string): CourseLesson[] => {
+      const lessonsInF = allLessons.filter(l => l.subModuleId === fId);
+      const childFKeys = allSubModules.filter(s => s.parentId === fId);
+      return [...lessonsInF, ...childFKeys.flatMap(c => getAllFolderLessons(c.id))];
+    };
+
+    const aulasInFolders = group.items.filter(i => i.type === 'folder').flatMap(i => getAllFolderLessons(i.id));
     return [...aulasDirect, ...aulasInFolders];
-  }, [group.items, getLessonsInFolder]);
+  }, [group.items, allSubModules, allLessons]);
 
   const completedCount = groupAulas.filter(l => completedLessons.includes(l.id)).length;
   const isComplete = groupAulas.length > 0 && completedCount === groupAulas.length;
@@ -220,6 +242,8 @@ const GroupAccordion: React.FC<GroupAccordionProps> = ({
                     onSelectLesson={onSelectLesson}
                     completedLessons={completedLessons}
                     isNested
+                    allSubModules={allSubModules}
+                    allLessons={allLessons}
                   />
                 </div>
               );
@@ -250,9 +274,20 @@ interface FolderItemProps {
     onSelectLesson: (lesson: CourseLesson) => void;
     completedLessons: string[];
     isNested?: boolean;
+    allSubModules?: CourseSubModule[];
+    allLessons?: CourseLesson[];
 }
 
-const FolderItem: React.FC<FolderItemProps> = ({ folder, lessons, activeLessonId, onSelectLesson, completedLessons, isNested }) => {
+const FolderItem: React.FC<FolderItemProps> = ({ 
+  folder, 
+  lessons, 
+  activeLessonId, 
+  onSelectLesson, 
+  completedLessons, 
+  isNested,
+  allSubModules = [],
+  allLessons = []
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     
     // Lógica de Bloqueio (Drip Content)
@@ -274,13 +309,41 @@ const FolderItem: React.FC<FolderItemProps> = ({ folder, lessons, activeLessonId
         minute: '2-digit'
     }) : '';
 
-    // Abre automaticamente se a aula ativa estiver aqui
+    // Abre automaticamente se a aula ativa estiver aqui ou em subpastas recursivamente
     useEffect(() => {
-        if (lessons.some(l => l.id === activeLessonId)) setIsOpen(true);
-    }, [activeLessonId, lessons]);
+        const hasActiveInThisOrChildren = (fId: string): boolean => {
+            if (allLessons.some(l => l.subModuleId === fId && l.id === activeLessonId)) return true;
+            const subs = allSubModules.filter(s => s.parentId === fId);
+            return subs.some(s => hasActiveInThisOrChildren(s.id));
+        };
+        if (hasActiveInThisOrChildren(folder.id)) setIsOpen(true);
+    }, [activeLessonId, folder.id, allSubModules, allLessons]);
 
-    const folderCompletedCount = lessons.filter(l => completedLessons.includes(l.id)).length;
-    const isFolderComplete = lessons.length > 0 && folderCompletedCount === lessons.length;
+    // Subpastas e Aulas unificadas do Folder, ordenadas por 'order'
+    const combinedFolderContents = useMemo(() => {
+        const folders = allSubModules
+            .filter(s => s.parentId === folder.id)
+            .map(f => ({ type: 'folder' as const, id: f.id, data: f, order: f.order || 0 }));
+            
+        const childLessons = allLessons
+            .filter(l => l.subModuleId === folder.id)
+            .map(l => ({ type: 'lesson' as const, id: l.id, data: l, order: l.order || 0 }));
+            
+        return [...folders, ...childLessons].sort((a, b) => (a.order || 0) - (b.order || 0));
+    }, [allSubModules, allLessons, folder.id]);
+
+    // Progresso Recursivo
+    const allFolderLessonsRecursive = useMemo(() => {
+        const getAllFolderLessons = (fId: string): CourseLesson[] => {
+            const lessonsInF = allLessons.filter(l => l.subModuleId === fId);
+            const childFKeys = allSubModules.filter(s => s.parentId === fId);
+            return [...lessonsInF, ...childFKeys.flatMap(c => getAllFolderLessons(c.id))];
+        };
+        return getAllFolderLessons(folder.id);
+    }, [allLessons, allSubModules, folder.id]);
+
+    const folderCompletedCount = allFolderLessonsRecursive.filter(l => completedLessons.includes(l.id)).length;
+    const isFolderComplete = allFolderLessonsRecursive.length > 0 && folderCompletedCount === allFolderLessonsRecursive.length;
 
     return (
         <div className={`mb-1 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''} ${isNested ? 'ml-2' : ''}`}>
@@ -325,21 +388,39 @@ const FolderItem: React.FC<FolderItemProps> = ({ folder, lessons, activeLessonId
                 </div>
                 <div className="flex items-center gap-2">
                     {isFolderComplete && <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
-                    {!isLocked && <span className="text-[9px] text-gray-600 font-mono">{folderCompletedCount}/{lessons.length}</span>}
+                    {!isLocked && <span className="text-[9px] text-gray-600 font-mono">{folderCompletedCount}/{allFolderLessonsRecursive.length}</span>}
                 </div>
             </button>
 
             {isOpen && !isLocked && (
                 <div className="ml-2 pl-2 border-l border-gray-800 space-y-0.5 mt-1">
-                    {lessons.map(lesson => (
-                        <LessonRow 
-                            key={lesson.id} 
-                            lesson={lesson} 
-                            isActive={lesson.id === activeLessonId}
-                            isCompleted={completedLessons.includes(lesson.id)}
-                            onClick={() => onSelectLesson(lesson)} 
-                        />
-                    ))}
+                    {combinedFolderContents.map(item => {
+                        if (item.type === 'folder') {
+                            return (
+                                <FolderItem 
+                                    key={item.id}
+                                    folder={item.data}
+                                    lessons={allLessons.filter(l => l.subModuleId === item.id).sort((a, b) => (a.order || 0) - (b.order || 0))}
+                                    activeLessonId={activeLessonId}
+                                    onSelectLesson={onSelectLesson}
+                                    completedLessons={completedLessons}
+                                    isNested
+                                    allSubModules={allSubModules}
+                                    allLessons={allLessons}
+                                />
+                            );
+                        } else {
+                            return (
+                                <LessonRow 
+                                    key={item.id} 
+                                    lesson={item.data} 
+                                    isActive={item.id === activeLessonId}
+                                    isCompleted={completedLessons.includes(item.id)}
+                                    onClick={() => onSelectLesson(item.data)} 
+                                />
+                            );
+                        }
+                    })}
                 </div>
             )}
         </div>

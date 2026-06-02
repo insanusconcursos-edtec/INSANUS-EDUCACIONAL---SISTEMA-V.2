@@ -441,6 +441,74 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     await saveEdictStructure(plan.id, newStructure);
   };
 
+  const handleMoveGoal = async (
+    type: 'topic' | 'subtopic',
+    ids: { disciplineId: string; topicId: string; subtopicId?: string },
+    goalId: string,
+    direction: 'up' | 'down'
+  ) => {
+    if (!structure || !plan.id) return;
+
+    const newStructure = deepCloneSafe(structure);
+    const disc = newStructure.disciplines.find((d: any) => d.id === ids.disciplineId);
+    if (!disc) return;
+
+    let item: any;
+    if (type === 'topic') {
+      item = disc.topics.find((t: any) => t.id === ids.topicId);
+    } else if (type === 'subtopic' && ids.subtopicId) {
+      const topic = disc.topics.find((t: any) => t.id === ids.topicId);
+      if (topic) {
+        item = topic.subtopics.find((s: any) => s.id === ids.subtopicId);
+      }
+    }
+
+    if (!item) return;
+
+    // Get currently linked goal IDs in default order to build/update the metasOrder array
+    const types: MetaType[] = ['lesson', 'material', 'questions', 'law', 'summary', 'review'];
+    const currentGoalIds: string[] = [];
+
+    types.forEach(t => {
+      if (item.linkedGoals && item.linkedGoals[t]) {
+        item.linkedGoals[t].forEach((gId: string) => {
+          if (!currentGoalIds.includes(gId)) {
+            currentGoalIds.push(gId);
+          }
+        });
+      }
+    });
+
+    // Initialize or cleanup metasOrder to contain exactly the current goal IDs in their saved order
+    let order: string[] = item.metasOrder || [];
+    order = order.filter(id => currentGoalIds.includes(id));
+    currentGoalIds.forEach(id => {
+      if (!order.includes(id)) {
+        order.push(id);
+      }
+    });
+
+    // Perform Swap
+    const idx = order.indexOf(goalId);
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx !== -1 && targetIdx >= 0 && targetIdx < order.length) {
+      const temp = order[idx];
+      order[idx] = order[targetIdx];
+      order[targetIdx] = temp;
+    }
+
+    // Assign back
+    item.metasOrder = order;
+
+    // Save
+    setStructure(newStructure);
+    try {
+      await saveEdictStructure(plan.id, newStructure);
+    } catch (error) {
+      console.error("Erro ao ordernar metas:", error);
+    }
+  };
+
   // --- EXPAND/COLLAPSE ---
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => 
@@ -477,6 +545,8 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
       linkedGoals={topic.linkedGoals}
       metaLookup={metaLookup}
       isExpanded={expandedItems.includes(topic.id)}
+      metasOrder={topic.metasOrder}
+      onMoveGoal={(goalId, direction) => handleMoveGoal('topic', { disciplineId: discipline.id, topicId: topic.id }, goalId, direction)}
       
       // Pass Level Data
       studyLevels={structure?.studyLevels}
@@ -507,6 +577,8 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
             numbering={subNumbering}
             linkedGoals={sub.linkedGoals}
             metaLookup={metaLookup}
+            metasOrder={sub.metasOrder}
+            onMoveGoal={(goalId, direction) => handleMoveGoal('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, direction)}
             onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
             onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
             onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}

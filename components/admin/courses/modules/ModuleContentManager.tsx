@@ -29,6 +29,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<CourseSubModule | null>(null);
+  const [parentIdForNewFolder, setParentIdForNewFolder] = useState<string | null>(null);
   
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<CourseLesson | null>(null);
@@ -274,9 +275,10 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   };
 
   // --- CRUD PASTAS ---
-  const handleSaveFolder = async (title: string, publishDate: string | null, groupId?: string | null) => {
+  const handleSaveFolder = async (title: string, publishDate: string | null, groupId?: string | null, parentId?: string | null) => {
     try {
-      const data = { title, publishDate, groupId: groupId || null };
+      const folderParentId = editingFolder ? (editingFolder.parentId || null) : (parentId || null);
+      const data = { title, publishDate, groupId: groupId || null, parentId: folderParentId };
       if (editingFolder) {
         await courseService.updateSubModule(editingFolder.id, data);
         // Atualização Otimista
@@ -288,7 +290,8 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
             moduleId: module.id, 
             order: newOrder,
             publishDate,
-            groupId: groupId || null
+            groupId: groupId || null,
+            parentId: folderParentId
         });
 
         // Atualização Otimista
@@ -298,15 +301,23 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
             title,
             order: newOrder,
             publishDate,
-            groupId: groupId || null
+            groupId: groupId || null,
+            parentId: folderParentId
         }]);
 
-        // Abre a nova pasta
-        setExpandedFolders(prev => ({ ...prev, [newId]: true }));
+        // Abre a nova pasta e o pai
+        setExpandedFolders(prev => {
+          const updated = { ...prev, [newId]: true };
+          if (folderParentId) {
+            updated[folderParentId] = true;
+          }
+          return updated;
+        });
         if (groupId) toggleGroup(groupId); // Garante que o grupo está aberto
       }
       setIsFolderModalOpen(false); // Fecha o modal
       setEditingFolder(null); // Limpa edição
+      setParentIdForNewFolder(null);
     } catch (error) {
       console.error("Erro ao salvar pasta:", error);
       loadContent(); // Reverte em caso de erro
@@ -427,7 +438,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   // --- NOVA FUNÇÃO: Reordenar Conteúdo Misto (Pastas + Aulas Raiz) (APENAS ÓRFÃOS) ---
   const handleReorderMixed = async (index: number, direction: 'up' | 'down') => {
     const mixedContent = [
-      ...subModules.filter(f => !f.groupId).map(f => ({ type: 'folder' as const, id: f.id, order: f.order })),
+      ...subModules.filter(f => !f.groupId && !f.parentId).map(f => ({ type: 'folder' as const, id: f.id, order: f.order })),
       ...lessons.filter(l => !l.subModuleId && !l.groupId).map(l => ({ type: 'lesson' as const, id: l.id, order: l.order }))
     ].sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -462,7 +473,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
 
   const handleReorderMixedInGroup = async (groupId: string, index: number, direction: 'up' | 'down') => {
     const mixedContent = [
-      ...subModules.filter(f => f.groupId === groupId).map(f => ({ type: 'folder' as const, id: f.id, order: f.order })),
+      ...subModules.filter(f => f.groupId === groupId && !f.parentId).map(f => ({ type: 'folder' as const, id: f.id, order: f.order })),
       ...lessons.filter(l => !l.subModuleId && l.groupId === groupId).map(l => ({ type: 'lesson' as const, id: l.id, order: l.order }))
     ].sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -525,6 +536,163 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   const getLessonsInFolder = (folderId: string) => lessons
     .filter(l => l.subModuleId === folderId)
     .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  // Árvore real de pastas para exibição hierárquica no modal de mover
+  const hierarchicalFolders = React.useMemo(() => {
+    const list: { folder: CourseSubModule; depth: number }[] = [];
+    
+    const addFolderAndChildren = (folder: CourseSubModule, depth: number) => {
+      if (list.some(item => item.folder.id === folder.id)) return;
+      
+      list.push({ folder, depth });
+      
+      const children = subModules
+        .filter(s => s.parentId === folder.id)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+        
+      children.forEach(child => addFolderAndChildren(child, depth + 1));
+    };
+
+    // 1. Órfãos (sem grupo e sem pai)
+    const orphanRootFolders = subModules
+      .filter(s => !s.groupId && !s.parentId)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    orphanRootFolders.forEach(folder => addFolderAndChildren(folder, 0));
+
+    // 2. Grupos (ordenados por group order)
+    groups
+      .sort((a, b) => (a.order || 0) - (b.order || 0))
+      .forEach(group => {
+        const groupRootFolders = subModules
+          .filter(s => s.groupId === group.id && !s.parentId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+        groupRootFolders.forEach(folder => addFolderAndChildren(folder, 0));
+      });
+
+    return list;
+  }, [subModules, groups]);
+
+  // Reordenar conteúdo misto (pastas + aulas) dentro de uma pasta
+  const handleReorderMixedInFolder = async (parentFolderId: string, index: number, direction: 'up' | 'down') => {
+    const mixedContent = [
+      ...subModules.filter(f => f.parentId === parentFolderId).map(f => ({ type: 'folder' as const, id: f.id, order: f.order })),
+      ...lessons.filter(l => l.subModuleId === parentFolderId).map(l => ({ type: 'lesson' as const, id: l.id, order: l.order }))
+    ].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= mixedContent.length) return;
+
+    // Swap
+    [mixedContent[index], mixedContent[targetIndex]] = [mixedContent[targetIndex], mixedContent[index]];
+
+    // Recalculate orders
+    const updates = mixedContent.map((item, idx) => ({ ...item, order: idx + 1 }));
+
+    // Update local state
+    setSubModules(prev => prev.map(s => {
+      const update = updates.find(u => u.type === 'folder' && u.id === s.id);
+      return update ? { ...s, order: update.order } : s;
+    }).sort((a, b) => a.order - b.order));
+
+    setLessons(prev => prev.map(l => {
+      const update = updates.find(u => u.type === 'lesson' && u.id === l.id);
+      return update ? { ...l, order: update.order } : l;
+    }).sort((a, b) => a.order - b.order));
+
+    // Save to DB
+    try {
+      await courseService.reorderMixedContent(updates);
+    } catch (error) {
+      console.error("Erro ao reordenar conteúdo no folder", error);
+      loadContent();
+    }
+  };
+
+  // Renderizador recursivo de Pastas (Submódulos) e suas subpastas
+  const renderFolderRecursive = (folder: CourseSubModule, listItemsSibling: any[], index: number) => {
+    const childFolders = subModules
+      .filter(s => s.parentId === folder.id)
+      .map(f => ({ type: 'folder' as const, id: f.id, order: f.order || 0, data: f }));
+
+    const childLessons = lessons
+      .filter(l => l.subModuleId === folder.id)
+      .map(l => ({ type: 'lesson' as const, id: l.id, order: l.order || 0, data: l }));
+
+    const combinedChildren = [...childFolders, ...childLessons]
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const lessonsList = childLessons.map(i => i.data);
+
+    return (
+      <SubModuleItem 
+        key={folder.id}
+        subModule={folder}
+        lessons={lessonsList}
+        
+        onEdit={() => { setEditingFolder(folder); setIsFolderModalOpen(true); }}
+        onDelete={() => setItemToDelete({ type: 'folder', id: folder.id, title: folder.title })}
+        onAddLesson={() => { setEditingLesson(null); setTargetFolderIdForNewLesson(folder.id); setIsLessonModalOpen(true); }}
+        onAddSubFolder={() => { setParentIdForNewFolder(folder.id); setEditingFolder(null); setIsFolderModalOpen(true); }}
+        onEditLesson={(l) => { setEditingLesson(l); setIsLessonModalOpen(true); }}
+        onDeleteLesson={(l) => setItemToDelete({ type: 'lesson', id: l.id, title: l.title })}
+        onMoveLesson={setLessonToMove}
+        onManageLesson={setManagingLesson} 
+        
+        onMoveUp={() => {
+          if (folder.parentId) {
+            handleReorderMixedInFolder(folder.parentId, index, 'up');
+          } else if (folder.groupId) {
+            handleReorderMixedInGroup(folder.groupId, index, 'up');
+          } else {
+            handleReorderMixed(index, 'up');
+          }
+        }}
+        onMoveDown={() => {
+          if (folder.parentId) {
+            handleReorderMixedInFolder(folder.parentId, index, 'down');
+          } else if (folder.groupId) {
+            handleReorderMixedInGroup(folder.groupId, index, 'down');
+          } else {
+            handleReorderMixed(index, 'down');
+          }
+        }}
+        onReorderLesson={(idx, dir) => handleReorderMixedInFolder(folder.id, idx, dir)}
+        isFirst={index === 0}
+        isLast={index === listItemsSibling.length - 1}
+
+        isOpen={!!expandedFolders[folder.id]}
+        onToggle={() => toggleFolder(folder.id)}
+
+        selectedLessonIds={selectedLessonIds}
+        onToggleLessonSelection={toggleLessonSelection}
+      >
+        {combinedChildren.map((child, childIdx) => {
+          if (child.type === 'folder') {
+            return renderFolderRecursive(child.data, combinedChildren, childIdx);
+          } else {
+            const lesson = child.data;
+            return (
+              <LessonItem 
+                key={lesson.id}
+                lesson={lesson}
+                onEdit={() => { setEditingLesson(lesson); setIsLessonModalOpen(true); }}
+                onDelete={() => setItemToDelete({ type: 'lesson', id: lesson.id, title: lesson.title })}
+                onMove={() => setLessonToMove(lesson)}
+                onManageContent={() => setManagingLesson(lesson)} 
+                onReorderUp={() => handleReorderMixedInFolder(folder.id, childIdx, 'up')}
+                onReorderDown={() => handleReorderMixedInFolder(folder.id, childIdx, 'down')}
+                isFirst={childIdx === 0}
+                isLast={childIdx === combinedChildren.length - 1}
+
+                isSelected={selectedLessonIds.includes(lesson.id)}
+                onToggleSelection={toggleLessonSelection}
+              />
+            );
+          }
+        })}
+      </SubModuleItem>
+    );
+  };
 
   // Renderização do LessonContentManager
   if (managingLesson) {
@@ -664,42 +832,16 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
             <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-600"></div></div>
         ) : (
             <>
-                {/* --- SEÇÃO 1: ITENS ÓRFÃOS (SEM GRUPO) --- */}
+                 {/* --- SEÇÃO 1: ITENS ÓRFÃOS (SEM GRUPO) --- */}
                 <div className="space-y-3">
                   {[
-                    ...subModules.filter(s => !s.groupId).map(folder => ({ type: 'folder' as const, id: folder.id, data: folder, order: folder.order })),
+                    ...subModules.filter(s => !s.groupId && !s.parentId).map(folder => ({ type: 'folder' as const, id: folder.id, data: folder, order: folder.order })),
                     ...lessons.filter(l => !l.subModuleId && !l.groupId).map(lesson => ({ type: 'lesson' as const, id: lesson.id, data: lesson, order: lesson.order }))
                   ]
                   .sort((a, b) => (a.order || 0) - (b.order || 0))
                   .map((item, index, array) => {
                     if (item.type === 'folder') {
-                      const folder = item.data;
-                      return (
-                        <SubModuleItem 
-                          key={folder.id}
-                          subModule={folder}
-                          lessons={getLessonsInFolder(folder.id)}
-                          onEdit={() => { setEditingFolder(folder); setIsFolderModalOpen(true); }}
-                          onDelete={() => setItemToDelete({ type: 'folder', id: folder.id, title: folder.title })}
-                          onAddLesson={() => { setEditingLesson(null); setTargetFolderIdForNewLesson(folder.id); setIsLessonModalOpen(true); }}
-                          onEditLesson={(l) => { setEditingLesson(l); setIsLessonModalOpen(true); }}
-                          onDeleteLesson={(l) => setItemToDelete({ type: 'lesson', id: l.id, title: l.title })}
-                          onMoveLesson={setLessonToMove}
-                          onManageLesson={setManagingLesson} 
-                          
-                          onMoveUp={() => handleReorderMixed(index, 'up')}
-                          onMoveDown={() => handleReorderMixed(index, 'down')}
-                          onReorderLesson={(idx, dir) => handleReorderLesson(idx, dir, folder.id)}
-                          isFirst={index === 0}
-                          isLast={index === array.length - 1}
-
-                          isOpen={!!expandedFolders[folder.id]}
-                          onToggle={() => toggleFolder(folder.id)}
-
-                          selectedLessonIds={selectedLessonIds}
-                          onToggleLessonSelection={toggleLessonSelection}
-                        />
-                      );
+                      return renderFolderRecursive(item.data, array, index);
                     } else {
                       const lesson = item.data;
                       return (
@@ -726,7 +868,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
                 {/* --- SEÇÃO 2: GRUPOS (ACORDEÕES) --- */}
                 {groups.sort((a,b) => a.order - b.order).map((group, groupIdx) => {
                   const groupItems = [
-                    ...subModules.filter(s => s.groupId === group.id).map(folder => ({ type: 'folder' as const, id: folder.id, data: folder, order: folder.order })),
+                    ...subModules.filter(s => s.groupId === group.id && !s.parentId).map(folder => ({ type: 'folder' as const, id: folder.id, data: folder, order: folder.order })),
                     ...lessons.filter(l => !l.subModuleId && l.groupId === group.id).map(lesson => ({ type: 'lesson' as const, id: lesson.id, data: lesson, order: lesson.order }))
                   ].sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -796,32 +938,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
                           ) : (
                             groupItems.map((item, index) => {
                               if (item.type === 'folder') {
-                                return (
-                                  <SubModuleItem 
-                                    key={item.id}
-                                    subModule={item.data}
-                                    lessons={getLessonsInFolder(item.id)}
-                                    
-                                    onEdit={() => { setEditingFolder(item.data); setIsFolderModalOpen(true); }}
-                                    onDelete={() => setItemToDelete({ type: 'folder', id: item.id, title: item.data.title })}
-                                    onAddLesson={() => { setEditingLesson(null); setTargetFolderIdForNewLesson(item.id); setIsLessonModalOpen(true); }}
-                                    onEditLesson={(l) => { setEditingLesson(l); setIsLessonModalOpen(true); }}
-                                    onDeleteLesson={(l) => setItemToDelete({ type: 'lesson', id: l.id, title: l.title })}
-                                    onMoveLesson={setLessonToMove}
-                                    onManageLesson={setManagingLesson} 
-                                    
-                                    onMoveUp={() => handleReorderMixedInGroup(group.id, index, 'up')}
-                                    onMoveDown={() => handleReorderMixedInGroup(group.id, index, 'down')}
-                                    onReorderLesson={(idx, dir) => handleReorderLesson(idx, dir, item.id)}
-
-                                    isOpen={!!expandedFolders[item.id]}
-                                    onToggle={() => toggleFolder(item.id)}
-                                    selectedLessonIds={selectedLessonIds}
-                                    onToggleLessonSelection={toggleLessonSelection}
-                                    isFirst={index === 0}
-                                    isLast={index === groupItems.length - 1}
-                                  />
-                                );
+                                return renderFolderRecursive(item.data, groupItems, index);
                               } else {
                                 return (
                                   <LessonItem 
@@ -870,11 +987,12 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
 
       <FolderModal 
         isOpen={isFolderModalOpen}
-        onClose={() => setIsFolderModalOpen(false)}
+        onClose={() => { setIsFolderModalOpen(false); setParentIdForNewFolder(null); }}
         onSave={handleSaveFolder}
         initialTitle={editingFolder?.title}
         initialPublishDate={editingFolder?.publishDate}
-        initialGroupId={editingFolder?.groupId}
+        initialGroupId={editingFolder?.groupId || (parentIdForNewFolder ? subModules.find(s => s.id === parentIdForNewFolder)?.groupId : null)}
+        initialParentId={editingFolder ? editingFolder.parentId : parentIdForNewFolder}
         groups={groups}
       />
 
@@ -901,23 +1019,24 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
       {/* Modal para Mover Aula */}
       {lessonToMove && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-[#121418] border border-gray-800 rounded-xl w-full max-w-sm shadow-2xl">
+            <div className="bg-[#121418] border border-gray-800 rounded-xl w-full max-w-sm shadow-2xl overflow-hidden">
                 <div className="p-4 border-b border-gray-800"><h3 className="text-white font-bold">Mover &quot;{lessonToMove.title}&quot; para...</h3></div>
-                <div className="p-2 space-y-1">
+                <div className="p-2 space-y-1 max-h-[350px] overflow-y-auto">
                     <button 
                         onClick={() => handleMoveLessonConfirm(null)}
                         className={`w-full text-left px-4 py-3 rounded hover:bg-gray-800 text-sm ${!lessonToMove.subModuleId ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'text-gray-300'}`}
                     >
                         (Raiz do Módulo)
                     </button>
-                    {subModules.map(folder => (
+                    {hierarchicalFolders.map(item => (
                         <button 
-                            key={folder.id}
-                            onClick={() => handleMoveLessonConfirm(folder.id)}
-                            className={`w-full text-left px-4 py-3 rounded hover:bg-gray-800 text-sm flex items-center gap-2 ${lessonToMove.subModuleId === folder.id ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'text-gray-300'}`}
+                            key={item.folder.id}
+                            style={{ paddingLeft: `${(item.depth * 16) + 16}px` }}
+                            onClick={() => handleMoveLessonConfirm(item.folder.id)}
+                            className={`w-full text-left py-3 rounded hover:bg-gray-800 text-sm flex items-center gap-2 ${lessonToMove.subModuleId === item.folder.id ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'text-gray-300'}`}
                         >
-                            <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
-                            {folder.title}
+                            <svg className="w-4 h-4 text-yellow-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                            <span className="truncate">{item.folder.title}</span>
                         </button>
                     ))}
                 </div>

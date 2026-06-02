@@ -79,6 +79,7 @@ export interface CourseSubModule {
   publishDate?: string | null; // Adicionado para Drip Content
   scheduledDate?: string | null; // Novo: Data de gravação/agendamento
   status?: 'published' | 'recording' | 'scheduled' | null; // Novo: Status do módulo
+  parentId?: string | null; // Adicionado para suportar subpastas aninhadas
 }
 
 // --- NOVO: Interface da Aula ---

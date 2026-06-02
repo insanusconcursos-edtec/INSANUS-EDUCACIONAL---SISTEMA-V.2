@@ -4,17 +4,19 @@ import { CourseGroup } from '../../../../../types/course';
 interface FolderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, publishDate: string | null, groupId?: string | null) => Promise<void>;
+  onSave: (title: string, publishDate: string | null, groupId?: string | null, parentId?: string | null) => Promise<void>;
   initialTitle?: string;
   initialPublishDate?: string | null;
   initialGroupId?: string | null;
+  initialParentId?: string | null;
   groups?: CourseGroup[];
 }
 
-export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPublishDate, initialGroupId, groups = [] }: FolderModalProps) {
+export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPublishDate, initialGroupId, initialParentId, groups = [] }: FolderModalProps) {
   const [title, setTitle] = useState('');
   const [publishDate, setPublishDate] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [parentId, setParentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -22,14 +24,15 @@ export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPubl
       setTitle(initialTitle || '');
       setPublishDate(initialPublishDate || null);
       setGroupId(initialGroupId || null);
+      setParentId(initialParentId || null);
     }
-  }, [isOpen, initialTitle, initialPublishDate, initialGroupId]);
+  }, [isOpen, initialTitle, initialPublishDate, initialGroupId, initialParentId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     setLoading(true);
-    await onSave(title, publishDate, groupId);
+    await onSave(title, publishDate, groupId, parentId);
     setLoading(false);
     onClose();
   };

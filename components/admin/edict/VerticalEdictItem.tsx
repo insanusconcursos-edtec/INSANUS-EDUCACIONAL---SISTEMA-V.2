@@ -20,6 +20,8 @@ interface VerticalEdictItemProps {
   metaLookup?: Record<string, Meta>; 
   observation?: string;
   analysisVideoUrl?: string;
+  metasOrder?: string[];
+  onMoveGoal?: (goalId: string, direction: 'up' | 'down') => void;
   
   // Study Level Props
   studyLevels?: EdictStudyLevel[];
@@ -44,6 +46,7 @@ interface VerticalEdictItemProps {
 
 const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
   name, type, isExpanded, linkedGoals, metaLookup, observation, analysisVideoUrl,
+  metasOrder, onMoveGoal,
   studyLevels, currentLevelId, onLevelChange,
   onToggleExpand, onRename, onUpdateObservation, onUpdateAnalysisVideoUrl, onDelete, onAddChild, onManageGroups, onMove, 
   onLinkGoals, onUnlinkGoal, numbering,
@@ -112,9 +115,20 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
 
     if (metasToRender.length === 0) return null;
 
+    // Apply custom defined metas order if present
+    if (metasOrder && metasOrder.length > 0) {
+      metasToRender.sort((a, b) => {
+        const indexA = metasOrder.indexOf(a.id!);
+        const indexB = metasOrder.indexOf(b.id!);
+        const valA = indexA === -1 ? Infinity : indexA;
+        const valB = indexB === -1 ? Infinity : indexB;
+        return valA - valB;
+      });
+    }
+
     return (
       <div className="mt-2 pl-2 space-y-1">
-        {metasToRender.map(meta => (
+        {metasToRender.map((meta, index) => (
           <div key={meta.id} className="flex items-center justify-between group/meta bg-zinc-900/40 border border-zinc-800/50 rounded-lg p-1.5 pl-2 hover:border-zinc-700 transition-colors">
             <div className="flex items-center gap-2 overflow-hidden">
               {getMetaIcon(meta.type)}
@@ -122,15 +136,37 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
               {getReviewBadge(meta)}
             </div>
             
-            {onUnlinkGoal && (
-              <button 
-                onClick={() => onUnlinkGoal(meta.id!, meta.type)}
-                className="p-1 text-zinc-700 hover:text-red-500 transition-all"
-                title="Desvincular Meta"
-              >
-                <Unlink size={10} />
-              </button>
-            )}
+            <div className="flex items-center gap-1 opacity-0 group-hover/meta:opacity-100 transition-opacity">
+              {onMoveGoal && (
+                <>
+                  <button
+                    onClick={() => onMoveGoal(meta.id!, 'up')}
+                    disabled={index === 0}
+                    className="p-1 text-zinc-500 hover:text-white transition-all disabled:opacity-20 disabled:hover:text-zinc-500 cursor-pointer disabled:cursor-not-allowed"
+                    title="Mover Para Cima"
+                  >
+                    <ChevronUp size={10} />
+                  </button>
+                  <button
+                    onClick={() => onMoveGoal(meta.id!, 'down')}
+                    disabled={index === metasToRender.length - 1}
+                    className="p-1 text-zinc-500 hover:text-white transition-all disabled:opacity-20 disabled:hover:text-zinc-500 cursor-pointer disabled:cursor-not-allowed"
+                    title="Mover Para Baixo"
+                  >
+                    <ChevronDown size={10} />
+                  </button>
+                </>
+              )}
+              {onUnlinkGoal && (
+                <button 
+                  onClick={() => onUnlinkGoal(meta.id!, meta.type)}
+                  className="p-1 text-zinc-700 hover:text-red-500 transition-all"
+                  title="Desvincular Meta"
+                >
+                  <Unlink size={10} />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

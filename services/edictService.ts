@@ -29,6 +29,7 @@ export interface EdictSubtopic {
   observation?: string;
   subtopics?: EdictSubtopic[]; // Added for compatibility with EdictTopic
   studyLevelId?: string | null; // Added for compatibility with EdictTopic
+  metasOrder?: string[];
 }
 
 export interface EdictTopicGroup {
@@ -46,6 +47,7 @@ export interface EdictTopic {
   studyLevelId?: string | null;
   observation?: string;
   groupId?: string | null;
+  metasOrder?: string[];
 }
 
 export interface EdictDiscipline {
@@ -209,6 +211,7 @@ export const linkGoalsToItem = async (
 ) => {
   const structure = await getEdict(planId);
   let targetGoals: EdictLinkedGoals | undefined;
+  let targetItem: any;
 
   const discipline = structure.disciplines.find(d => d.id === ids.disciplineId);
   if (discipline) {
@@ -217,9 +220,13 @@ export const linkGoalsToItem = async (
       if (topic) {
         if (ids.subtopicId) {
           const subtopic = topic.subtopics.find(s => s.id === ids.subtopicId);
-          if (subtopic) targetGoals = subtopic.linkedGoals;
+          if (subtopic) {
+            targetGoals = subtopic.linkedGoals;
+            targetItem = subtopic;
+          }
         } else {
           targetGoals = topic.linkedGoals;
+          targetItem = topic;
         }
       }
     }
@@ -231,6 +238,12 @@ export const linkGoalsToItem = async (
     if (targetGoals && targetGoals[goal.type]) {
       if (!targetGoals[goal.type].includes(goal.id)) {
         targetGoals[goal.type].push(goal.id);
+      }
+    }
+    if (targetItem) {
+      if (!targetItem.metasOrder) targetItem.metasOrder = [];
+      if (!targetItem.metasOrder.includes(goal.id)) {
+        targetItem.metasOrder.push(goal.id);
       }
     }
   });
@@ -246,6 +259,7 @@ export const unlinkGoalFromItem = async (
 ) => {
   const structure = await getEdict(planId);
   let targetGoals: EdictLinkedGoals | undefined;
+  let targetItem: any;
 
   const discipline = structure.disciplines.find(d => d.id === ids.disciplineId);
   if (discipline) {
@@ -254,9 +268,13 @@ export const unlinkGoalFromItem = async (
       if (topic) {
         if (ids.subtopicId) {
           const subtopic = topic.subtopics.find(s => s.id === ids.subtopicId);
-          if (subtopic) targetGoals = subtopic.linkedGoals;
+          if (subtopic) {
+            targetGoals = subtopic.linkedGoals;
+            targetItem = subtopic;
+          }
         } else {
           targetGoals = topic.linkedGoals;
+          targetItem = topic;
         }
       }
     }
@@ -266,6 +284,10 @@ export const unlinkGoalFromItem = async (
 
   if (targetGoals[type]) {
     targetGoals[type] = targetGoals[type].filter(id => id !== goalId);
+  }
+
+  if (targetItem && targetItem.metasOrder) {
+    targetItem.metasOrder = targetItem.metasOrder.filter((id: string) => id !== goalId);
   }
 
   await saveEdictStructure(planId, structure);
