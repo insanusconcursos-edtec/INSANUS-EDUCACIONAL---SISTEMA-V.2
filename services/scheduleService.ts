@@ -70,6 +70,14 @@ export interface ScheduledEvent {
   questions?: any[];
 }
 
+const mergeArrayUniques = (existingArr: any[], newArr: any[]) => {
+  const e = existingArr || [];
+  const n = newArr || [];
+  if (n.length === 0) return e;
+  const existingIds = new Set(e.map(item => item.id || item.title || JSON.stringify(item)));
+  return [...e, ...n.filter(item => !existingIds.has(item.id || item.title || JSON.stringify(item)))];
+};
+
 export const scheduleService = {
   // ... existing methods ...
 };
@@ -1116,13 +1124,13 @@ export const rescheduleOverdueTasks = async (
         // Mantém a 'part' original mais baixa, já que queremos que inicie daí
         if (!existing.part && item.part) existing.part = item.part;
         
-        // Agrupa os materiais da meta original (vídeos, pdfs, etc.)
-        if (item.videos) existing.videos = [...(existing.videos || []), ...item.videos];
-        if (item.files) existing.files = [...(existing.files || []), ...item.files];
-        if (item.links) existing.links = [...(existing.links || []), ...item.links];
-        if (item.mindMap) existing.mindMap = [...(existing.mindMap || []), ...item.mindMap];
-        if (item.flashcards) existing.flashcards = [...(existing.flashcards || []), ...item.flashcards];
-        if (item.questions) existing.questions = [...(existing.questions || []), ...item.questions];
+        // Agrupa os materiais da meta original (vídeos, pdfs, etc.) prevenindo duplicidades
+        if (item.videos) existing.videos = mergeArrayUniques(existing.videos, item.videos);
+        if (item.files) existing.files = mergeArrayUniques(existing.files, item.files);
+        if (item.links) existing.links = mergeArrayUniques(existing.links, item.links);
+        if (item.mindMap) existing.mindMap = mergeArrayUniques(existing.mindMap, item.mindMap);
+        if (item.flashcards) existing.flashcards = mergeArrayUniques(existing.flashcards, item.flashcards);
+        if (item.questions) existing.questions = mergeArrayUniques(existing.questions, item.questions);
       } else {
         mergedTasksMap.set(baseId, { ...item });
       }
@@ -1635,13 +1643,13 @@ export const anticipateAndShiftGoals = async (
       existing.duration = (existing.duration || 0) + (item.duration || 0); 
       if (!existing.part && item.part) existing.part = item.part;
       
-      // Restaura o conteúdo concatenando as listas
-      if (item.videos) existing.videos = [...(existing.videos || []), ...item.videos];
-      if (item.files) existing.files = [...(existing.files || []), ...item.files];
-      if (item.links) existing.links = [...(existing.links || []), ...item.links];
-      if (item.mindMap) existing.mindMap = [...(existing.mindMap || []), ...item.mindMap];
-      if (item.flashcards) existing.flashcards = [...(existing.flashcards || []), ...item.flashcards];
-      if (item.questions) existing.questions = [...(existing.questions || []), ...item.questions];
+      // Restaura o conteúdo concatenando as listas, prevenindo duplicidades
+      if (item.videos) existing.videos = mergeArrayUniques(existing.videos, item.videos);
+      if (item.files) existing.files = mergeArrayUniques(existing.files, item.files);
+      if (item.links) existing.links = mergeArrayUniques(existing.links, item.links);
+      if (item.mindMap) existing.mindMap = mergeArrayUniques(existing.mindMap, item.mindMap);
+      if (item.flashcards) existing.flashcards = mergeArrayUniques(existing.flashcards, item.flashcards);
+      if (item.questions) existing.questions = mergeArrayUniques(existing.questions, item.questions);
     } else {
       mergedTasksMap.set(baseId, { ...item });
     }
