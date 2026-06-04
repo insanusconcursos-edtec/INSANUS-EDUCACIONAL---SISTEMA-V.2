@@ -1049,16 +1049,18 @@ export const rescheduleOverdueTasks = async (
       const data = docSnap.data();
       const items = data.items || [];
       
-      const uncompletedOfThisPlan = items.filter((item: any) => 
-        item.status !== 'completed' && String(item.planId) === String(planId)
-      );
+      const isOverdueCycleTarget = (item: any) => {
+        const type = String(item.type || '').toLowerCase();
+        const isFreeStudy = type === 'free_study' || type === 'estudo_livre' || type === 'estudo livre';
+        return item.status !== 'completed' && String(item.planId) === String(planId) && !isFreeStudy;
+      };
+      
+      const uncompletedOfThisPlan = items.filter(isOverdueCycleTarget);
       
       if (uncompletedOfThisPlan.length > 0) {
         allPendingGoals.push(...uncompletedOfThisPlan);
         
-        const itemsToKeep = items.filter((item: any) => 
-          !(String(item.planId) === String(planId) && item.status !== 'completed')
-        );
+        const itemsToKeep = items.filter((item: any) => !isOverdueCycleTarget(item));
 
         if (itemsToKeep.length === 0) {
           batch.delete(docSnap.ref);
@@ -1083,10 +1085,12 @@ export const rescheduleOverdueTasks = async (
       const data = docSnap.data();
       const currentItems = data.items || [];
       
-      // Filtrar itens não concluídos deste plano
-      const uncompletedOfThisPlan = currentItems.filter((item: any) => 
-        item.status !== 'completed' && String(item.planId) === String(planId)
-      );
+      // Filtrar itens não concluídos deste plano (excluindo estudo livre para não acumular tempo extra)
+      const uncompletedOfThisPlan = currentItems.filter((item: any) => {
+        const type = String(item.type || '').toLowerCase();
+        const isFreeStudy = type === 'free_study' || type === 'estudo_livre' || type === 'estudo livre';
+        return item.status !== 'completed' && String(item.planId) === String(planId) && !isFreeStudy;
+      });
       
       if (uncompletedOfThisPlan.length > 0) {
         allPendingGoals.push(...uncompletedOfThisPlan);
@@ -1097,10 +1101,13 @@ export const rescheduleOverdueTasks = async (
         !(String(item.planId) === String(planId) && item.status !== 'completed')
       );
       
-      if (keptItems.length === 0) {
-        batch.delete(docSnap.ref);
-      } else {
-        batch.update(docSnap.ref, { items: keptItems });
+      // Atualizar o doc se algo precisou ser removido
+      if (keptItems.length !== currentItems.length) {
+        if (keptItems.length === 0) {
+          batch.delete(docSnap.ref);
+        } else {
+          batch.update(docSnap.ref, { items: keptItems });
+        }
       }
     });
 
