@@ -410,7 +410,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
   const handleMove = async (
     type: 'discipline' | 'topic' | 'subtopic', 
     ids: { disciplineId: string, topicId?: string },
-    index: number, 
+    itemId: string, 
     direction: 'up' | 'down'
   ) => {
     if (!structure || !plan.id) return;
@@ -431,11 +431,28 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
 
     if (itemsArray.length === 0) return;
 
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= itemsArray.length) return;
+    const currentIndex = itemsArray.findIndex(item => item.id === itemId);
+    if (currentIndex === -1) return;
 
-    // Swap
-    [itemsArray[index], itemsArray[targetIndex]] = [itemsArray[targetIndex], itemsArray[index]];
+    // Filter items to respect groups if it's a topic
+    let filteredItems: any[] = [];
+    if (type === 'topic') {
+        const currentItem = itemsArray[currentIndex];
+        filteredItems = itemsArray.filter(t => t.groupId === currentItem.groupId);
+    } else {
+        filteredItems = itemsArray;
+    }
+
+    const indexInFiltered = filteredItems.findIndex(item => item.id === itemId);
+    const targetIndexInFiltered = direction === 'up' ? indexInFiltered - 1 : indexInFiltered + 1;
+
+    if (targetIndexInFiltered < 0 || targetIndexInFiltered >= filteredItems.length) return;
+
+    const targetItem = filteredItems[targetIndexInFiltered];
+    const targetIndexInFull = itemsArray.findIndex(item => item.id === targetItem.id);
+
+    // Swap items in the full array
+    [itemsArray[currentIndex], itemsArray[targetIndexInFull]] = [itemsArray[targetIndexInFull], itemsArray[currentIndex]];
 
     setStructure(newStructure);
     await saveEdictStructure(plan.id, newStructure);
@@ -522,6 +539,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     topic: EdictTopic, 
     discipline: EdictDiscipline, 
     tIndex: number, 
+    itemsCount: number, // Added to correctly identify last item
     metaLookup: Record<string, Meta>, 
     expandedItems: string[], 
     toggleExpand: (id: string) => void, 
@@ -531,7 +549,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     handleUpdateObservation: (type: 'topic'|'subtopic', ids: any, obs: string) => void, 
     requestDelete: (type: 'topic', ids: any, name: string) => void, 
     handleAddSubtopic: (d: string, t: string) => void, 
-    handleMove: (type: 'topic', ids: any, i: number, dir: 'up'|'down') => void, 
+    handleMove: (type: 'topic', ids: any, i: string, dir: 'up'|'down') => void, 
     openLinkModal: (ids: any, name: string) => void, 
     handleUnlinkGoal: (ids: any, goalId: string, type: MetaType) => void,
     numbering?: string
@@ -558,11 +576,11 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
       onUpdateObservation={(newObs) => handleUpdateObservation('topic', { disciplineId: discipline.id, topicId: topic.id }, newObs)}
       onDelete={() => requestDelete('topic', { disciplineId: discipline.id, topicId: topic.id }, topic.name)}
       onAddChild={() => handleAddSubtopic(discipline.id, topic.id)}
-      onMove={(dir) => handleMove('topic', { disciplineId: discipline.id }, tIndex, dir)}
+      onMove={(dir) => handleMove('topic', { disciplineId: discipline.id }, topic.id, dir)}
       onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id }, topic.name)}
       onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id }, goalId, type)}
       isFirst={tIndex === 0}
-      isLast={tIndex === discipline.topics.length - 1} // Approximated
+      isLast={tIndex === itemsCount - 1}
       observation={topic.observation}
     >
       {/* SUBTÓPICOS */}
@@ -582,7 +600,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
             onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
             onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
             onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-            onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sIndex, dir)}
+            onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sub.id, dir)}
             onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
             onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, type)}
             isFirst={sIndex === 0}
@@ -751,7 +769,8 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
                       {groupTopics.map((topic, tIndex) => renderTopicItem(
                         topic, 
                         discipline, 
-                        tIndex, 
+                        tIndex,
+                        groupTopics.length, 
                         metaLookup, 
                         expandedItems, 
                         toggleExpand, 
@@ -783,6 +802,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
                           topic, 
                           discipline, 
                           tIndex, 
+                          unassigned.length,
                           metaLookup, 
                           expandedItems, 
                           toggleExpand, 
@@ -804,6 +824,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
                 topic, 
                 discipline, 
                 tIndex, 
+                unassigned.length,
                 metaLookup, 
                 expandedItems, 
                 toggleExpand, 

@@ -277,20 +277,20 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
           )}
 
           {/* Reorder */}
-          <div className="flex flex-col mr-1">
+          <div className="flex flex-col mr-1 scale-95 origin-right">
             <button 
                 onClick={() => onMove('up')} 
                 disabled={isFirst}
-                className="text-zinc-600 hover:text-zinc-300 disabled:opacity-20"
+                className="text-zinc-500 hover:text-white disabled:opacity-20 transition-colors p-0.5"
             >
-                <ChevronUp size={10} />
+                <ChevronUp size={14} />
             </button>
             <button 
                 onClick={() => onMove('down')} 
                 disabled={isLast}
-                className="text-zinc-600 hover:text-zinc-300 disabled:opacity-20"
+                className="text-zinc-500 hover:text-white disabled:opacity-20 transition-colors p-0.5"
             >
-                <ChevronDown size={10} />
+                <ChevronDown size={14} />
             </button>
           </div>
 
