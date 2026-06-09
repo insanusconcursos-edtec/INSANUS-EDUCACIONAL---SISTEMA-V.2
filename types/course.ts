@@ -41,6 +41,7 @@ export interface OnlineCourse {
   examDate?: string;             
   
   type?: 'REGULAR' | 'ISOLADO';
+  teacherIds?: string[]; // IDs dos professores vinculados (para feedback)
 
   createdAt: string;
   updatedAt: string;
@@ -128,6 +129,7 @@ export interface CourseFormData {
   examBoard?: string;
   examDate?: string;
   type?: 'REGULAR' | 'ISOLADO';
+  teacherIds?: string[];
 }
 
 // --- NOVO: Tipos de Conteúdo ---

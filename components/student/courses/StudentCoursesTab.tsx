@@ -10,28 +10,39 @@ import { TictoProduct } from '../../../types/product';
 import { StudentCourseCard } from './StudentCourseCard';
 import { CourseDetails } from './CourseDetails';
 import CheckoutModal from '../checkout/CheckoutModal';
+import { useStudyContext } from '../../../contexts/StudyContext';
 
 export function StudentCoursesTab() {
   const { courseId } = useParams<{ courseId: string }>();
   const [searchParams] = useSearchParams();
   const { userData } = useAuth();
+  const { setCurrentProduct } = useStudyContext();
   
-  // Estados de Dados
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [myCourses, setMyCourses] = useState<OnlineCourse[]>([]);
   const [availableProducts, setAvailableProducts] = useState<TictoProduct[]>([]);
   const [filteredCourses, setFilteredCourses] = useState<OnlineCourse[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Navegação e Checkout
   const [selectedCourse, setSelectedCourse] = useState<OnlineCourse | null>(null);
   const [checkoutProduct, setCheckoutProduct] = useState<TictoProduct | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
 
-  // Estados de Filtro
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedSubcategory, setSelectedSubcategory] = useState('');
+  // Update current product for support
+  useEffect(() => {
+    if (selectedCourse) {
+      setCurrentProduct({
+        type: 'curso_online',
+        id: selectedCourse.id,
+        name: selectedCourse.title
+      });
+    } else {
+      setCurrentProduct(null);
+    }
+    return () => setCurrentProduct(null);
+  }, [selectedCourse, setCurrentProduct]);
 
   // 1. Carregar e Filtrar Dados
   useEffect(() => {

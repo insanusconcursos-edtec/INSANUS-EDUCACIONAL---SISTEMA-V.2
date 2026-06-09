@@ -22,13 +22,14 @@ import { StudentSimulatedList } from '../../components/student/simulados/Student
 import { StudentAutoDiagnosis } from '../../components/student/simulados/StudentAutoDiagnosis';
 import { StudentPerformanceDashboard } from '../../components/student/simulados/StudentPerformanceDashboard';
 import { ExamResult } from '../../components/student/simulados/ExamResult';
-
+import { useStudyContext } from '../../contexts/StudyContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // --- COMPONENTE DE RESULTADO (Acessado via componente externo em /components/student/simulados/ExamResult) ---
 
 const StudentSimulated: React.FC = () => {
   const { currentUser } = useAuth();
+  const { setCurrentProduct } = useStudyContext();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
@@ -52,6 +53,23 @@ const StudentSimulated: React.FC = () => {
   const [isRunningExam, setIsRunningExam] = useState(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const [examToConfirm, setExamToConfirm] = useState<SimulatedExam | null>(null);
+
+  // Update current product for support
+  useEffect(() => {
+    if (selectedClass) {
+      setCurrentProduct({
+        type: 'simulado',
+        id: selectedClass.id!,
+        name: selectedClass.title
+      });
+    } else {
+      // Quando não há turma selecionada, limpamos para não aparecer o botão
+      // ou deixamos null para que o StudentLayout decida.
+      // Seguindo a lógica do usuário, só aparece quando estiver no produto.
+      setCurrentProduct(null);
+    }
+    return () => setCurrentProduct(null);
+  }, [selectedClass, setCurrentProduct]);
 
   // --- INITIALIZATION ---
   useEffect(() => {

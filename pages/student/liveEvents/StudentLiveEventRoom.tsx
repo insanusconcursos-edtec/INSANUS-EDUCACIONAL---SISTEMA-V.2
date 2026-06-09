@@ -11,12 +11,14 @@ import { AdminLivePlayer } from '../../../components/admin/liveEvents/room/Admin
 import { StudentLiveRecording } from '../../../components/student/lives/room/StudentLiveRecording';
 import { joinLiveEvent, leaveLiveEvent } from '../../../services/liveChatService';
 import toast from 'react-hot-toast';
+import { useStudyContext } from '../../../contexts/StudyContext';
 
 export const StudentLiveEventRoom: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, userData, loading: authLoading } = useAuth();
+  const { setCurrentProduct } = useStudyContext();
   
   const returnPath = location.state?.returnPath || '/app/eventos-ao-vivo';
   const [event, setEvent] = useState<LiveEvent | null>(null);
@@ -30,6 +32,20 @@ export const StudentLiveEventRoom: React.FC = () => {
   }>({ plans: [], courses: [], classes: [], simulated: [], isolatedProducts: [] });
   const [viewerCount, setViewerCount] = useState(0);
   const [isChatBlocked, setIsChatBlocked] = useState(false);
+
+  // Update current product for support
+  useEffect(() => {
+    if (event) {
+      setCurrentProduct({
+        type: 'evento_ao_vivo',
+        id: event.id!,
+        name: event.title
+      });
+    }
+    return () => {
+      setCurrentProduct(null);
+    };
+  }, [event, setCurrentProduct]);
 
   const formatShortName = (fullName?: string | null) => {
     if (!fullName) return 'Aluno';

@@ -4,6 +4,13 @@ import { StudentGoal } from '../components/student/StudentGoalCard';
 import { registerStudySession, updateGoalRecordedTime, toggleGoalStatus, updateActiveTimer } from '../services/studentService';
 import { getLocalISODate } from '../services/scheduleService';
 import { useAuth } from './AuthContext';
+import { ProductType } from '../types/support';
+
+export interface ProductInfo {
+  type: ProductType;
+  id: string;
+  name: string;
+}
 
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed';
 
@@ -21,6 +28,8 @@ interface StudyContextType {
   setIsFloating: (value: boolean) => void;
   isMaterialActive: boolean;
   setIsMaterialActive: (value: boolean) => void;
+  currentProduct: ProductInfo | null;
+  setCurrentProduct: (product: ProductInfo | null) => void;
 }
 
 const StudyContext = createContext<StudyContextType | undefined>(undefined);
@@ -34,6 +43,7 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [accumulatedSeconds, setAccumulatedSeconds] = useState(0);
   const [isFloating, setIsFloating] = useState(false);
   const [isMaterialActive, setIsMaterialActive] = useState(false);
+  const [currentProduct, setCurrentProduct] = useState<ProductInfo | null>(null);
   const lastSavedSeconds = useRef(0);
 
   const formatTime = (totalSeconds: number) => {
@@ -262,7 +272,9 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isFloating,
       setIsFloating,
       isMaterialActive,
-      setIsMaterialActive
+      setIsMaterialActive,
+      currentProduct,
+      setCurrentProduct
     }}>
       {children}
     </StudyContext.Provider>

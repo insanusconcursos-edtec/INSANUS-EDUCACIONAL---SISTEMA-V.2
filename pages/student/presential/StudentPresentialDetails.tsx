@@ -15,17 +15,33 @@ import { ConcursoStatusBanner } from '../../../components/student/presential/Con
 import { liveEventService } from '../../../services/liveEventService';
 import { LiveEvent } from '../../../types/liveEvent';
 import { LinkedSimulatedView } from '../../../components/student/simulados/LinkedSimulatedView';
+import { useStudyContext } from '../../../contexts/StudyContext';
 
 export const StudentPresentialDetails: React.FC = () => {
   const { classId } = useParams<{ classId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { setCurrentProduct } = useStudyContext();
   const moduleIdParam = searchParams.get('module');
   
   const [currentClass, setCurrentClass] = useState<Class | null>(null);
   const [activeTab, setActiveTab] = useState<'TEACHING' | 'SCHEDULE' | 'PLANNING' | 'LIVE' | 'SIMULADOS'>('TEACHING');
   const [loading, setLoading] = useState(true);
   const [classLiveEvents, setClassLiveEvents] = useState<LiveEvent[]>([]);
+
+  // Update current product for support
+  useEffect(() => {
+    if (currentClass) {
+      setCurrentProduct({
+        type: 'turma_presencial',
+        id: currentClass.id,
+        name: currentClass.name
+      });
+    }
+    return () => {
+      setCurrentProduct(null);
+    };
+  }, [currentClass, setCurrentProduct]);
   
   // Tab availability flags
   const [hasModules, setHasModules] = useState(false);

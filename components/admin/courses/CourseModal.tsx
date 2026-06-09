@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Loader2, Upload, Image as ImageIcon } from 'lucide-react';
+import { X, Loader2, Upload, Image as ImageIcon, Check, User } from 'lucide-react';
 import { courseService } from '../../../services/courseService';
+import { teacherService } from '../../../services/teacherService';
 import { getCategories, Category } from '../../../services/planService';
 import { OnlineCourse, CourseFormData, ContestStatus, CONTEST_STATUS_LABELS } from '../../../types/course';
+import { Teacher } from '../../../types/teacher';
 
 interface CourseModalProps {
   isOpen: boolean;
@@ -25,10 +27,12 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
     examDate: '',
     type: 'REGULAR',
     welcomeButtonTitle: '',
-    welcomeVideoUrl: ''
+    welcomeVideoUrl: '',
+    teacherIds: []
   });
   
   const [categories, setCategories] = useState<Category[]>([]);
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Estados para Upload
@@ -42,17 +46,21 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
   const [bannerDesktopPreview, setBannerDesktopPreview] = useState<string>('');
   const [bannerMobilePreview, setBannerMobilePreview] = useState<string>('');
 
-  // Carregar categorias
+  // Carregar categorias e professores
   useEffect(() => {
-    const loadCategories = async () => {
+    const loadInitialData = async () => {
       try {
-        const data = await getCategories();
-        setCategories(data);
+        const [cats, teachers] = await Promise.all([
+          getCategories(),
+          teacherService.getTeachers()
+        ]);
+        setCategories(cats);
+        setAllTeachers(teachers.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (error) {
-        console.error("Erro ao carregar categorias", error);
+        console.error("Erro ao carregar dados iniciais", error);
       }
     };
-    if (isOpen) loadCategories();
+    if (isOpen) loadInitialData();
   }, [isOpen]);
 
   // Preencher dados na edição
@@ -72,7 +80,8 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
         bannerUrlDesktop: initialData.bannerUrlDesktop,
         bannerUrlMobile: initialData.bannerUrlMobile,
         welcomeButtonTitle: initialData.welcomeButtonTitle || '',
-        welcomeVideoUrl: initialData.welcomeVideoUrl || ''
+        welcomeVideoUrl: initialData.welcomeVideoUrl || '',
+        teacherIds: initialData.teacherIds || []
       });
       setPreviewUrl(initialData.coverUrl); // Mostra a capa atual
       setBannerDesktopPreview(initialData.bannerUrlDesktop || '');
@@ -91,7 +100,8 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
           examDate: '',
           type: 'REGULAR',
           welcomeButtonTitle: '',
-          welcomeVideoUrl: ''
+          welcomeVideoUrl: '',
+          teacherIds: []
       });
       setPreviewUrl('');
       setSelectedFile(null);
@@ -129,6 +139,17 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
       setBannerMobileFile(file);
       setBannerMobilePreview(URL.createObjectURL(file));
     }
+  };
+
+  const toggleTeacher = (teacherId: string) => {
+    setFormData(prev => {
+      const currentIds = prev.teacherIds || [];
+      if (currentIds.includes(teacherId)) {
+        return { ...prev, teacherIds: currentIds.filter(id => id !== teacherId) };
+      } else {
+        return { ...prev, teacherIds: [...currentIds, teacherId] };
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -359,6 +380,65 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
                   placeholder="Link do vídeo..."
                 />
               </div>
+            </div>
+          </div>
+
+          {/* VINCULAÇÃO DE PROFESSORES */}
+          <div className="bg-[#1a1d24] p-4 rounded-lg border border-gray-800 space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Professores do Curso</h3>
+                <span className="text-[10px] font-bold text-zinc-600 uppercase">
+                    {formData.teacherIds?.length || 0} SELECIONADOS
+                </span>
+            </div>
+            
+            <p className="text-[10px] text-zinc-500 italic">
+                * Os professores selecionados aparecerão para o aluno na área de feedback e avaliação.
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto no-scrollbar pr-1">
+              {allTeachers.map((teacher) => {
+                const isSelected = formData.teacherIds?.includes(teacher.id);
+                return (
+                  <button
+                    key={teacher.id}
+                    type="button"
+                    onClick={() => toggleTeacher(teacher.id)}
+                    className={`
+                        flex items-center gap-2 p-2 rounded-lg border text-left transition-all group
+                        ${isSelected 
+                            ? 'bg-brand-red/10 border-brand-red/30 text-white' 
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:bg-zinc-900'}
+                    `}
+                  >
+                    <div className="relative shrink-0">
+                        <div className={`w-8 h-8 rounded-full overflow-hidden border ${isSelected ? 'border-brand-red/50' : 'border-zinc-800'}`}>
+                            {teacher.photoUrl ? (
+                                <img src={teacher.photoUrl} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                                    <User size={14} className="text-zinc-700" />
+                                </div>
+                            )}
+                        </div>
+                        {isSelected && (
+                            <div className="absolute -top-1 -right-1 bg-brand-red text-white rounded-full p-0.5">
+                                <Check size={8} strokeWidth={4} />
+                            </div>
+                        )}
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase truncate ${isSelected ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-300'}`}>
+                        {teacher.name}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {allTeachers.length === 0 && (
+                <div className="col-span-full py-8 text-center border border-dashed border-zinc-800 rounded-xl">
+                    <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Nenhum professor cadastrado</p>
+                </div>
+              )}
             </div>
           </div>
 

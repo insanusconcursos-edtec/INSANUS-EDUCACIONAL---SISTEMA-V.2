@@ -6,14 +6,17 @@ import PlanUpdateManager from '../student/PlanUpdateManager';
 import { SupportFloatingButton } from '../student/support/SupportFloatingButton';
 import { ChatNotificationToast } from '../student/chat/ChatNotificationToast';
 import { useAuth } from '../../contexts/AuthContext';
+import { useStudyContext } from '../../contexts/StudyContext';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 
 const StudentLayout: React.FC = () => {
   const { userData } = useAuth();
+  const { currentProduct, setCurrentProduct } = useStudyContext();
   const [themeColor, setThemeColor] = useState('#EF4444');
   const [planTitle, setPlanTitle] = useState('Meu Plano de Estudos');
   const location = useLocation();
+
   const isCourseArea = location.pathname.includes('/app/courses') || location.pathname.includes('/app/presential') || location.pathname.includes('/app/eventos-ao-vivo');
 
   const isLiveRoom = location.pathname.includes('/app/eventos-ao-vivo/sala/');
@@ -25,13 +28,38 @@ const StudentLayout: React.FC = () => {
     const unsub = onSnapshot(doc(db, 'plans', planId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        const title = data.title || 'Meu Plano de Estudos';
         setThemeColor(data.themeColor || '#EF4444');
-        setPlanTitle(data.title || 'Meu Plano de Estudos');
+        setPlanTitle(title);
       }
     });
 
     return () => unsub();
   }, [userData?.activePlanId, userData?.currentPlanId]);
+
+  // Lógica de Detecção Automática de Produto Baseado na Rota
+  useEffect(() => {
+    const planId = userData?.activePlanId || userData?.currentPlanId;
+    const path = location.pathname;
+
+    // Se estiver em uma área de produto específica, deixamos a própria página definir o setCurrentProduct
+    // Para evitar flashes e sobrescritas erradas, aqui só definimos o padrão para o Plano se estiver no Dashboard/Home
+    if (path === '/app/home' || path.startsWith('/app/dashboard') || path.startsWith('/app/calendar') || path.startsWith('/app/edict') || path.startsWith('/app/edital')) {
+      if (planId) {
+        setCurrentProduct({
+          type: 'plano',
+          id: planId,
+          name: planTitle
+        });
+      }
+    } else if (path === '/app/presential' || path === '/app/courses' || path === '/app/eventos-ao-vivo' || path === '/app/simulated') {
+      setCurrentProduct(null);
+    } else if (!isCourseArea && !path.includes('/app/simulated/') && !path.includes('/app/presential/') && !path.includes('/app/courses/')) {
+      // Se não for Dashboard nem uma área de produto específica, oculta o botão
+      setCurrentProduct(null);
+    }
+    // Note: Detail pages like /app/presential/:id will call setCurrentProduct themselves with the correct name
+  }, [location.pathname, userData?.activePlanId, userData?.currentPlanId, planTitle, setCurrentProduct]);
 
   const hexToRgb = (hex: string) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -75,13 +103,9 @@ const StudentLayout: React.FC = () => {
         </div>
       </main>
 
-      {currentPlanId && (
+      {currentProduct && (
         <SupportFloatingButton 
-          productInfo={{
-            type: 'plano',
-            id: currentPlanId,
-            name: planTitle
-          }}
+          productInfo={currentProduct}
         />
       )}
       

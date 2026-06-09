@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { feedbackService } from '../../../services/feedbackService';
 import { curriculumService } from '../../../services/curriculumService';
 import { teacherService } from '../../../services/teacherService';
+import { courseService } from '../../../services/courseService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Teacher } from '../../../types/teacher';
 import { FeedbackCategory } from '../../../types/feedback';
@@ -48,7 +49,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
-    if (isOpen && productInfo.type === 'turma_presencial' && productInfo.id) {
+    if (isOpen && (productInfo.type === 'turma_presencial' || productInfo.type === 'curso_online') && productInfo.id) {
       loadTeachers();
     }
   }, [isOpen, productInfo.type, productInfo.id]);
@@ -56,22 +57,36 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   const loadTeachers = async () => {
     setLoadingTeachers(true);
     try {
-      const [subjects, topics, allTeachers] = await Promise.all([
-        curriculumService.getSubjectsByClass(productInfo.id),
-        curriculumService.getTopicsByClass(productInfo.id),
-        teacherService.getTeachers()
-      ]);
+      if (productInfo.type === 'turma_presencial') {
+        const [subjects, topics, allTeachers] = await Promise.all([
+          curriculumService.getSubjectsByClass(productInfo.id),
+          curriculumService.getTopicsByClass(productInfo.id),
+          teacherService.getTeachers()
+        ]);
 
-      const instructorIds = new Set<string>();
-      subjects.forEach(s => { 
-        if (s.defaultTeacherId) instructorIds.add(s.defaultTeacherId); 
-      });
-      topics.forEach(t => { 
-        if (t.teacherId) instructorIds.add(t.teacherId); 
-      });
+        const instructorIds = new Set<string>();
+        subjects.forEach(s => { 
+          if (s.defaultTeacherId) instructorIds.add(s.defaultTeacherId); 
+        });
+        topics.forEach(t => { 
+          if (t.teacherId) instructorIds.add(t.teacherId); 
+        });
 
-      const filteredTeachers = allTeachers.filter(t => instructorIds.has(t.id));
-      setTeachers(filteredTeachers);
+        const filteredTeachers = allTeachers.filter(t => instructorIds.has(t.id));
+        setTeachers(filteredTeachers);
+      } else if (productInfo.type === 'curso_online') {
+        // Para cursos online, buscamos os IDs de professores vinculados diretamente no curso
+        const [allTeachers, allCourses] = await Promise.all([
+          teacherService.getTeachers(),
+          courseService.getCourses()
+        ]);
+        
+        const currentCourse = allCourses.find(c => c.id === productInfo.id);
+        const linkedTeacherIds = currentCourse?.teacherIds || [];
+        
+        const filteredTeachers = allTeachers.filter(t => linkedTeacherIds.includes(t.id));
+        setTeachers(filteredTeachers);
+      }
     } catch (error) {
       console.error('Error loading teachers:', error);
     } finally {
@@ -218,7 +233,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                   <span className="text-sm font-medium text-white">Reclamação</span>
                 </button>
 
-                {productInfo.type === 'turma_presencial' && (
+                {(productInfo.type === 'turma_presencial' || productInfo.type === 'curso_online') && (
                   <button 
                     onClick={() => handleCategorySelect('teacher_evaluation')}
                     className="flex flex-col items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all group"
