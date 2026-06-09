@@ -7,7 +7,7 @@ import { useStudyContext } from '../../../contexts/StudyContext';
 
 export const ChatNotificationToast: React.FC = () => {
   const { unreadCount, recentNotifications } = useChatNotifications();
-  const { isFloating } = useStudyContext();
+  const { isFloating, activeGoal, status } = useStudyContext();
   const [show, setShow] = useState(false);
   const [lastCount, setLastCount] = useState(0);
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ export const ChatNotificationToast: React.FC = () => {
   if (recentNotifications.length === 0) return null;
 
   const latest = recentNotifications[0];
+  const isTimerActive = isFloating && activeGoal && (status === 'running' || status === 'paused');
 
   return (
     <AnimatePresence>
@@ -34,8 +35,8 @@ export const ChatNotificationToast: React.FC = () => {
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.9 }}
-          className={`fixed right-6 z-[200] max-w-xs w-full bg-zinc-950 border-2 border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)] rounded-2xl p-4 overflow-hidden transition-all duration-500 ease-in-out ${
-            isFloating ? 'bottom-[340px]' : 'bottom-6'
+          className={`fixed right-3 z-[200] max-w-xs w-full bg-zinc-950 border-2 border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)] rounded-2xl p-4 overflow-hidden transition-all duration-500 ease-in-out ${
+            isTimerActive ? 'bottom-80' : 'bottom-20'
           }`}
         >
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-amber-500"></div>

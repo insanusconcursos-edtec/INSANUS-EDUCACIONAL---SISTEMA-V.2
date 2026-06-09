@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Headset, Megaphone } from 'lucide-react';
+import { Headset, Megaphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SupportTicketModal } from './SupportTicketModal';
 import { FeedbackModal } from './FeedbackModal';
@@ -16,7 +16,7 @@ interface SupportFloatingButtonProps {
 }
 
 export const SupportFloatingButton: React.FC<SupportFloatingButtonProps> = ({ productInfo }) => {
-  const { isFloating } = useStudyContext();
+  const { isFloating, activeGoal, status } = useStudyContext();
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -38,11 +38,13 @@ export const SupportFloatingButton: React.FC<SupportFloatingButtonProps> = ({ pr
   // Mapear ProductType para o tipo esperado pelo FeedbackModal
   const feedbackProductType = productInfo.type as 'plano' | 'curso_online' | 'turma_presencial' | 'simulado' | 'evento_ao_vivo';
 
+  const isTimerActive = isFloating && activeGoal && (status === 'running' || status === 'paused');
+
   return (
     <>
       <div 
-        className={`fixed z-[9999] flex flex-col items-end gap-3 transition-all duration-500 ease-in-out ${
-          isFloating ? 'right-6 bottom-[340px] md:right-80 md:bottom-6' : 'right-6 bottom-6'
+        className={`fixed right-3 z-[9999] flex flex-col items-end gap-3 transition-all duration-500 ease-in-out ${
+          isTimerActive ? 'bottom-52' : 'bottom-3'
         } ${!isHovered ? 'opacity-40' : 'opacity-100'}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

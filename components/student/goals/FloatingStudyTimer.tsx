@@ -52,7 +52,7 @@ export const FloatingStudyTimer: React.FC = () => {
       initial={{ opacity: 0, y: 50, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 50, scale: 0.9 }}
-      className="fixed bottom-6 right-6 z-[9999] w-72 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden group"
+      className="fixed bottom-3 right-3 z-[9999] w-72 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden group"
     >
       {/* ProgressBar */}
       <div className="absolute top-0 left-0 w-full h-1 bg-zinc-800">
