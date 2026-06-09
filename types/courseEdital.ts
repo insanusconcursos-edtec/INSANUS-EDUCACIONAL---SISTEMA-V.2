@@ -14,9 +14,16 @@ export interface MaterialPDF {
   pdfType?: 'TEORIA' | 'QUESTOES';
 }
 
+export interface CourseEditalTopicGroup {
+  id: string;
+  name: string;
+  order: number;
+}
+
 export interface CourseEditalTopic {
   id: string;
   name: string;
+  groupId?: string | null;
   subtopics: CourseEditalTopic[];
   
   // Novo Campo: Observação Rica
@@ -37,6 +44,7 @@ export interface CourseEditalDiscipline {
   id: string;
   name: string;
   topics: CourseEditalTopic[];
+  topicGroups?: CourseEditalTopicGroup[];
 }
 
 export interface CourseEditalStructure {

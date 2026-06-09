@@ -67,7 +67,7 @@ export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, on
       {/* Overlay de Título (Apenas Hover se não bloqueado) */}
       {!isLocked && (
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-            <h4 className="text-white font-bold text-sm leading-tight drop-shadow-md">{module.title}</h4>
+            <h4 className="text-white font-bold text-sm leading-tight drop-shadow-md" title={module.title}>{module.title}</h4>
             <div className="h-1 w-10 bg-red-600 mt-2 rounded-full"></div>
         </div>
       )}

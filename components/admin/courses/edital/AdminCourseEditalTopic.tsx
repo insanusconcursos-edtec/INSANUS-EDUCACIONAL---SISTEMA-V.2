@@ -209,6 +209,7 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
                 <span 
                     onClick={(e) => { e.stopPropagation(); setIsEditingName(true); }}
                     className={`hover:text-white text-xs cursor-text transition-colors truncate font-medium ${isSubtopic ? 'text-zinc-400' : 'text-zinc-200'}`}
+                    title={topic.name}
                 >
                     {topic.name}
                 </span>

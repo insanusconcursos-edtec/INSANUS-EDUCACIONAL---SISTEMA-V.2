@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ChevronRight, CheckCircle2, PlayCircle, FileText, FileQuestion,
-  BrainCircuit, Layers, X, BookOpen, Loader2, CalendarClock
+  BrainCircuit, Layers, X, BookOpen, Loader2, CalendarClock, FolderKanban
 } from 'lucide-react';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useSpacedReviewModal } from '../../../../contexts/SpacedReviewModalContext';
@@ -333,7 +333,7 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
 
                 <h4 className={`font-bold text-xs uppercase transition-colors flex items-center gap-1 ${isCompleted ? 'text-gray-400 line-through decoration-green-900/50' : isFocused ? 'text-yellow-500' : 'text-gray-200'}`}>
                     {numberingPrefix && <span className="text-gray-500">{numberingPrefix}</span>}
-                    <span>{topic.name}</span>
+                    <span title={topic.name}>{topic.name}</span>
                 </h4>
             </div>
 
@@ -670,6 +670,69 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
 }
 
 // ==========================================
+// 1.2 ACORDEÃO DE PASTA (FOLDERS)
+// ==========================================
+function StudentFolderAccordion({ group, topics, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId, startNumber }: any) {
+    const hasFocusedTopic = useMemo(() => {
+        if (!focusTopicId) return false;
+        const check = (items: any[]): boolean => {
+            for (const t of items) {
+                if (String(t.id) === String(focusTopicId)) return true;
+                if (t.subtopics && check(t.subtopics)) return true;
+            }
+            return false;
+        };
+        return check(topics);
+    }, [topics, focusTopicId]);
+
+    const [isOpen, setIsOpen] = useState(hasFocusedTopic);
+    
+    useEffect(() => {
+        if (hasFocusedTopic) setIsOpen(true);
+    }, [hasFocusedTopic]);
+
+    const completedInGroup = topics.filter((t: any) => completedTopics.includes(String(t.id))).length;
+
+    return (
+        <div className="border border-red-600/10 rounded-xl bg-zinc-950/30 overflow-hidden mb-3">
+            <div 
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between p-3 cursor-pointer hover:bg-zinc-900/50 transition-colors group/folder"
+            >
+                <div className="flex items-center gap-3">
+                    <ChevronRight size={14} className={`text-zinc-500 transition-transform ${isOpen ? 'rotate-90' : 'group-hover:text-white'}`} />
+                    <FolderKanban size={16} className="text-red-500" />
+                    <div>
+                        <h4 className="text-white font-black text-[10px] uppercase tracking-tight" title={group.name}>{group.name}</h4>
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{topics.length} tópicos • {completedInGroup} concluídos</span>
+                    </div>
+                </div>
+            </div>
+
+            {isOpen && (
+                <div className="p-3 pt-0 space-y-2 animate-in slide-in-from-top-1 duration-200">
+                    {topics.map((topic: any, index: number) => (
+                        <StudentTopicAccordion 
+                            key={topic.id} 
+                            topic={topic} 
+                            courseId={courseId}
+                            planId={planId}
+                            disciplineId={disciplineId} 
+                            disciplineName={disciplineName}
+                            completedLessons={completedLessons}
+                            completedTopics={completedTopics}
+                            onToggleTopic={onToggleTopic}
+                            focusTopicId={focusTopicId}
+                            numberingPrefix={`${startNumber + index}.`}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ==========================================
 // 2. DISCIPLINAS (WRAPPER)
 // ==========================================
 function StudentDisciplineAccordion({ discipline, courseId, planId, completedLessons, completedTopics, onToggleTopic, focusTopicId }: any) {
@@ -727,7 +790,7 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
           <div className="flex items-center gap-3">
             <ChevronRight size={18} className={`text-gray-500 transition-transform ${isOpen ? 'rotate-90' : 'group-hover:text-white'}`} />
             <BookOpen size={20} className={discProgress === 100 ? 'text-green-500' : 'text-red-500'} />
-            <h3 className="text-white font-black text-sm uppercase">{discipline.name}</h3>
+            <h3 className="text-white font-black text-sm uppercase" title={discipline.name}>{discipline.name}</h3>
           </div>
           
           <div className="flex items-center gap-4 ml-7 sm:ml-0">
@@ -751,21 +814,65 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
         {isOpen && discipline.topics && (
           <div className="p-4 pt-0 border-t border-gray-800/50 bg-black/20">
             <div className="pl-4 border-l-2 border-gray-800 mt-4 space-y-3">
-              {discipline.topics.map((topic: any, index: number) => (
-                <StudentTopicAccordion 
-                   key={topic.id} 
-                   topic={topic} 
-                   courseId={courseId}
-                   planId={planId}
-                   disciplineId={discipline.id} 
-                   disciplineName={discipline.name} // <-- CAPTURANDO E ENVIANDO O NOME
-                   completedLessons={completedLessons}
-                   completedTopics={completedTopics}
-                   onToggleTopic={onToggleTopic}
-                   focusTopicId={focusTopicId}
-                   numberingPrefix={`${index + 1}.`}
-                />
-              ))}
+              {/* TÓPICOS AGRUPADOS EM PASTAS */}
+              {(discipline.topicGroups || []).map((group: any) => {
+                const groupTopics = discipline.topics.filter((t: any) => t.groupId === group.id);
+                if (groupTopics.length === 0) return null;
+                
+                // Precisamos calcular o índice inicial baseado nos tópicos anteriores que NÃO estão em pastas
+                // Mas simplificando, podemos apenas usar o índice do tópico no array original ou omitir se preferir.
+                // Aqui vou apenas passar um numbering prefix simples ou omitir.
+                return (
+                  <StudentFolderAccordion 
+                    key={group.id}
+                    group={group}
+                    topics={groupTopics}
+                    courseId={courseId}
+                    planId={planId}
+                    disciplineId={discipline.id}
+                    disciplineName={discipline.name}
+                    completedLessons={completedLessons}
+                    completedTopics={completedTopics}
+                    onToggleTopic={onToggleTopic}
+                    focusTopicId={focusTopicId}
+                    startNumber={1}
+                  />
+                );
+              })}
+
+              {/* TÓPICOS SEM PASTA */}
+              {(() => {
+                const unassigned = discipline.topics.filter((t: any) => !t.groupId);
+                const hasGroups = (discipline.topicGroups || []).length > 0;
+                
+                if (unassigned.length > 0) {
+                  return (
+                    <div className={hasGroups ? "mt-4 pt-4 border-t border-gray-800/50" : ""}>
+                      {hasGroups && (
+                        <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest block mb-3 pl-2">Outros Tópicos</span>
+                      )}
+                      <div className="space-y-3">
+                        {unassigned.map((topic: any, index: number) => (
+                          <StudentTopicAccordion 
+                            key={topic.id} 
+                            topic={topic} 
+                            courseId={courseId}
+                            planId={planId}
+                            disciplineId={discipline.id} 
+                            disciplineName={discipline.name}
+                            completedLessons={completedLessons}
+                            completedTopics={completedTopics}
+                            onToggleTopic={onToggleTopic}
+                            focusTopicId={focusTopicId}
+                            numberingPrefix={`${index + 1}.`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         )}

@@ -74,7 +74,7 @@ export function CoursePlayerSidebar({
       {/* HEADER DA SIDEBAR */}
       <div className="p-4 border-b border-gray-800 bg-[#0f1114] shrink-0">
         <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block mb-1">Módulo Atual</span>
-        <h3 className="text-white font-bold text-sm leading-tight line-clamp-2 mb-3">{moduleTitle}</h3>
+        <h3 className="text-white font-bold text-sm leading-tight line-clamp-2 mb-3" title={moduleTitle}>{moduleTitle}</h3>
         
         {/* Barra de Progresso do Módulo */}
         <div className="flex items-center gap-3">
@@ -218,7 +218,10 @@ const GroupAccordion: React.FC<GroupAccordionProps> = ({
             <Layers size={14} />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className={`text-[10px] font-black uppercase tracking-wider truncate mb-0.5 ${isComplete ? 'text-green-500' : 'text-zinc-300'}`}>
+            <span 
+              className={`text-[10px] font-black uppercase tracking-wider truncate mb-0.5 ${isComplete ? 'text-green-500' : 'text-zinc-300'}`}
+              title={group.title}
+            >
               {group.title}
             </span>
             <span className="text-[9px] text-zinc-500 font-bold">
@@ -368,7 +371,10 @@ const FolderItem: React.FC<FolderItemProps> = ({
                     )}
                     
                     <div className="flex flex-col flex-1 min-w-0 pr-2">
-                        <span className={`text-[11px] font-bold uppercase truncate ${isFolderComplete ? 'text-green-500' : isLocked ? 'text-gray-500' : 'text-gray-200 group-hover:text-white'}`}>
+                        <span 
+                            className={`text-[11px] font-bold uppercase truncate ${isFolderComplete ? 'text-green-500' : isLocked ? 'text-gray-500' : 'text-gray-200 group-hover:text-white'}`}
+                            title={folder.title}
+                        >
                             {folder.title}
                         </span>
                         
@@ -486,9 +492,12 @@ const LessonRow: React.FC<LessonRowProps> = ({ lesson, isActive, isCompleted, on
             
             {/* Título */}
             <div className="flex-1 min-w-0">
-                <span className={`text-xs font-medium block truncate 
+                <span 
+                    className={`text-xs font-medium block truncate 
                     ${isCompleted ? 'text-gray-500 line-through' : isActive ? 'text-[var(--plan-theme)]' : 'text-gray-400 group-hover:text-gray-200'}
-                `}>
+                `}
+                    title={lesson.title}
+                >
                     {lesson.title}
                 </span>
             </div>
