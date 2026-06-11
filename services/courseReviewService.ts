@@ -151,13 +151,28 @@ export const courseReviewService = {
   /**
    * 3. Busca revisões específicas de um Tópico (Para exibir no Edital)
    */
-  getReviewsByTopic: async (userId: string, topicId: string) => {
+  getReviewsByTopic: async (userId: string, topicId: string, courseId?: string, planId?: string) => {
     const reviewsRef = collection(db, 'users', userId, 'course_reviews');
     
-    const q = query(
+    let q;
+    if (courseId) {
+      q = query(
+        reviewsRef, 
+        where('topicId', '==', topicId),
+        where('courseId', '==', courseId)
+      );
+    } else if (planId) {
+      q = query(
+        reviewsRef, 
+        where('topicId', '==', topicId),
+        where('planId', '==', planId)
+      );
+    } else {
+      q = query(
         reviewsRef, 
         where('topicId', '==', topicId)
-    );
+      );
+    }
     
     const snapshot = await getDocs(q);
     
@@ -173,9 +188,25 @@ export const courseReviewService = {
   /**
    * 4. Deleta todas as revisões de um tópico (Quando o aluno desmarca conclusão)
    */
-  deleteReviewsByTopic: async (userId: string, topicId: string) => {
+  deleteReviewsByTopic: async (userId: string, topicId: string, courseId?: string, planId?: string) => {
     const reviewsRef = collection(db, 'users', userId, 'course_reviews');
-    const q = query(reviewsRef, where('topicId', '==', topicId));
+    
+    let q;
+    if (courseId) {
+      q = query(
+        reviewsRef, 
+        where('topicId', '==', topicId),
+        where('courseId', '==', courseId)
+      );
+    } else if (planId) {
+      q = query(
+        reviewsRef, 
+        where('topicId', '==', topicId),
+        where('planId', '==', planId)
+      );
+    } else {
+      q = query(reviewsRef, where('topicId', '==', topicId));
+    }
     
     const snapshot = await getDocs(q);
     

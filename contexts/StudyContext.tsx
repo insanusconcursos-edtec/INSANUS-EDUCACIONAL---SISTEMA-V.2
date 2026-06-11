@@ -23,7 +23,7 @@ interface StudyContextType {
   pause: () => void;
   resume: () => void;
   finish: () => Promise<number>;
-  reset: () => void;
+  reset: () => Promise<void>;
   isFloating: boolean;
   setIsFloating: (value: boolean) => void;
   isMaterialActive: boolean;
@@ -35,7 +35,7 @@ interface StudyContextType {
 const StudyContext = createContext<StudyContextType | undefined>(undefined);
 
 export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData, refreshUserData } = useAuth();
   const [activeGoal, setActiveGoal] = useState<StudentGoal | null>(null);
   const [status, setStatus] = useState<TimerStatus>('idle');
   const [seconds, setSeconds] = useState(0);
@@ -45,6 +45,7 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isMaterialActive, setIsMaterialActive] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<ProductInfo | null>(null);
   const lastSavedSeconds = useRef(0);
+  const isResettingRef = useRef(false);
 
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -58,7 +59,7 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Restaurar cronômetro persistente do Firestore ao carregar
   useEffect(() => {
-    if (userData?.activeTimer && status === 'idle') {
+    if (userData?.activeTimer && status === 'idle' && !isResettingRef.current) {
       const { goal, startTime: remoteStart, accumulatedSeconds: remoteAccumulated, status: remoteStatus } = userData.activeTimer;
       setActiveGoal(goal);
       setStartTime(remoteStart);
@@ -194,7 +195,8 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [currentUser, activeGoal, accumulatedSeconds]);
 
-  const reset = useCallback(() => {
+  const reset = useCallback(async () => {
+    isResettingRef.current = true;
     setActiveGoal(null);
     setStatus('idle');
     setSeconds(0);
@@ -205,9 +207,20 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsMaterialActive(false);
 
     if (currentUser) {
-      updateActiveTimer(currentUser.uid, null);
+      try {
+        await updateActiveTimer(currentUser.uid, null);
+        if (refreshUserData) await refreshUserData();
+      } catch (error) {
+        console.error("[StudyContext] Error clearing active timer:", error);
+      }
     }
-  }, [currentUser]);
+    
+    // Pequeno delay para garantir que o ciclo de renderização reconheça o userData atualizado 
+    // antes de permitir novas restaurações automáticas.
+    setTimeout(() => {
+      isResettingRef.current = false;
+    }, 1000);
+  }, [currentUser, refreshUserData]);
 
   const finish = useCallback(async () => {
     if (!currentUser || !activeGoal || !activeGoal.planId) return 0;
@@ -221,7 +234,11 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setStatus('completed');
     
     // 1. Salva o tempo acumulado da sessão no banco (recordedTime)
-    await saveSessionTime(finalSeconds);
+    try {
+      await saveSessionTime(finalSeconds);
+    } catch (e) {
+      console.error("Error saving session time:", e);
+    }
     
     // 2. Persistência de Conclusão Real (Database Sync)
     // Garantimos que a meta mude de status em todas as coleções (Schedule e Edital Progress)
@@ -245,7 +262,7 @@ export const StudyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error("[StudyContext] Erro ao persistir conclusão:", error);
     } finally {
       // Limpa os estados de meta ativa para garantir um fechamento de relógio limpo.
-      reset();
+      await reset();
     }
 
     return finalSeconds;

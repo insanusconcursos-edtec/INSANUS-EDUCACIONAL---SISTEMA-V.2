@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ChevronRight, ChevronDown, CheckCircle2, Circle, Lock, StickyNote, CalendarClock, BookOpen,
-  Layers, Network, Loader2
+  Layers, Network, Loader2, X
 } from 'lucide-react';
 import { EdictTopic, EdictSubtopic, EdictStudyLevel } from '../../../services/edictService';
 import { Meta, MetaType } from '../../../services/metaService';
@@ -76,6 +76,7 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
 
   // ESTADO PARA ARMAZENAR REVISÕES DESTE TÓPICO
   const [topicReviews, setTopicReviews] = useState<CourseReview[]>([]);
+  const [showEditReviewsModal, setShowEditReviewsModal] = useState(false);
 
   // --- LOCAL STATE FOR OPTIMISTIC UI ---
   const [localCompletedIds, setLocalCompletedIds] = useState<Set<string>>(new Set());
@@ -206,7 +207,12 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
   const fetchReviews = async () => {
     if (currentUser) {
         try {
-            const reviews = await courseReviewService.getReviewsByTopic(currentUser.uid, String(item.id));
+            const reviews = await courseReviewService.getReviewsByTopic(
+              currentUser.uid, 
+              String(item.id),
+              undefined,
+              planId
+            );
             setTopicReviews(reviews);
         } catch (error) {
             console.error("Erro ao buscar revisões:", error);
@@ -246,7 +252,12 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
             
             // Apaga as revisões do banco
             try {
-                await courseReviewService.deleteReviewsByTopic(currentUser.uid, String(item.id));
+                await courseReviewService.deleteReviewsByTopic(
+                  currentUser.uid, 
+                  String(item.id),
+                  undefined,
+                  planId
+                );
                 setTopicReviews([]);
             } catch (error) {
                 console.error("Erro ao apagar revisões:", error);
@@ -271,7 +282,12 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
             setShowConfirmModal(false);
 
             // Abre o modal de agendar revisão via Contexto Global (Apenas se não houver revisões de tópico)
-            const allReviews = await courseReviewService.getReviewsByTopic(currentUser.uid, String(item.id));
+            const allReviews = await courseReviewService.getReviewsByTopic(
+              currentUser.uid, 
+              String(item.id),
+              undefined,
+              planId
+            );
             const existingTopicReviews = allReviews.filter(r => r.type === 'topic_revision');
             
             if (existingTopicReviews.length === 0) {
@@ -311,6 +327,26 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
     } catch (error) {
         console.error("Erro ao atualizar tópico", error);
         alert("Erro ao salvar progresso.");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteReviews = async () => {
+    if (!currentUser) return;
+    setIsProcessing(true);
+    try {
+        await courseReviewService.deleteReviewsByTopic(
+          currentUser.uid, 
+          String(item.id),
+          undefined,
+          planId
+        );
+        setTopicReviews([]);
+        setShowEditReviewsModal(false);
+    } catch (error) {
+        console.error("Erro ao apagar revisões:", error);
+        alert("Erro ao excluir revisões.");
     } finally {
         setIsProcessing(false);
     }
@@ -426,6 +462,19 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
                             </div>
                         );
                     })}
+                    
+                    {!isReadOnly && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowEditReviewsModal(true);
+                        }}
+                        className="text-[8px] font-bold px-1.5 py-0.5 rounded border border-blue-500/30 text-blue-500 hover:bg-blue-500/10 uppercase tracking-widest transition-all"
+                        title="Gerenciar Agendamentos"
+                      >
+                        Editar Revisões
+                      </button>
+                    )}
                 </div>
             )}
 
@@ -667,6 +716,91 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
                             className={`flex-1 py-3 rounded-lg text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${isFullyComplete ? 'bg-[var(--plan-theme)] hover:brightness-110 shadow-[var(--plan-theme)]/20' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20'}`}
                         >
                             {isProcessing ? <Loader2 size={14} className="animate-spin" /> : 'Confirmar'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL DE EDIÇÃO DE REVISÕES (NOVO) */}
+      {showEditReviewsModal && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowEditReviewsModal(false)}>
+            <div 
+                className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex flex-col items-center text-center gap-4">
+                    <div className="p-3 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                        <CalendarClock size={32} />
+                    </div>
+                    
+                    <div className="space-y-1">
+                        <h3 className="text-lg font-black text-white uppercase tracking-tighter">
+                            Editar Revisões
+                        </h3>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{item.name}</p>
+                    </div>
+                    
+                    <div className="text-sm text-zinc-400 leading-relaxed">
+                        <p>Deseja gerenciar os agendamentos deste tópico? Escolha uma das opções abaixo:</p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 w-full mt-2">
+                        {/* BOTÃO ADICIONAR (REUTILIZA LÓGICA DE AGENDAMENTO) */}
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowEditReviewsModal(false);
+                                
+                                let inheritedConfig = [1, 7, 15, 30];
+                                if (item.linkedGoals) {
+                                    const allLinkedIds = Object.values(item.linkedGoals).flat() as string[];
+                                    const goalWithReview = allLinkedIds
+                                        .map(id => metaLookup[id])
+                                        .find(g => g?.reviewConfig?.active);
+                                    if (goalWithReview?.reviewConfig) {
+                                        const intervalsStr = goalWithReview.reviewConfig.spacedReviewIntervals || "1,7,15,30";
+                                        inheritedConfig = intervalsStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+                                    }
+                                }
+
+                                openSpacedReviewModal({
+                                    planId: planId || '',
+                                    disciplineId: disciplineId || '',
+                                    disciplineName: disciplineName || '',
+                                    topicId: String(item.id),
+                                    topicName: item.name,
+                                    isAutoTriggered: false,
+                                    config: inheritedConfig,
+                                    contextType: planId ? 'plan' : 'course_topic',
+                                    message: `Deseja agendar/adicionar revisões para o tópico [${item.name}]?`
+                                });
+                            }}
+                            disabled={isProcessing}
+                            className="flex items-center justify-center gap-2 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg"
+                        >
+                            <CalendarClock size={16} />
+                            Adicionar / Reagendar
+                        </button>
+
+                        {/* BOTÃO EXCLUIR */}
+                        <button 
+                            onClick={handleDeleteReviews}
+                            disabled={isProcessing}
+                            className="flex items-center justify-center gap-2 py-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg shadow-red-900/20"
+                        >
+                            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+                            Excluir Todas
+                        </button>
+
+                        <button 
+                            onClick={() => setShowEditReviewsModal(false)}
+                            disabled={isProcessing}
+                            className="py-3 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-zinc-300 font-bold uppercase text-xs tracking-widest transition-colors mt-2"
+                        >
+                            Cancelar
                         </button>
                     </div>
                 </div>

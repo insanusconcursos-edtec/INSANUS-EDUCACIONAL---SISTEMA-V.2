@@ -9,13 +9,14 @@ interface EditalManagerProps {
     courseId: string;
 }
 
-// Helper para gerar ID
-const generateId = () => Math.random().toString(36).substr(2, 9);
+// Helper para gerar ID Robusto
+const generateId = () => crypto.randomUUID();
 
 export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseId }) => {
     const [editalStatus, setEditalStatus] = useState<'PRE_EDITAL' | 'POS_EDITAL'>('PRE_EDITAL');
     const [disciplines, setDisciplines] = useState<CourseEditalDiscipline[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isRegenerating, setIsRegenerating] = useState(false);
 
     // Estados para Exclusão (Modal)
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -54,6 +55,41 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
             updatedAt: new Date()
         };
         await courseService.saveCourseEdital(structure);
+    };
+
+    // FUNÇÃO CRÍTICA: Regenerar todos os IDs para isolar progresso
+    const handleRegenerateAllIds = async () => {
+        if (!confirm("Isso irá gerar novos IDs para todos os tópicos e disciplinas deste edital. O progresso de todos os alunos NESTE curso específico será resetado. Deseja continuar?")) {
+            return;
+        }
+
+        setIsRegenerating(true);
+        try {
+            const newDisciplines = JSON.parse(JSON.stringify(disciplines));
+            
+            const regenerateTopicIds = (topics: any[]) => {
+                topics.forEach(t => {
+                    t.id = crypto.randomUUID();
+                    if (t.subtopics && t.subtopics.length > 0) {
+                        regenerateTopicIds(t.subtopics);
+                    }
+                });
+            };
+
+            newDisciplines.forEach((d: any) => {
+                d.id = crypto.randomUUID();
+                if (d.topics) regenerateTopicIds(d.topics);
+            });
+
+            await saveToFirestore(editalStatus, newDisciplines);
+            setDisciplines(newDisciplines);
+            alert("IDs regenerados com sucesso! O progresso foi isolado.");
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao regenerar IDs.");
+        } finally {
+            setIsRegenerating(false);
+        }
     };
 
     // Handler de Status
@@ -168,6 +204,16 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
                         Pós-Edital
                     </button>
                 </div>
+
+                <button
+                    onClick={handleRegenerateAllIds}
+                    disabled={isRegenerating || loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all disabled:opacity-50"
+                    title="Gera novos IDs para os tópicos, o que reseta o progresso visual de todos os alunos deste curso (Útil para cursos duplicados)."
+                >
+                    {isRegenerating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} className="rotate-45" />}
+                    Isolar Progresso
+                </button>
             </div>
 
             {/* BOTÃO ADICIONAR DISCIPLINA */}

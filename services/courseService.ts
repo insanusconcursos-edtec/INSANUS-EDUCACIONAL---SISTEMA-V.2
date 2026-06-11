@@ -270,39 +270,63 @@ export const courseService = {
         }));
       }));
 
-      // 6. Edital Verticalizado
-      const edital = await courseService.getCourseEdital(originalCourse.id);
-      if (edital) {
-        console.log(`[DUPLICATE] Edital encontrado, processando...`);
-        const newEditalRef = doc(db, EDITAL_COLLECTION, newCourseRef.id);
-        
-        // Clonagem profunda do edital para manipular referências (usando sanitizeData para ser seguro)
-        const newEditalData: CourseEditalStructure = sanitizeData(edital);
-        newEditalData.courseId = newCourseRef.id;
-        newEditalData.updatedAt = serverTimestamp();
+        // 6. Edital Verticalizado
+        const edital = await courseService.getCourseEdital(originalCourse.id);
+        if (edital) {
+            console.log(`[DUPLICATE] Edital encontrado, processando...`);
+            const newEditalRef = doc(db, EDITAL_COLLECTION, newCourseRef.id);
+            
+            // Clonagem profunda do edital
+            const newEditalData: CourseEditalStructure = JSON.parse(JSON.stringify(edital));
+            newEditalData.courseId = newCourseRef.id;
+            newEditalData.updatedAt = serverTimestamp();
 
-        // Função recursiva para atualizar IDs de aulas e módulos vinculados no edital
-        const updateTopics = (topics: any[]) => {
-          topics.forEach(topic => {
-            if (topic.linkedLessons) {
-              topic.linkedLessons = topic.linkedLessons.map((ll: { id: string, moduleId: string }) => ({
-                ...ll,
-                id: lessonMapping[ll.id] || ll.id,
-                moduleId: moduleMapping[ll.moduleId] || ll.moduleId
-              }));
-            }
-            if (topic.subtopics && topic.subtopics.length > 0) {
-              updateTopics(topic.subtopics);
-            }
-          });
-        };
+            newEditalData.disciplines.forEach(discipline => {
+                // 1. Novos IDs para Disciplinas
+                discipline.id = crypto.randomUUID();
 
-        newEditalData.disciplines.forEach(discipline => {
-          updateTopics(discipline.topics);
-        });
+                // 2. Mapeamento de Grupos
+                const groupMapping: Record<string, string> = {};
+                if (discipline.topicGroups) {
+                    discipline.topicGroups.forEach(group => {
+                        const oldGroupId = group.id;
+                        group.id = crypto.randomUUID();
+                        groupMapping[oldGroupId] = group.id;
+                    });
+                }
 
-        operations.push({ ref: newEditalRef, data: newEditalData });
-      }
+                // 3. Função recursiva para tópicos e sub-referências
+                const updateTopicsRecursive = (topics: any[]) => {
+                    topics.forEach(topic => {
+                        // Novo ID de Tópico (FUNDAMENTAL para isolar progresso)
+                        topic.id = crypto.randomUUID();
+                        
+                        // Remapear Grupo
+                        if (topic.groupId && groupMapping[topic.groupId]) {
+                            topic.groupId = groupMapping[topic.groupId];
+                        }
+
+                        // Remapear Aulas Vinculadas (Usando lessonMapping já criado)
+                        if (topic.linkedLessons) {
+                            topic.linkedLessons = topic.linkedLessons.map((ll: any) => ({
+                                ...ll,
+                                id: lessonMapping[ll.id] || ll.id,
+                                moduleId: moduleMapping[ll.moduleId] || ll.moduleId
+                            }));
+                        }
+
+                        // Recursão para sub-tópicos
+                        if (topic.subtopics && topic.subtopics.length > 0) {
+                            updateTopicsRecursive(topic.subtopics);
+                        }
+                    });
+                };
+
+                updateTopicsRecursive(discipline.topics);
+            });
+
+            operations.push({ ref: newEditalRef, data: newEditalData });
+        }
 
       console.log(`[DUPLICATE] Total de operações preparadas: ${operations.length}. Iniciando gravação em lotes.`);
 
