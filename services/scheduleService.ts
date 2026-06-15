@@ -74,8 +74,9 @@ const mergeArrayUniques = (existingArr: any[], newArr: any[]) => {
   const e = existingArr || [];
   const n = newArr || [];
   if (n.length === 0) return e;
-  const existingIds = new Set(e.map(item => item.id || item.title || JSON.stringify(item)));
-  return [...e, ...n.filter(item => !existingIds.has(item.id || item.title || JSON.stringify(item)))];
+  // Use a safer key generation that won't crash on circular structures
+  const existingIds = new Set(e.map(item => item.id || item.title || (typeof item === 'object' ? 'OBJ_' + item.id : String(item))));
+  return [...e, ...n.filter(item => !existingIds.has(item.id || item.title || (typeof item === 'object' ? 'OBJ_' + item.id : String(item))))];
 };
 
 export const scheduleService = {
@@ -1049,18 +1050,31 @@ export const rescheduleOverdueTasks = async (
       const data = docSnap.data();
       const items = data.items || [];
       
-      const isOverdueCycleTarget = (item: any) => {
-        const type = String(item.type || '').toLowerCase();
-        const isFreeStudy = type === 'free_study' || type === 'estudo_livre' || type === 'estudo livre';
-        return item.status !== 'completed' && String(item.planId) === String(planId) && !isFreeStudy;
+      const isFreeStudyCheck = (item: any) => {
+        const typeUpper = String(item.type || '').toUpperCase();
+        const titleUpper = String(item.title || '').toUpperCase();
+        const discUpper = String(item.disciplineName || item.discipline || '').toUpperCase();
+        const topicUpper = String(item.topicName || item.topic || item.subject || '').toUpperCase();
+        
+        return typeUpper === 'FREE_STUDY' || 
+               titleUpper === 'ESTUDO LIVRE' || 
+               discUpper === 'ESTUDO LIVRE' || 
+               topicUpper === 'ESTUDO LIVRE';
+      };
+
+      const isUncompletedOfThisPlan = (item: any) => {
+        return item.status !== 'pending' ? false : String(item.planId) === String(planId);
       };
       
-      const uncompletedOfThisPlan = items.filter(isOverdueCycleTarget);
+      const uncompletedOfThisPlan = items.filter(isUncompletedOfThisPlan);
       
       if (uncompletedOfThisPlan.length > 0) {
-        allPendingGoals.push(...uncompletedOfThisPlan);
+        // Só move para o futuro o que NÃO for Estudo Livre
+        const toMove = uncompletedOfThisPlan.filter(item => !isFreeStudyCheck(item));
+        allPendingGoals.push(...toMove);
         
-        const itemsToKeep = items.filter((item: any) => !isOverdueCycleTarget(item));
+        // Remove TODAS as pendentes deste plano (incluindo Estudo Livre) do documento do passado
+        const itemsToKeep = items.filter((item: any) => !isUncompletedOfThisPlan(item));
 
         if (itemsToKeep.length === 0) {
           batch.delete(docSnap.ref);

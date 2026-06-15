@@ -3,14 +3,20 @@
  */
 
 const isFirestoreObject = (obj: any): boolean => {
-  if (!obj) return false;
-  // Verifica se é Timestamp, FieldValue, DocumentReference, etc based on properties or prototype
+  if (!obj || typeof obj !== 'object') return false;
+  
+  // Robust check for Firestore objects even when minified
   return (
-    obj.constructor?.name === 'Timestamp' ||
-    obj.constructor?.name === 'FieldValue' ||
-    obj.constructor?.name === 'DocumentReference' ||
-    obj.constructor?.name === 'Query' ||
-    (obj._lat !== undefined && obj._long !== undefined) // GeoPoint
+    // Timestamp
+    (typeof obj.toDate === 'function' && typeof obj.toMillis === 'function') ||
+    // DocumentReference
+    (typeof obj.path === 'string' && (obj.id || obj.parent) && (obj.type === 'document' || obj.firestore)) ||
+    // FieldValue
+    (obj.constructor?.name === 'FieldValue' || (typeof obj.isEqual === 'function' && !obj.path)) ||
+    // GeoPoint
+    (obj._lat !== undefined && obj._long !== undefined) ||
+    // CollectionReference / Query
+    (typeof obj.where === 'function' && typeof obj.orderBy === 'function')
   );
 };
 
@@ -43,7 +49,6 @@ export const toPlainObject = (obj: any, seen = new WeakSet()): any => {
   }
 
   // Se for um DocumentReference ou algo com path (Firebase)
-  // Adicionamos verificação robusta pois o nome do construtor pode ser minificado
   if (obj.path && typeof obj.path === 'string' && (obj.id || obj.parent)) {
     return obj.path;
   }
@@ -55,13 +60,12 @@ export const toPlainObject = (obj: any, seen = new WeakSet()): any => {
   }
 
   // Se chegar aqui e não for um "Plain Object" (ex: Snapshot, Query), mas tiver dados
-  // Tentamos extrair se for um DocumentSnapshot
   if (typeof obj.data === 'function' && typeof obj.get === 'function') {
     try {
       const data = obj.data();
       return toPlainObject({ id: obj.id, ...data }, seen);
     } catch (e) {
-      // Ignora erro se não for snapshot
+      // Ignora erro
     }
   }
 
@@ -72,7 +76,6 @@ export const toPlainObject = (obj: any, seen = new WeakSet()): any => {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       const val = obj[key];
       // Ignora funções e campos privados (que começam com _)
-      // Campos privados de bibliotecas como Firestore costumam causar estrutura circular
       if (typeof val !== 'function' && !key.startsWith('_')) {
         plainObj[key] = toPlainObject(val, seen);
       }
@@ -84,25 +87,33 @@ export const toPlainObject = (obj: any, seen = new WeakSet()): any => {
 /**
  * Remove campos 'undefined' de um objeto recursivamente e realiza uma clonagem profunda segura.
  * Preserva objetos especiais do Firestore (Timestamp, FieldValue, DocumentReference) e Dates.
+ * Inclui proteção contra estrutura circular.
  */
-export const sanitizeData = (obj: any): any => {
-  if (obj === null || typeof obj !== 'object') return obj;
+export const sanitizeData = (obj: any, seen = new WeakSet()): any => {
+  if (obj === null || obj === undefined || typeof obj !== 'object') return obj;
 
-  // Se for um objeto especial do Firestore ou Date, retorna como está
+  // Proteção contra estrutura circular
+  if (seen.has(obj)) {
+    return null; // Ou poderíamos retornar uma referência se necessário, mas para Firestore dados circulares são inválidos
+  }
+
+  // Se for um objeto especial do Firestore ou Date, retorna como está (não recursivo)
   if (isFirestoreObject(obj) || obj instanceof Date) {
     return obj;
   }
 
   if (Array.isArray(obj)) {
+    seen.add(obj);
     return obj
       .filter(item => item !== undefined)
-      .map(sanitizeData);
+      .map(item => sanitizeData(item, seen));
   }
 
+  seen.add(obj);
   const newObj: any = {};
   Object.keys(obj).forEach(key => {
     if (obj[key] !== undefined) {
-      newObj[key] = sanitizeData(obj[key]);
+      newObj[key] = sanitizeData(obj[key], seen);
     }
   });
   return newObj;

@@ -435,7 +435,22 @@ export const getDashboardData = async (uid: string): Promise<{
       todayEvents.push(...planItems);
     } else {
       // Past Date Items (Only Pending)
-      const pendingPast = planItems.filter(e => e.status === 'pending');
+      const pendingPast = planItems.filter(e => {
+        const isPending = e.status === 'pending';
+        
+        // Detecção agressiva de Estudo Livre
+        const typeUpper = String(e.type || '').toUpperCase();
+        const titleUpper = String(e.title || '').toUpperCase();
+        const discUpper = String(e.disciplineName || e.discipline || '').toUpperCase();
+        const topicUpper = String(e.topicName || e.topic || e.subject || '').toUpperCase();
+        
+        const isFreeStudy = typeUpper === 'FREE_STUDY' || 
+                           titleUpper === 'ESTUDO LIVRE' || 
+                           discUpper === 'ESTUDO LIVRE' || 
+                           topicUpper === 'ESTUDO LIVRE';
+
+        return isPending && !isFreeStudy;
+      });
       overdueEvents.push(...pendingPast);
     }
   });

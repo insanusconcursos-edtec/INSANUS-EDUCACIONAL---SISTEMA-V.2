@@ -19,6 +19,7 @@ import toast from 'react-hot-toast';
 import { DraggableNotesList } from './DraggableNotesList';
 import { MoveNoteModal } from './MoveNoteModal';
 import { useStudyContext } from '../../../contexts/StudyContext';
+import { toPlainObject } from '../../../services/firestoreUtils';
 
 export interface NotebookEditorModalProps {
   isOpen: boolean;
@@ -489,8 +490,8 @@ export const EditalNotebookModal: React.FC<NotebookEditorModalProps> = ({
         editalNode,
         metaLookup
     };
-    // Salvar no localStorage temporariamente
-    localStorage.setItem(sessionId, JSON.stringify(pData));
+    // Salvar no localStorage temporariamente com proteção contra estrutura circular
+    localStorage.setItem(sessionId, JSON.stringify(toPlainObject(pData)));
     
     // Ocultar a janela principal do caderno de aula
     if (isEmbedded) {

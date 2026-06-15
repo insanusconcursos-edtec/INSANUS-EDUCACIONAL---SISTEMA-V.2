@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../../contexts/AuthContext';
 import { useStudyContext } from '../../../contexts/StudyContext';
 import { notebookService } from '../../../services/notebookService';
+import { toPlainObject } from '../../../services/firestoreUtils';
 import { applyWatermarkToPdf } from '../../../utils/pdfSecurityService';
 import toast from 'react-hot-toast';
 
@@ -88,8 +89,8 @@ export const InsanusPdfViewer: React.FC<InsanusPdfViewerProps> = ({ url }) => {
         if (!currentUser || isLoadingAnnotations) return;
         
         // Deep equal check to avoid redundant saves
-        const currentData = JSON.stringify({ highlights, notes });
-        const lastData = JSON.stringify(lastSavedRef.current);
+        const currentData = JSON.stringify(toPlainObject({ highlights, notes }));
+        const lastData = JSON.stringify(toPlainObject(lastSavedRef.current));
         
         if (currentData === lastData) return;
 

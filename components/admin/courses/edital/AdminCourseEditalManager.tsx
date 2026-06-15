@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CourseEditalStructure, CourseEditalDiscipline } from '../../../../types/courseEdital';
 import { courseService } from '../../../../services/courseService';
+import { deepCloneSafe } from '../../../../services/firestoreUtils';
 import { AdminCourseEditalDiscipline } from './AdminCourseEditalDiscipline';
 import { Loader2, Plus } from 'lucide-react';
 import ConfirmationModal from '../../../../components/ui/ConfirmationModal';
@@ -65,7 +66,7 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
 
         setIsRegenerating(true);
         try {
-            const newDisciplines = JSON.parse(JSON.stringify(disciplines));
+            const newDisciplines = deepCloneSafe(disciplines);
             
             const regenerateTopicIds = (topics: any[]) => {
                 topics.forEach(t => {

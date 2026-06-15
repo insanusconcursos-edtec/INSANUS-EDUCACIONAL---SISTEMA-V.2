@@ -186,6 +186,7 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
         if (t.subtopics) {
             t.subtopics.forEach(sub => {
                 countGoals(sub.linkedGoals);
+                traverse(sub);
             });
         }
     };
@@ -633,7 +634,8 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
 
             {/* 3. Subtopics Recursive Render */}
             {hasSubtopics && item.subtopics?.map((sub, sIndex) => {
-                const subNumbering = numbering ? `${numbering.replace('.', '')}.${sIndex + 1}` : `${sIndex + 1}`;
+                const cleanParentNumbering = numbering?.endsWith('.') ? numbering.slice(0, -1) : numbering;
+                const subNumbering = cleanParentNumbering ? `${cleanParentNumbering}.${sIndex + 1}.` : `${sIndex + 1}.`;
                 return (
                     <TopicItem 
                         key={sub.id} 

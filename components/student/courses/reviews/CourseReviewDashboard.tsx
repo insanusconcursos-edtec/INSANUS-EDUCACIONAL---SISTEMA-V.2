@@ -119,19 +119,27 @@ export function CourseReviewDashboard({ courseId, planId, onReviewNow }: { cours
         return revDate <= endOfToday;
     });
 
-    // 3. Lógica de Agrupamento Dinâmico (GroupBy)
-    const groupedReviews = pendingAndDueRevisions.reduce((acc, review) => {
-        let key = 'topic_revision';
-        if (review.type === 'goal_revision') {
-            if (review.goalType === 'LEI SECA') key = 'goal_lei_seca';
-            else if (review.goalType === 'QUESTÕES') key = 'goal_questoes';
-            else if (review.goalType === 'RESUMO') key = 'goal_resumo';
-            else if (review.goalType === 'FLASHCARD') key = 'goal_flashcard';
-        }
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(review);
-        return acc;
-    }, {} as Record<string, CourseReview[]>);
+    // 3. Lógica de Agrupamento Dinâmico por Tipo de Data e Categoria
+    const overdueReviews = pendingAndDueRevisions.filter(rev => rev.scheduledDate < todayStr);
+    const todayReviews = pendingAndDueRevisions.filter(rev => rev.scheduledDate === todayStr);
+
+    const groupByCategory = (items: CourseReview[]) => {
+        return items.reduce((acc, review) => {
+            let key = 'topic_revision';
+            if (review.type === 'goal_revision') {
+                if (review.goalType === 'LEI SECA') key = 'goal_lei_seca';
+                else if (review.goalType === 'QUESTÕES') key = 'goal_questoes';
+                else if (review.goalType === 'RESUMO') key = 'goal_resumo';
+                else if (review.goalType === 'FLASHCARD') key = 'goal_flashcard';
+            }
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(review);
+            return acc;
+        }, {} as Record<string, CourseReview[]>);
+    };
+
+    const overdueGrouped = groupByCategory(overdueReviews);
+    const todayGrouped = groupByCategory(todayReviews);
 
     const CATEGORIES_CONFIG: Record<string, { title: string; icon: any; theme: string }> = {
         topic_revision: { title: "REVISÕES DE TÓPICOS", icon: CalendarClock, theme: "blue" },
@@ -141,38 +149,62 @@ export function CourseReviewDashboard({ courseId, planId, onReviewNow }: { cours
         goal_flashcard: { title: "REVISÕES DE FLASHCARDS", icon: AlertCircle, theme: "pink" },
     };
 
-    // Filtra apenas as categorias que possuem itens
-    const activeCategories = Object.keys(CATEGORIES_CONFIG).filter(key => groupedReviews[key]?.length > 0);
+    const renderGroup = (grouped: Record<string, CourseReview[]>, groupTitle: string, groupIcon: any, groupColor: string) => {
+        const activeKeys = Object.keys(CATEGORIES_CONFIG).filter(key => grouped[key]?.length > 0);
+        if (activeKeys.length === 0) return null;
 
-    if (activeCategories.length === 0) return null;
+        return (
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3 px-1">
+                    <div className={`p-2 rounded-lg ${groupColor === 'red' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-400'}`}>
+                        {React.createElement(groupIcon, { size: 18 })}
+                    </div>
+                    <div>
+                        <h2 className={`font-black uppercase tracking-[0.2em] text-xs ${groupColor === 'red' ? 'text-red-500' : 'text-blue-400'}`}>
+                            {groupTitle}
+                        </h2>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase mt-0.5">
+                            {activeKeys.reduce((acc, k) => acc + (grouped[k]?.length || 0), 0)} metas pendentes
+                        </p>
+                    </div>
+                </div>
+                <div className="flex flex-col gap-4">
+                    {activeKeys.map(key => {
+                        const config = CATEGORIES_CONFIG[key];
+                        const categoryReviews = grouped[key];
+                        
+                        return (
+                            <ReviewSection 
+                                key={key}
+                                title={config.title} 
+                                count={categoryReviews.length} 
+                                theme={groupColor === 'red' ? 'red' : config.theme} 
+                                icon={config.icon}
+                                defaultOpen={true}
+                            >
+                                {categoryReviews.map(review => (
+                                    <ReviewCard 
+                                        key={review.id} 
+                                        review={review} 
+                                        onReviewNow={onReviewNow} 
+                                        onComplete={handleComplete} 
+                                        isOverdue={review.scheduledDate < todayStr} 
+                                    />
+                                ))}
+                            </ReviewSection>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+
+    if (overdueReviews.length === 0 && todayReviews.length === 0) return null;
 
     return (
-        <div className="flex flex-col gap-6 mb-8 animate-in fade-in slide-in-from-top-4">
-            {activeCategories.map(key => {
-                const config = CATEGORIES_CONFIG[key];
-                const categoryReviews = groupedReviews[key];
-                
-                return (
-                    <ReviewSection 
-                        key={key}
-                        title={config.title} 
-                        count={categoryReviews.length} 
-                        theme={config.theme} 
-                        icon={config.icon}
-                        defaultOpen={true}
-                    >
-                        {categoryReviews.map(review => (
-                            <ReviewCard 
-                                key={review.id} 
-                                review={review} 
-                                onReviewNow={onReviewNow} 
-                                onComplete={handleComplete} 
-                                isOverdue={review.scheduledDate < todayStr} 
-                            />
-                        ))}
-                    </ReviewSection>
-                );
-            })}
+        <div className="flex flex-col gap-10 mb-12 animate-in fade-in slide-in-from-top-4">
+            {renderGroup(overdueGrouped, "REVISÕES EM ATRASO", AlertCircle, "red")}
+            {renderGroup(todayGrouped, "REVISÕES PROGRAMADAS PARA HOJE", CalendarClock, "blue")}
         </div>
     );
 }

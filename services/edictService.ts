@@ -219,11 +219,18 @@ export const linkGoalsToItem = async (
       const topic = discipline.topics.find(t => t.id === ids.topicId);
       if (topic) {
         if (ids.subtopicId) {
-          const subtopic = topic.subtopics.find(s => s.id === ids.subtopicId);
-          if (subtopic) {
-            targetGoals = subtopic.linkedGoals;
-            targetItem = subtopic;
-          }
+          const findTarget = (subs: EdictSubtopic[]): boolean => {
+            for (const sub of subs) {
+              if (sub.id === ids.subtopicId) {
+                targetGoals = sub.linkedGoals;
+                targetItem = sub;
+                return true;
+              }
+              if (sub.subtopics && findTarget(sub.subtopics)) return true;
+            }
+            return false;
+          };
+          findTarget(topic.subtopics);
         } else {
           targetGoals = topic.linkedGoals;
           targetItem = topic;
@@ -267,11 +274,18 @@ export const unlinkGoalFromItem = async (
       const topic = discipline.topics.find(t => t.id === ids.topicId);
       if (topic) {
         if (ids.subtopicId) {
-          const subtopic = topic.subtopics.find(s => s.id === ids.subtopicId);
-          if (subtopic) {
-            targetGoals = subtopic.linkedGoals;
-            targetItem = subtopic;
-          }
+          const findTarget = (subs: EdictSubtopic[]): boolean => {
+            for (const sub of subs) {
+              if (sub.id === ids.subtopicId) {
+                targetGoals = sub.linkedGoals;
+                targetItem = sub;
+                return true;
+              }
+              if (sub.subtopics && findTarget(sub.subtopics)) return true;
+            }
+            return false;
+          };
+          findTarget(topic.subtopics);
         } else {
           targetGoals = topic.linkedGoals;
           targetItem = topic;
@@ -327,13 +341,20 @@ export const addEdictTopic = async (planId: string, disciplineId: string, name: 
   return newTopic;
 };
 
-export const addEdictSubtopic = async (planId: string, disciplineId: string, topicId: string, name: string, observation?: string) => {
+export const addEdictSubtopic = async (
+  planId: string, 
+  disciplineId: string, 
+  topicId: string, 
+  name: string, 
+  observation?: string,
+  parentSubtopicId?: string
+) => {
   const structure = await getEdict(planId);
   const discipline = structure.disciplines.find(d => d.id === disciplineId);
   if (!discipline) throw new Error("Disciplina não encontrada");
 
-  const topicIndex = discipline.topics.findIndex(t => t.id === topicId);
-  if (topicIndex === -1) throw new Error("Tópico não encontrado");
+  const topic = discipline.topics.find(t => t.id === topicId);
+  if (!topic) throw new Error("Tópico não encontrado");
 
   const newSubtopic: EdictSubtopic = {
     id: crypto.randomUUID(),
@@ -343,8 +364,29 @@ export const addEdictSubtopic = async (planId: string, disciplineId: string, top
     studyLevelId: null,
     observation: observation || ""
   };
-  discipline.topics[topicIndex].subtopics.push(newSubtopic);
-  discipline.topics[topicIndex].collapsed = false; // Auto-expand
+
+  if (parentSubtopicId) {
+    // Find parent subtopic recursively
+    const findAndAdd = (subs: EdictSubtopic[]): boolean => {
+      for (const sub of subs) {
+        if (sub.id === parentSubtopicId) {
+          if (!sub.subtopics) sub.subtopics = [];
+          sub.subtopics.push(newSubtopic);
+          return true;
+        }
+        if (sub.subtopics && findAndAdd(sub.subtopics)) return true;
+      }
+      return false;
+    };
+
+    if (!findAndAdd(topic.subtopics)) {
+      throw new Error("Subtópico pai não encontrado");
+    }
+  } else {
+    topic.subtopics.push(newSubtopic);
+  }
+
+  topic.collapsed = false; // Auto-expand
   await saveEdictStructure(planId, structure);
   return newSubtopic;
 };
@@ -364,7 +406,18 @@ export const deleteEdictItem = async (
     const discipline = structure.disciplines.find(d => d.id === ids.disciplineId);
     if (discipline) {
       const topic = discipline.topics.find(t => t.id === ids.topicId);
-      if (topic) topic.subtopics = topic.subtopics.filter(s => s.id !== ids.subtopicId);
+      if (topic) {
+        const recursiveDelete = (subs: EdictSubtopic[]): EdictSubtopic[] => {
+          const filtered = subs.filter(s => s.id !== ids.subtopicId);
+          if (filtered.length < subs.length) return filtered; // Found and deleted
+          
+          return subs.map(s => ({
+            ...s,
+            subtopics: s.subtopics ? recursiveDelete(s.subtopics) : []
+          }));
+        };
+        topic.subtopics = recursiveDelete(topic.subtopics);
+      }
     }
   }
   await saveEdictStructure(planId, structure);
@@ -392,11 +445,18 @@ export const updateEdictItem = async (
   } else if (type === 'subtopic' && ids.topicId && ids.subtopicId) {
     const topic = discipline.topics.find(t => t.id === ids.topicId);
     if (topic) {
-      const sub = topic.subtopics.find(s => s.id === ids.subtopicId);
-      if (sub) {
-        if (updates.name !== undefined) sub.name = updates.name;
-        if (updates.observation !== undefined) sub.observation = updates.observation;
-      }
+      const findAndUpdate = (subs: EdictSubtopic[]): boolean => {
+        for (const sub of subs) {
+          if (sub.id === ids.subtopicId) {
+            if (updates.name !== undefined) sub.name = updates.name;
+            if (updates.observation !== undefined) sub.observation = updates.observation;
+            return true;
+          }
+          if (sub.subtopics && findAndUpdate(sub.subtopics)) return true;
+        }
+        return false;
+      };
+      findAndUpdate(topic.subtopics);
     }
   }
   await saveEdictStructure(planId, structure);

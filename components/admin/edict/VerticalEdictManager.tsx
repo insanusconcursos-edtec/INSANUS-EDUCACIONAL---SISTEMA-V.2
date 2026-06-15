@@ -23,6 +23,7 @@ import {
   updateEdictItem,
   EdictStructure,
   EdictTopic,
+  EdictSubtopic,
   EdictDiscipline
 } from '../../../services/edictService';
 import { deepCloneSafe } from '../../../services/firestoreUtils';
@@ -267,13 +268,14 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     }
   };
 
-  const handleAddSubtopic = async (disciplineId: string, topicId: string) => {
+  const handleAddSubtopic = async (disciplineId: string, topicId: string, parentSubtopicId?: string) => {
     if (!plan.id) return;
     const name = "Novo Subtópico";
     try {
-      await addEdictSubtopic(plan.id, disciplineId, topicId, name);
-      if (!expandedItems.includes(topicId)) {
-        setExpandedItems(prev => [...prev, topicId]);
+      await addEdictSubtopic(plan.id, disciplineId, topicId, name, undefined, parentSubtopicId);
+      const expandId = parentSubtopicId || topicId;
+      if (!expandedItems.includes(expandId)) {
+        setExpandedItems(prev => [...prev, expandId]);
       }
       await loadEdictData();
     } catch (error) {
@@ -349,8 +351,17 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
           } else if (type === 'subtopic' && ids.topicId && ids.subtopicId) {
             const topic = disc.topics.find(t => t.id === ids.topicId);
             if (topic) {
-              const sub = topic.subtopics.find(s => s.id === ids.subtopicId);
-              if (sub) sub.name = newName;
+              const findAndRename = (subs: EdictSubtopic[]): boolean => {
+                for (const sub of subs) {
+                  if (sub.id === ids.subtopicId) {
+                    sub.name = newName;
+                    return true;
+                  }
+                  if (sub.subtopics && findAndRename(sub.subtopics)) return true;
+                }
+                return false;
+              };
+              findAndRename(topic.subtopics);
             }
           }
         }
@@ -394,8 +405,17 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
           } else if (type === 'subtopic' && ids.topicId && ids.subtopicId) {
             const topic = disc.topics.find(t => t.id === ids.topicId);
             if (topic) {
-              const sub = topic.subtopics.find(s => s.id === ids.subtopicId);
-              if (sub) sub.observation = newObservation;
+              const findAndUpdateObs = (subs: EdictSubtopic[]): boolean => {
+                for (const sub of subs) {
+                  if (sub.id === ids.subtopicId) {
+                    sub.observation = newObservation;
+                    return true;
+                  }
+                  if (sub.subtopics && findAndUpdateObs(sub.subtopics)) return true;
+                }
+                return false;
+              };
+              findAndUpdateObs(topic.subtopics);
             }
           }
         }
@@ -426,7 +446,20 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     } else if (type === 'subtopic' && ids.topicId) {
       const disc = newStructure.disciplines.find(d => d.id === ids.disciplineId);
       const topic = disc?.topics.find(t => t.id === ids.topicId);
-      if (topic) itemsArray = topic.subtopics;
+      if (topic) {
+        // Recursive find parent array containing the item to move
+        const findParentArray = (subs: EdictSubtopic[]): EdictSubtopic[] | null => {
+            if (subs.some(s => s.id === itemId)) return subs;
+            for (const sub of subs) {
+                if (sub.subtopics) {
+                    const found = findParentArray(sub.subtopics);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        itemsArray = findParentArray(topic.subtopics) || [];
+      }
     }
 
     if (itemsArray.length === 0) return;
@@ -476,7 +509,17 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     } else if (type === 'subtopic' && ids.subtopicId) {
       const topic = disc.topics.find((t: any) => t.id === ids.topicId);
       if (topic) {
-        item = topic.subtopics.find((s: any) => s.id === ids.subtopicId);
+        const findItem = (subs: EdictSubtopic[]): EdictSubtopic | null => {
+            for (const sub of subs) {
+                if (sub.id === ids.subtopicId) return sub;
+                if (sub.subtopics) {
+                    const found = findItem(sub.subtopics);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        item = findItem(topic.subtopics);
       }
     }
 
@@ -535,6 +578,45 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
 
   // === RENDER ===
 
+  const renderSubtopics = (
+    subs: EdictSubtopic[], 
+    disciplineId: string, 
+    topicId: string, 
+    parentNumbering?: string
+  ) => {
+    return subs.map((sub, sIndex) => {
+      const cleanParentNumbering = parentNumbering?.endsWith('.') ? parentNumbering.slice(0, -1) : parentNumbering;
+      const subNumbering = cleanParentNumbering ? `${cleanParentNumbering}.${sIndex + 1}.` : `${sIndex + 1}.`;
+      return (
+        <VerticalEdictItem
+          key={sub.id}
+          id={sub.id}
+          name={sub.name}
+          type="subtopic"
+          numbering={subNumbering}
+          linkedGoals={sub.linkedGoals}
+          metaLookup={metaLookup}
+          metasOrder={sub.metasOrder}
+          isExpanded={expandedItems.includes(sub.id)}
+          onToggleExpand={() => toggleExpand(sub.id)}
+          onMoveGoal={(goalId, direction) => handleMoveGoal('subtopic', { disciplineId, topicId, subtopicId: sub.id }, goalId, direction)}
+          onRename={(newName) => handleRename('subtopic', { disciplineId, topicId, subtopicId: sub.id }, newName)}
+          onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId, topicId, subtopicId: sub.id }, newObs)}
+          onDelete={() => requestDelete('subtopic', { disciplineId, topicId, subtopicId: sub.id }, sub.name)}
+          onMove={(dir) => handleMove('subtopic', { disciplineId, topicId }, sub.id, dir)}
+          onLinkGoals={() => openLinkModal({ disciplineId, topicId, subtopicId: sub.id }, sub.name)}
+          onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId, topicId, subtopicId: sub.id }, goalId, type)}
+          onAddChild={() => handleAddSubtopic(disciplineId, topicId, sub.id)}
+          isFirst={sIndex === 0}
+          isLast={sIndex === subs.length - 1}
+          observation={sub.observation}
+        >
+          {sub.subtopics && sub.subtopics.length > 0 && renderSubtopics(sub.subtopics, disciplineId, topicId, subNumbering)}
+        </VerticalEdictItem>
+      );
+    });
+  };
+
   const renderTopicItem = (
     topic: EdictTopic, 
     discipline: EdictDiscipline, 
@@ -548,7 +630,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
     handleRename: (type: 'topic', ids: any, name: string) => void, 
     handleUpdateObservation: (type: 'topic'|'subtopic', ids: any, obs: string) => void, 
     requestDelete: (type: 'topic', ids: any, name: string) => void, 
-    handleAddSubtopic: (d: string, t: string) => void, 
+    handleAddSubtopic: (d: string, t: string, ps?: string) => void, 
     handleMove: (type: 'topic', ids: any, i: string, dir: 'up'|'down') => void, 
     openLinkModal: (ids: any, name: string) => void, 
     handleUnlinkGoal: (ids: any, goalId: string, type: MetaType) => void,
@@ -584,31 +666,7 @@ const VerticalEdictManager: React.FC<VerticalEdictManagerProps> = ({ plan, onUpd
       observation={topic.observation}
     >
       {/* SUBTÓPICOS */}
-      {topic.subtopics.map((sub, sIndex) => {
-        const subNumbering = numbering ? `${numbering.replace('.', '')}.${sIndex + 1}` : `${sIndex + 1}`;
-        return (
-          <VerticalEdictItem
-            key={sub.id}
-            id={sub.id}
-            name={sub.name}
-            type="subtopic"
-            numbering={subNumbering}
-            linkedGoals={sub.linkedGoals}
-            metaLookup={metaLookup}
-            metasOrder={sub.metasOrder}
-            onMoveGoal={(goalId, direction) => handleMoveGoal('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, direction)}
-            onRename={(newName) => handleRename('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newName)}
-            onUpdateObservation={(newObs) => handleUpdateObservation('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, newObs)}
-            onDelete={() => requestDelete('subtopic', { disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-            onMove={(dir) => handleMove('subtopic', { disciplineId: discipline.id, topicId: topic.id }, sub.id, dir)}
-            onLinkGoals={() => openLinkModal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, sub.name)}
-            onUnlinkGoal={(goalId, type) => handleUnlinkGoal({ disciplineId: discipline.id, topicId: topic.id, subtopicId: sub.id }, goalId, type)}
-            isFirst={sIndex === 0}
-            isLast={sIndex === topic.subtopics.length - 1}
-            observation={sub.observation}
-          />
-        );
-      })}
+      {renderSubtopics(topic.subtopics, discipline.id, topic.id, numbering)}
     </VerticalEdictItem>
   );
 

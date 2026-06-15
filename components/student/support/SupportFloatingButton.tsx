@@ -44,7 +44,7 @@ export const SupportFloatingButton: React.FC<SupportFloatingButtonProps> = ({ pr
     <>
       <div 
         className={`fixed right-1 z-[9999] flex flex-col items-end gap-3 transition-all duration-500 ease-in-out ${
-          isTimerActive ? 'bottom-52' : 'bottom-1'
+          isTimerActive ? 'bottom-72' : 'bottom-1'
         } ${!isHovered ? 'opacity-40' : 'opacity-100'}`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

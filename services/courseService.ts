@@ -1,6 +1,6 @@
 
 import { db, storage } from './firebase';
-import { sanitizeData } from './firestoreUtils';
+import { sanitizeData, deepCloneSafe } from './firestoreUtils';
 import { 
   collection, 
   addDoc, 
@@ -277,7 +277,7 @@ export const courseService = {
             const newEditalRef = doc(db, EDITAL_COLLECTION, newCourseRef.id);
             
             // Clonagem profunda do edital
-            const newEditalData: CourseEditalStructure = JSON.parse(JSON.stringify(edital));
+            const newEditalData: CourseEditalStructure = deepCloneSafe(edital);
             newEditalData.courseId = newCourseRef.id;
             newEditalData.updatedAt = serverTimestamp();
 

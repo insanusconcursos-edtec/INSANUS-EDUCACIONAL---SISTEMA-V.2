@@ -214,7 +214,7 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
         
         {/* Esquerda: Expander + Nome */}
         <div className="flex items-center gap-2 flex-1 overflow-hidden">
-          {type !== 'subtopic' && (
+          {(type !== 'subtopic' || (children)) && (
             <button 
               onClick={onToggleExpand}
               className="p-1 text-zinc-500 hover:text-white transition-colors"
@@ -359,7 +359,7 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
       </div>
 
       {/* Linked Metas List */}
-      {(isExpanded || type === 'subtopic') && (
+      {isExpanded && (
         <div className="px-3 pb-2">
           {/* Observation Editor/Viewer */}
           {(isEditingObservation || (observation && observation !== '<p><br></p>' && observation !== '')) && (
@@ -423,7 +423,7 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
       )}
 
       {/* Renderização dos Filhos */}
-      {(isExpanded || type === 'subtopic') && children && (
+      {isExpanded && children && (
         <div className={type === 'discipline' ? 'p-2 pt-0' : ''}>
           {children}
         </div>
