@@ -794,18 +794,6 @@ const CoproductionDashboard: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* Payout Button */}
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowPayoutModal(true)}
-              disabled={!balance?.available || balance.available <= 0 || loadingBalance || requestingPayout}
-              className="w-full lg:w-auto px-8 py-3.5 bg-green-400 hover:bg-green-500 disabled:opacity-30 disabled:hover:bg-green-400 text-black font-black uppercase text-[11px] tracking-[0.2em] rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-400/20 active:scale-95"
-            >
-              <Wallet className="w-4 h-4" />
-              SACAR AGORA
-            </motion.button>
           </div>
         </div>
 
