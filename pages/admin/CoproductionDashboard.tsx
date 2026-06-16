@@ -564,6 +564,37 @@ const CoproductionDashboard: React.FC = () => {
     });
     const allTimeTotal = allTimeComms.reduce((acc, c) => acc + (Number(c.commissionValue) || 0), 0);
 
+    const now = new Date();
+    const todayNum = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    // Início da Semana
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const weekTime = startOfWeek.getTime();
+
+    // Início do Mês Atual
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    // Período do Mês Passado
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).getTime();
+
+    let totalToday = 0;
+    let totalWeek = 0;
+    let totalMonth = 0;
+    let totalLastMonth = 0;
+
+    allTimeComms.forEach(comm => {
+      const time = new Date(comm.createdAt).getTime();
+      const val = Number(comm.commissionValue) || 0;
+      
+      if (time >= todayNum) totalToday += val;
+      if (time >= weekTime) totalWeek += val;
+      if (time >= startOfMonth) totalMonth += val;
+      if (time >= startOfLastMonth && time <= endOfLastMonth) totalLastMonth += val;
+    });
+
     // Current period
     const relevantComms = commissions.filter(c => {
       const matchProduct = selectedProductId === 'all' || c.courseId === selectedProductId;
@@ -596,10 +627,15 @@ const CoproductionDashboard: React.FC = () => {
     return {
       total: total / 100,
       allTimeTotal: allTimeTotal / 100,
+      totalToday: totalToday / 100,
+      totalWeek: totalWeek / 100,
+      totalMonth: totalMonth / 100,
+      totalLastMonth: totalLastMonth / 100,
       count,
       uniqueCoproducers,
       uniqueProducts,
-      growth
+      growth,
+      allTimeCount: allTimeComms.length
     };
   }, [commissions, selectedProductId, dateFilter]);
 
@@ -797,93 +833,93 @@ const CoproductionDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Saldo Disponível */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-[#111] p-6 rounded-xl border border-[#222] relative overflow-hidden group hover:border-green-400/30 transition-colors"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-green-400/10 rounded-lg">
-                <Wallet className="w-5 h-5 text-green-400" />
+        {/* Account Info Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { 
+              label: 'SALDO DISPONÍVEL', 
+              value: (balance?.available || 0) / 100, 
+              icon: Wallet, 
+              color: 'text-green-400',
+              isLoading: loadingBalance,
+              secondaryLabel: !userProfile?.pagarmeRecipientId ? 'ID NÃO CONFIGURADO' : balance?.recipient_name ? `PAGAR.ME: ${balance.recipient_name.toUpperCase()}` : `RECIPIENTE: ${userProfile.pagarmeRecipientId}`
+            },
+            { 
+              label: 'A RECEBER', 
+              value: (balance?.waiting_funds || 0) / 100, 
+              icon: Lock, 
+              color: 'text-amber-400',
+              isLoading: loadingBalance 
+            },
+            { 
+              label: 'TOTAL SACADO (BAIXADO)', 
+              value: ((balance as any)?.transferred || 0) / 100, 
+              icon: ArrowRightCircle, 
+              color: 'text-blue-400',
+              isLoading: loadingBalance 
+            },
+          ].map((item, i) => (
+            <div key={i} className="bg-[#111] p-5 rounded-xl border border-[#222] relative overflow-hidden group hover:border-[#333] transition-colors">
+              <div className="flex justify-between items-start mb-2">
+                <div className={`p-1.5 rounded-lg ${
+                  item.label === 'A RECEBER' ? 'bg-amber-400/10' : 
+                  item.label === 'TOTAL SACADO (BAIXADO)' ? 'bg-blue-400/10' : 
+                  'bg-green-400/10'
+                }`}>
+                  <item.icon size={16} className={
+                    item.label === 'A RECEBER' ? 'text-amber-400' : 
+                    item.label === 'TOTAL SACADO (BAIXADO)' ? 'text-blue-400' : 
+                    'text-green-400'
+                  } />
+                </div>
               </div>
+              <p className="text-[9px] text-gray-500 font-black tracking-widest uppercase mb-1">{item.label}</p>
+              <h3 className={`text-xl font-black tracking-tighter ${item.color}`}>
+                {item.isLoading ? (
+                  <span className="text-xs font-medium animate-pulse text-gray-600">Sincronizando...</span>
+                ) : (
+                  formatCurrency(item.value)
+                )}
+              </h3>
+              {item.secondaryLabel && (
+                <p className="text-[8px] text-gray-600 font-bold uppercase mt-1 truncate">{item.secondaryLabel}</p>
+              )}
             </div>
-            <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">Saldo Disponível</p>
-            <h3 className="text-2xl font-black text-green-400 tracking-tighter">
-              {loadingBalance ? (
-                <span className="text-xs font-medium animate-pulse text-gray-500">Sincronizando...</span>
-              ) : !userProfile?.pagarmeRecipientId ? (
-                <span className="text-xs font-medium text-red-500/50">Configure seu ID</span>
-              ) : formatCurrency((balance?.available || 0) / 100)}
-            </h3>
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-               <Wallet className="w-24 h-24" />
-            </div>
-          </motion.div>
+          ))}
+        </div>
 
-          {/* Card 2: A Receber */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="bg-[#111] p-6 rounded-xl border border-[#222] relative overflow-hidden group hover:border-amber-400/30 transition-colors"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-amber-400/10 rounded-lg">
-                <Lock className="w-5 h-5 text-amber-400" />
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">A Receber</p>
-            <h3 className="text-2xl font-black text-amber-400 tracking-tighter">
-              {loadingBalance ? (
-                <span className="text-xs font-medium animate-pulse text-gray-500">Calculando...</span>
-              ) : !userProfile?.pagarmeRecipientId ? (
-                <span className="text-xs font-medium text-red-500/50">Configure seu ID</span>
-              ) : formatCurrency((balance?.waiting_funds || 0) / 100)}
-            </h3>
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-               <Lock className="w-24 h-24" />
-            </div>
-          </motion.div>
-
-          {/* Card 3: Sacado (Transferred) */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-[#111] p-6 rounded-xl border border-[#222] relative overflow-hidden group hover:border-blue-400/30 transition-colors"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-blue-400/10 rounded-lg">
-                <ArrowRightCircle className="w-5 h-5 text-blue-400" />
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">Total Sacado (Baixado)</p>
-            <h3 className="text-2xl font-black text-white tracking-tighter">
-              {loadingBalance ? (
-                <span className="text-xs font-medium animate-pulse text-gray-500">Buscando...</span>
-              ) : formatCurrency(((balance as any)?.transferred || 0) / 100)}
-            </h3>
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-               <ArrowRightCircle className="w-24 h-24" />
-            </div>
-          </motion.div>
-
-          {/* Card 4: Comissão Total */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="bg-[#111] p-6 rounded-xl border border-[#222] relative overflow-hidden group hover:border-green-400/30 transition-colors"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-green-400/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-green-400" />
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase mb-1">Comissão Acumulada</p>
-            <h3 className="text-2xl font-black text-green-400 tracking-tighter">
-              {formatCurrency(globalStats.allTimeTotal)}
-            </h3>
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-               <DollarSign className="w-24 h-24" />
-            </div>
-          </motion.div>
+        {/* Performance Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: 'Hoje', value: globalStats.totalToday, icon: Clock, color: 'text-emerald-400' },
+            { label: 'Semana', value: globalStats.totalWeek, icon: Calendar, color: 'text-emerald-400' },
+            { label: 'Mês Atual', value: globalStats.totalMonth, icon: TrendingUp, color: 'text-emerald-400' },
+            { label: 'Mês Passado', value: globalStats.totalLastMonth, icon: TrendingUp, color: 'text-gray-400' },
+            { label: 'Acumulado Total', value: globalStats.allTimeTotal, icon: DollarSign, color: 'text-green-400' },
+          ].map((item, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className={`bg-[#0a0a0a] p-4 rounded-xl border border-[#222]/50 relative group hover:bg-[#111] transition-all ${
+                item.label === 'Mês Passado' ? 'bg-zinc-900/10' : 'bg-green-500/[0.02]'
+              }`}
+            >
+              <p className="text-[8px] text-gray-500 font-black tracking-widest uppercase mb-2 flex items-center gap-2">
+                <item.icon size={10} className="text-gray-600" />
+                {item.label}
+              </p>
+              <h4 className={`text-lg font-black tracking-tighter ${item.color}`}>
+                {formatCurrency(item.value)}
+              </h4>
+              {item.label === 'Mês Atual' && globalStats.totalLastMonth > 0 && (
+                <div className={`text-[8px] font-black mt-1 uppercase flex items-center gap-1 ${globalStats.totalMonth >= globalStats.totalLastMonth ? 'text-green-500' : 'text-red-500'}`}>
+                  {globalStats.totalMonth >= globalStats.totalLastMonth ? '↑ Crescimento' : '↓ Queda'}
+                </div>
+              )}
+            </motion.div>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 gap-8">
