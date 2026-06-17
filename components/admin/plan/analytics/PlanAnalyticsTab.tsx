@@ -13,6 +13,8 @@ import {
   Target,
   X,
   ListTodo,
+  RefreshCw,
+  Loader2,
   BookOpen,
   Check,
   Layout,
@@ -37,12 +39,15 @@ import { getStudents, Student } from '../../../../services/userService';
 import { getEdict, EdictStructure } from '../../../../services/edictService';
 import { getAllPlanMetas, Meta } from '../../../../services/metaService';
 import { useEditalProgress } from '../../../../hooks/useEditalProgress';
-import { collection, getDocs, query, where, documentId, doc, getDoc, setDoc, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, documentId, doc, getDoc, setDoc, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../../../services/firebase';
 import { toPlainObject } from '../../../../services/firestoreUtils';
 import { StudyCalendar } from '../../../../components/student/calendar/StudyCalendar';
 import WeeklyPlannerModal, { RoutineTemplate } from '../../../../components/student/config/WeeklyPlannerModal';
 import DisciplineItem from '../../../../components/student/edital/DisciplineItem';
+import { StudentGoalCard, StudentGoal } from '../../../../components/student/StudentGoalCard';
+import { scheduleService, rescheduleOverdueTasks, getLocalDataString, getStudentCompletedMetas } from '../../../../services/scheduleService';
+import { getStudentConfig } from '../../../../services/studentService';
 import Loading from '../../../ui/Loading';
 import { updateStudent } from '../../../../services/userService';
 import { motion, AnimatePresence } from 'motion/react';
@@ -99,7 +104,7 @@ interface PlanAnalyticsTabProps {
 }
 
 type ViewState = 'STUDENTS' | 'STUDENT_DASHBOARD' | 'ATTEMPT_DETAIL';
-type SubTab = 'SIMULADOS' | 'SCHEDULE' | 'EDITAL' | 'ROUTINE';
+type SubTab = 'SIMULADOS' | 'SCHEDULE' | 'EDITAL' | 'ROUTINE' | 'TODAY';
 
 export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, linkedSimuladoClassId }) => {
   const [view, setView] = useState<ViewState>('STUDENTS');
@@ -125,12 +130,209 @@ export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, link
   const [chartMode, setChartMode] = useState<'quantity' | 'percentage' | 'autodiagnosis'>('quantity');
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
   const [isManageBlockedDisciplinesOpen, setIsManageBlockedDisciplinesOpen] = useState(false);
+  const [todayGoals, setTodayGoals] = useState<StudentGoal[]>([]);
+  const [overdueGoals, setOverdueGoals] = useState<StudentGoal[]>([]);
+  const [isRescheduling, setIsRescheduling] = useState(false);
 
-  // NOVO: Garantir que o selectedStudent reflita os dados em tempo real da lista allStudents
   const activeStudent = useMemo(() => {
     if (!selectedStudent) return null;
     return allStudents.find(s => s.uid === selectedStudent.uid) || selectedStudent;
   }, [allStudents, selectedStudent]);
+
+  // Fetch Today's and Overdue Goals when subTab is 'TODAY'
+  useEffect(() => {
+    if (subTab === 'TODAY' && activeStudent) {
+      const fetchGoals = async () => {
+        setLoading(true);
+        try {
+          const todayStr = getLocalDataString(new Date());
+          
+          // 1. Fetch Completed Meta IDs (Source of Truth Progress)
+          const completedMetaIds = await getStudentCompletedMetas(activeStudent.uid, planId);
+          
+          // 2. Fetch Today's Goals
+          const schedulesRef = collection(db, 'users', activeStudent.uid, 'schedules');
+          const todayDocRef = doc(schedulesRef, todayStr);
+          const todaySnap = await getDoc(todayDocRef);
+          
+          let mappedToday: StudentGoal[] = [];
+          if (todaySnap.exists()) {
+            const data = todaySnap.data();
+            const items = (data.items || []) as any[];
+            mappedToday = items
+              .filter(item => !planId || item.planId === planId)
+              .map(item => {
+                const canonicalId = String(item.metaId || item.taskId || item.id).trim();
+                const isCompleted = item.status === 'completed' || item.completed === true || completedMetaIds.has(canonicalId);
+                
+                return {
+                  ...item,
+                  id: item.id || `${todayStr}-${canonicalId}`,
+                  isCompleted: isCompleted,
+                  status: isCompleted ? 'completed' : 'pending',
+                  discipline: item.disciplineName || item.discipline || 'Geral',
+                  topic: item.topicName || item.topic || 'Geral',
+                  date: todayStr
+                };
+              });
+          }
+          setTodayGoals(mappedToday);
+
+          // 3. Fetch Overdue Goals (Match student dashboard filtering)
+          const overdue: StudentGoal[] = [];
+          
+          // Query past schedules chronologically (up to 60 days)
+          const qOverdue = query(
+            schedulesRef, 
+            where('date', '<', todayStr),
+            orderBy('date', 'desc'),
+            limit(60)
+          );
+          
+          const snapOverdue = await getDocs(qOverdue);
+          snapOverdue.docs.forEach(snap => {
+            const data = snap.data();
+            const items = (data.items || []) as any[];
+            const docDate = data.date;
+
+            items.forEach(item => {
+              if (!planId || item.planId === planId) {
+                const canonicalId = String(item.metaId || item.taskId || item.id).trim();
+                
+                // CRITICAL: Filter exactly as the student dashboard does (via getDashboardData)
+                // If it's already marked COMPLETED in the schedule document, it's not "delayed" anymore.
+                const isPendingInSchedule = item.status === 'pending';
+                
+                // Detecção de Estudo Livre
+                const typeUpper = String(item.type || '').toUpperCase();
+                const titleUpper = String(item.title || '').toUpperCase();
+                const discUpper = String(item.disciplineName || item.discipline || '').toUpperCase();
+                const topicUpper = String(item.topicName || item.topic || item.subject || '').toUpperCase();
+                const isFreeStudy = typeUpper === 'FREE_STUDY' || titleUpper === 'ESTUDO LIVRE' || discUpper === 'ESTUDO LIVRE' || topicUpper === 'ESTUDO LIVRE' || item.isFreeStudy;
+
+                // Rule: Past items are only "Overdue" if they are still pending in the schedule, NOT Free Study, AND NOT yet completed in edital progress
+                const isCompletedInEdital = completedMetaIds.has(canonicalId);
+                
+                if (isPendingInSchedule && !isFreeStudy && !isCompletedInEdital) {
+                  overdue.push({
+                    ...item,
+                    id: item.id || `${docDate}-${canonicalId}`,
+                    isCompleted: false,
+                    status: 'pending',
+                    discipline: item.disciplineName || item.discipline || 'Geral',
+                    topic: item.topicName || item.topic || 'Geral',
+                    date: docDate,
+                    isFreeStudy
+                  });
+                }
+              }
+            });
+          });
+          
+          setOverdueGoals(overdue);
+
+        } catch (error) {
+          console.error("Error fetching goals for admin:", error);
+          toast.error("Erro ao carregar metas");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchGoals();
+    }
+  }, [subTab, activeStudent, planId]);
+
+  const handleToggleGoalCompleteFromAdmin = async (goal: StudentGoal) => {
+    if (!activeStudent || !planId) return;
+    
+    const newValue = !goal.isCompleted;
+    const goalDateStr = (goal as any).date || getLocalDataString(new Date()); 
+    const canonicalId = String(goal.metaId || goal.taskId || goal.id).trim();
+    
+    try {
+      // 1. Update Schedule Document
+      const scheduleRef = doc(db, 'users', activeStudent.uid, 'schedules', goalDateStr);
+      const scheduleSnap = await getDoc(scheduleRef);
+      
+      if (scheduleSnap.exists()) {
+        const items = scheduleSnap.data().items as any[];
+        const updatedItems = items.map(item => {
+          const itemCanonicalId = String(item.metaId || item.taskId || item.id).trim();
+          const isMatch = item.id === goal.id || itemCanonicalId === canonicalId;
+          
+          if (isMatch) {
+            return { 
+              ...item, 
+              status: newValue ? 'completed' : 'pending',
+              completed: newValue
+            };
+          }
+          return item;
+        });
+        
+        await setDoc(scheduleRef, { items: updatedItems }, { merge: true });
+      }
+
+      // 2. Update Edital Progress (Source of Truth Sync)
+      const progressRef = doc(db, `users/${activeStudent.uid}/plans/${planId}/edital_progress`, canonicalId);
+      await setDoc(progressRef, { 
+        metaId: canonicalId,
+        completed: newValue, 
+        status: newValue ? 'completed' : 'pending',
+        completedAt: newValue ? new Date().toISOString() : null,
+        manuallyCompleted: true,
+        updatedByAdmin: true
+      }, { merge: true });
+      
+      // 3. Update local state
+      setTodayGoals(prev => prev.map(g => {
+        const gCanonicalId = String(g.metaId || g.taskId || g.id).trim();
+        return (g.id === goal.id || gCanonicalId === canonicalId) ? { ...g, isCompleted: newValue, status: newValue ? 'completed' : 'pending' } : g;
+      }));
+      setOverdueGoals(prev => prev.map(g => {
+        const gCanonicalId = String(g.metaId || g.taskId || g.id).trim();
+        return (g.id === goal.id || gCanonicalId === canonicalId) ? { ...g, isCompleted: newValue, status: newValue ? 'completed' : 'pending' } : g;
+      }));
+      
+      toast.success(newValue ? 'Meta concluída!' : 'Meta reaberta!');
+    } catch (error) {
+      console.error("Error toggling goal status from admin:", error);
+      toast.error("Erro ao atualizar status da meta");
+    }
+  };
+
+  const handleReplanDelays = async () => {
+    if (!activeStudent) return;
+    
+    setIsRescheduling(true);
+    try {
+      const config = await getStudentConfig(activeStudent.uid);
+      const routine = activeStudent.routine || config?.routine || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 0: 0 };
+      const studyProfile = activeStudent.studyProfile || config?.studyProfile || { level: 'beginner', semiActiveClass: false, semiActiveMaterial: false, semiActiveLaw: false };
+      
+      const result = await rescheduleOverdueTasks(
+        activeStudent.uid,
+        planId,
+        routine,
+        studyProfile
+      );
+      
+      if (result.success) {
+        toast.success(result.message);
+        // Refresh today goals if needed
+        if (subTab === 'TODAY') {
+          // Trigger a re-fetch by toggling a piece of state or just calling the fetch logic again
+          setSubTab('SCHEDULE');
+          setTimeout(() => setSubTab('TODAY'), 100);
+        }
+      }
+    } catch (error) {
+      console.error("Error rescheduling delays from admin:", error);
+      toast.error("Erro ao replanejar atrasos");
+    } finally {
+      setIsRescheduling(false);
+    }
+  };
 
   // Routine to sync levels for non-leveled students
   const handleSyncLevels = async () => {
@@ -291,6 +493,7 @@ export const PlanAnalyticsTab: React.FC<PlanAnalyticsTabProps> = ({ planId, link
     setSelectedStudent(student);
     setView('STUDENT_DASHBOARD');
     setSubTab('SIMULADOS');
+    setTodayGoals([]); // Reset today goals when changing student
     setLoading(true);
     try {
       // 1. Fetch Attempts
@@ -926,6 +1129,13 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                     <Clock size={14} />
                     PLANEJADOR DE ROTINA
                   </button>
+                  <button 
+                    onClick={() => setSubTab('TODAY')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all ${subTab === 'TODAY' ? 'bg-zinc-800 text-yellow-400 border border-zinc-700 shadow-xl' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    <ListTodo size={14} />
+                    METAS DO ALUNO
+                  </button>
                 </div>
 
                 <AnimatePresence mode="wait">
@@ -1107,6 +1317,91 @@ const StudentEditalReadOnly = ({ structure, completedIds, metaLookup }: { struct
                         targetUserId={activeStudent?.uid}
                         studentName={activeStudent?.name}
                       />
+                    </motion.div>
+                  )}
+
+                  {subTab === 'TODAY' && (
+                    <motion.div 
+                      key="today"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-8 pb-10"
+                    >
+                      <div className="flex items-center justify-between">
+                         <div>
+                            <h3 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-2">
+                              <Target size={20} className="text-yellow-400" />
+                              Metas do Aluno
+                            </h3>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
+                                {activeStudent?.name} • Visualização em tempo real
+                            </p>
+                         </div>
+
+                         <button 
+                           onClick={handleReplanDelays}
+                           disabled={isRescheduling}
+                           className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                         >
+                           {isRescheduling ? (
+                             <>
+                               <Loader2 size={14} className="animate-spin" />
+                               Replanejando...
+                             </>
+                           ) : (
+                             <>
+                               <RefreshCw size={14} />
+                               Replanejar Atrasos
+                             </>
+                           )}
+                         </button>
+                      </div>
+
+                      {/* Metas em Atraso */}
+                      {overdueGoals.length > 0 && (
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-black text-red-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                             <AlertCircle size={14} />
+                             Metas em Atraso ({overdueGoals.length})
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {overdueGoals.map((goal) => (
+                              <StudentGoalCard 
+                                key={goal.id} 
+                                goal={goal} 
+                                onToggleComplete={handleToggleGoalCompleteFromAdmin}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Metas de Hoje */}
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-black text-emerald-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                           <Calendar size={14} />
+                           Metas para Hoje ({todayGoals.length})
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {todayGoals.length === 0 ? (
+                            <div className="col-span-full py-12 bg-zinc-900/50 border-2 border-dashed border-zinc-800 rounded-3xl flex flex-col items-center justify-center text-center">
+                              <div className="mb-4 p-4 rounded-full bg-zinc-800 text-zinc-600">
+                                  <Check size={32} />
+                              </div>
+                              <h4 className="text-zinc-500 text-sm font-bold uppercase">Nenhuma meta agendada para hoje</h4>
+                            </div>
+                          ) : (
+                            todayGoals.map((goal) => (
+                              <StudentGoalCard 
+                                key={goal.id} 
+                                goal={goal} 
+                                onToggleComplete={handleToggleGoalCompleteFromAdmin}
+                              />
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>

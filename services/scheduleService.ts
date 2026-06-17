@@ -1043,12 +1043,15 @@ export const rescheduleOverdueTasks = async (
     const allPendingGoals: any[] = [];
 
     // 1. Captura todas as metas em atraso (não concluídas e data < hoje)
-    const overdueQuery = query(schedulesRef, where('date', '<', todayStr));
-    const overdueSnap = await getDocs(overdueQuery);
+    const [overdueSnap, completedMetaIds] = await Promise.all([
+      getDocs(query(schedulesRef, where('date', '<', todayStr))),
+      getStudentCompletedMetas(userId, planId)
+    ]);
 
     overdueSnap.docs.forEach(docSnap => {
       const data = docSnap.data();
-      const items = data.items || [];
+      const items = (data.items || []) as any[];
+      let documentChanged = false;
       
       const isFreeStudyCheck = (item: any) => {
         const typeUpper = String(item.type || '').toUpperCase();
@@ -1062,20 +1065,29 @@ export const rescheduleOverdueTasks = async (
                topicUpper === 'ESTUDO LIVRE';
       };
 
-      const isUncompletedOfThisPlan = (item: any) => {
-        return item.status !== 'pending' ? false : String(item.planId) === String(planId);
-      };
+      const itemsToKeep = items.map((item: any) => {
+        if (item.status === 'pending' && String(item.planId) === String(planId)) {
+          const canonicalId = String(item.metaId || item.taskId || item.id).trim();
+          
+          if (completedMetaIds.has(canonicalId)) {
+            // Already completed in edital progress -> Just update status in history
+            documentChanged = true;
+            return { ...item, status: 'completed' };
+          }
+          
+          // Still pending -> Move to future (except Free Study)
+          if (!isFreeStudyCheck(item)) {
+            allPendingGoals.push(item);
+          }
+          
+          // Remove from this historical document as it's been handled (moved or discarded if free study)
+          documentChanged = true;
+          return null;
+        }
+        return item;
+      }).filter(Boolean);
       
-      const uncompletedOfThisPlan = items.filter(isUncompletedOfThisPlan);
-      
-      if (uncompletedOfThisPlan.length > 0) {
-        // Só move para o futuro o que NÃO for Estudo Livre
-        const toMove = uncompletedOfThisPlan.filter(item => !isFreeStudyCheck(item));
-        allPendingGoals.push(...toMove);
-        
-        // Remove TODAS as pendentes deste plano (incluindo Estudo Livre) do documento do passado
-        const itemsToKeep = items.filter((item: any) => !isUncompletedOfThisPlan(item));
-
+      if (documentChanged) {
         if (itemsToKeep.length === 0) {
           batch.delete(docSnap.ref);
         } else {

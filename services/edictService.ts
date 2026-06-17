@@ -189,15 +189,27 @@ export const getAllLinkedGoalIds = (structure: EdictStructure): Set<string> => {
   const usedIds = new Set<string>();
   
   const collectFromGoals = (goals: EdictLinkedGoals) => {
-    Object.values(goals).flat().forEach(id => usedIds.add(id));
+    if (!goals) return;
+    Object.values(goals).flat().forEach(id => {
+      if (id) usedIds.add(id);
+    });
+  };
+
+  const collectRecursively = (subs: EdictSubtopic[]) => {
+    subs.forEach(s => {
+      if (s.linkedGoals) collectFromGoals(s.linkedGoals);
+      if (s.subtopics && s.subtopics.length > 0) {
+        collectRecursively(s.subtopics);
+      }
+    });
   };
 
   structure.disciplines.forEach(d => {
     d.topics.forEach(t => {
-      collectFromGoals(t.linkedGoals);
-      t.subtopics.forEach(s => {
-        collectFromGoals(s.linkedGoals);
-      });
+      if (t.linkedGoals) collectFromGoals(t.linkedGoals);
+      if (t.subtopics && t.subtopics.length > 0) {
+        collectRecursively(t.subtopics);
+      }
     });
   });
 

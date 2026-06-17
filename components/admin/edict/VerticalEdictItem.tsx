@@ -214,7 +214,7 @@ const VerticalEdictItem: React.FC<VerticalEdictItemProps> = ({
         
         {/* Esquerda: Expander + Nome */}
         <div className="flex items-center gap-2 flex-1 overflow-hidden">
-          {(type !== 'subtopic' || (children)) && (
+          {(type !== 'subtopic' || children || (linkedGoals && Object.values(linkedGoals).some(g => g && g.length > 0)) || (observation && observation !== '<p><br></p>' && observation !== '')) && (
             <button 
               onClick={onToggleExpand}
               className="p-1 text-zinc-500 hover:text-white transition-colors"
