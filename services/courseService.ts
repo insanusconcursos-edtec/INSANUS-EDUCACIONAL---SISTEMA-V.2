@@ -21,7 +21,7 @@ import {
   arrayUnion,
   arrayRemove
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { OnlineCourse, CourseFormData, CourseModule, CourseSubModule, CourseLesson, CourseContent, CourseStructureModule } from '../types/course';
 import { CourseEditalStructure } from '../types/courseEdital';
 
@@ -34,6 +34,19 @@ const CONTENTS_COLLECTION = 'course_contents';
 const EDITAL_COLLECTION = 'course_edital'; 
 
 export const courseService = {
+  // --- AUXILIARES ---
+  
+  safeDeleteStorageFile: async (url?: string) => {
+    if (!url || !url.includes('firebasestorage.googleapis.com')) return;
+    try {
+      const fileRef = ref(storage, url);
+      await deleteObject(fileRef);
+    } catch (error: any) {
+      if (error.code === 'storage/object-not-found') return;
+      console.warn("Erro ao deletar arquivo do storage:", error);
+    }
+  },
+
   // --- GRUPOS ---
 
   createGroup: async (data: Omit<CourseGroup, 'id'>) => {
@@ -172,6 +185,23 @@ export const courseService = {
   // Excluir curso
   deleteCourse: async (id: string) => {
     try {
+      // 1. Deletar módulos do curso
+      const modulesQuery = query(collection(db, MODULES_COLLECTION), where('courseId', '==', id));
+      const modulesSnap = await getDocs(modulesQuery);
+      const deleteModulesPromises = modulesSnap.docs.map(d => courseService.deleteModule(d.id));
+      await Promise.all(deleteModulesPromises);
+
+      // 2. Deletar ativos do curso (capas, banners)
+      const courseSnap = await getDoc(doc(db, COLLECTION_NAME, id));
+      if (courseSnap.exists()) {
+        const course = courseSnap.data() as OnlineCourse;
+        if (course.coverUrl) await courseService.safeDeleteStorageFile(course.coverUrl);
+        if (course.bannerUrlDesktop) await courseService.safeDeleteStorageFile(course.bannerUrlDesktop);
+        if (course.bannerUrlTablet) await courseService.safeDeleteStorageFile(course.bannerUrlTablet);
+        if (course.bannerUrlMobile) await courseService.safeDeleteStorageFile(course.bannerUrlMobile);
+        if (course.welcomeVideoUrl) await courseService.safeDeleteStorageFile(course.welcomeVideoUrl);
+      }
+
       await deleteDoc(doc(db, COLLECTION_NAME, id));
     } catch (error) {
       console.error("Erro ao excluir curso:", error);
@@ -430,6 +460,29 @@ export const courseService = {
 
   deleteModule: async (moduleId: string) => {
     try {
+      // 1. Deletar pastas (submódulos) deste módulo
+      const subModulesQuery = query(collection(db, SUBMODULES_COLLECTION), where('moduleId', '==', moduleId));
+      const subModulesSnap = await getDocs(subModulesQuery);
+      const deleteSubModulesPromises = subModulesSnap.docs.map(d => courseService.deleteSubModule(d.id));
+      await Promise.all(deleteSubModulesPromises);
+
+      // 2. Deletar aulas soltas (sem pasta) deste módulo
+      const looseLessonsQuery = query(
+        collection(db, LESSONS_COLLECTION), 
+        where('moduleId', '==', moduleId),
+        where('subModuleId', '==', null)
+      );
+      const looseLessonsSnap = await getDocs(looseLessonsQuery);
+      const deleteLooseLessonsPromises = looseLessonsSnap.docs.map(d => courseService.deleteLesson(d.id));
+      await Promise.all(deleteLooseLessonsPromises);
+
+      // 3. Deletar capa do módulo
+      const modSnap = await getDoc(doc(db, MODULES_COLLECTION, moduleId));
+      if (modSnap.exists()) {
+        const mod = modSnap.data() as CourseModule;
+        if (mod.coverUrl) await courseService.safeDeleteStorageFile(mod.coverUrl);
+      }
+
       await deleteDoc(doc(db, MODULES_COLLECTION, moduleId));
     } catch (error) {
       console.error("Erro ao excluir módulo:", error);
@@ -494,7 +547,25 @@ export const courseService = {
   },
 
   deleteSubModule: async (id: string) => {
-    await deleteDoc(doc(db, SUBMODULES_COLLECTION, id));
+    try {
+      // 1. Deletar aulas dentro desta pasta
+      const lessonsQuery = query(collection(db, LESSONS_COLLECTION), where('subModuleId', '==', id));
+      const lessonsSnap = await getDocs(lessonsQuery);
+      const deleteLessonsPromises = lessonsSnap.docs.map(d => courseService.deleteLesson(d.id));
+      await Promise.all(deleteLessonsPromises);
+
+      // 2. Deletar subpastas recursivamente
+      const subFoldersQuery = query(collection(db, SUBMODULES_COLLECTION), where('parentId', '==', id));
+      const subFoldersSnap = await getDocs(subFoldersQuery);
+      const deleteSubFoldersPromises = subFoldersSnap.docs.map(d => courseService.deleteSubModule(d.id));
+      await Promise.all(deleteSubFoldersPromises);
+
+      // 3. Deletar o documento da pasta
+      await deleteDoc(doc(db, SUBMODULES_COLLECTION, id));
+    } catch (error) {
+      console.error("Erro ao excluir pasta:", error);
+      throw error;
+    }
   },
 
   reorderSubModules: async (subModules: CourseSubModule[]) => {
@@ -566,7 +637,26 @@ export const courseService = {
   },
 
   deleteLesson: async (id: string) => {
-    await deleteDoc(doc(db, LESSONS_COLLECTION, id));
+    try {
+      // Deletar conteúdos vinculados (PDFs, Vídeos, etc)
+      const q = query(collection(db, CONTENTS_COLLECTION), where('lessonId', '==', id));
+      const snapshot = await getDocs(q);
+      
+      const deletePromises = snapshot.docs.map(doc => courseService.deleteContent(doc.id));
+      await Promise.all(deletePromises);
+
+      // Deletar capa se houver
+      const lessonSnap = await getDoc(doc(db, LESSONS_COLLECTION, id));
+      if (lessonSnap.exists()) {
+        const lesson = lessonSnap.data() as CourseLesson;
+        if (lesson.coverUrl) await courseService.safeDeleteStorageFile(lesson.coverUrl);
+      }
+
+      await deleteDoc(doc(db, LESSONS_COLLECTION, id));
+    } catch (error) {
+      console.error("Erro ao excluir aula:", error);
+      throw error;
+    }
   },
   
   moveLesson: async (lessonId: string, targetSubModuleId: string | null) => {
@@ -667,7 +757,13 @@ export const courseService = {
         const lessonRef = doc(db, LESSONS_COLLECTION, content.lessonId);
 
         if (content.type === 'video') await updateDoc(lessonRef, { videoCount: increment(-1) });
-        else if (content.type === 'pdf') await updateDoc(lessonRef, { pdfCount: increment(-1) });
+        else if (content.type === 'pdf') {
+            await updateDoc(lessonRef, { pdfCount: increment(-1) });
+            // Deletar arquivo do storage se for PDF
+            if (content.fileUrl) {
+                await courseService.safeDeleteStorageFile(content.fileUrl);
+            }
+        }
 
         await deleteDoc(contentRef);
       }
