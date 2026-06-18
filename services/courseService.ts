@@ -575,6 +575,12 @@ export const courseService = {
      });
   },
 
+  moveSubModule: async (subModuleId: string, targetParentId: string | null) => {
+    await updateDoc(doc(db, SUBMODULES_COLLECTION, subModuleId), {
+        parentId: targetParentId
+    });
+  },
+
   reorderLessons: async (lessons: CourseLesson[]) => {
     try {
       const batch = writeBatch(db);

@@ -300,7 +300,14 @@ const AdminDashboard: React.FC = () => {
     }).reverse();
 
     return last15Days.map(dayStr => {
-      const dayReports = filteredReports.filter(r => r.createdAt && r.createdAt.startsWith(dayStr));
+      const dayReports = filteredReports.filter(r => {
+        if (!r.createdAt) return false;
+        try {
+          return format(parseISO(r.createdAt || ''), 'yyyy-MM-dd') === dayStr;
+        } catch (e) {
+          return r.createdAt.startsWith(dayStr);
+        }
+      });
       const value = dayReports.reduce((acc, curr) => {
         const { netCompanyValue } = calculateDeductions(curr);
         return acc + netCompanyValue;

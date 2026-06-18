@@ -37,6 +37,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
 
   const [itemToDelete, setItemToDelete] = useState<{ type: 'folder' | 'lesson' | 'group', id: string, title: string } | null>(null);
   const [lessonToMove, setLessonToMove] = useState<CourseLesson | null>(null);
+  const [folderToMove, setFolderToMove] = useState<CourseSubModule | null>(null);
 
   // Estado para Drill-down de Aula (Gerenciar Conteúdos)
   const [managingLesson, setManagingLesson] = useState<CourseLesson | null>(null);
@@ -532,6 +533,14 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
     }
   };
 
+  const handleMoveFolderConfirm = async (targetParentId: string | null) => {
+    if (folderToMove) {
+        await courseService.moveSubModule(folderToMove.id, targetParentId);
+        await loadContent();
+        setFolderToMove(null);
+    }
+  };
+
   // Filtrar aulas por pasta
   const getLessonsInFolder = (folderId: string) => lessons
     .filter(l => l.subModuleId === folderId)
@@ -633,6 +642,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
         onDelete={() => setItemToDelete({ type: 'folder', id: folder.id, title: folder.title })}
         onAddLesson={() => { setEditingLesson(null); setTargetFolderIdForNewLesson(folder.id); setIsLessonModalOpen(true); }}
         onAddSubFolder={() => { setParentIdForNewFolder(folder.id); setEditingFolder(null); setIsFolderModalOpen(true); }}
+        onMove={() => setFolderToMove(folder)}
         onEditLesson={(l) => { setEditingLesson(l); setIsLessonModalOpen(true); }}
         onDeleteLesson={(l) => setItemToDelete({ type: 'lesson', id: l.id, title: l.title })}
         onMoveLesson={setLessonToMove}
@@ -1042,6 +1052,60 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
                 </div>
                 <div className="p-4 border-t border-gray-800 flex justify-end">
                     <button onClick={() => setLessonToMove(null)} className="text-gray-400 hover:text-white text-xs font-bold uppercase">Cancelar</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Modal para Mover Pasta */}
+      {folderToMove && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-[#121418] border border-gray-800 rounded-xl w-full max-w-sm shadow-2xl overflow-hidden">
+                <div className="p-4 border-b border-gray-800"><h3 className="text-white font-bold">Mover Pasta &quot;{folderToMove.title}&quot; para...</h3></div>
+                <div className="p-2 space-y-1 max-h-[350px] overflow-y-auto">
+                    <button 
+                        onClick={() => handleMoveFolderConfirm(null)}
+                        className={`w-full text-left px-4 py-3 rounded hover:bg-gray-800 text-sm ${!folderToMove.parentId ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'text-gray-300'}`}
+                    >
+                        (Raiz do Módulo)
+                    </button>
+                    {hierarchicalFolders.filter(item => {
+                        // Não pode mover para si mesma
+                        if (item.folder.id === folderToMove.id) return false;
+                        
+                        // Não pode mover para um dos seus próprios filhos (prevenção de ciclo)
+                        // Precisamos verificar se a pasta destino tem o folderToMove.id em sua árvore de pais.
+                        // Para simplificar, vou verificar se o item.folder.parentId é o folderToMove.id, etc.
+                        // Mas como temos a profundidade e a lista ordenada, podemos deduzir.
+                        // No entanto, hierarquicalFolders é calculada no Memo, então podemos usar uma lógica recursiva ou rastrear o caminho.
+                        
+                        let isDescendant = false;
+                        let current = item.folder;
+                        while (current.parentId) {
+                            if (current.parentId === folderToMove.id) {
+                                isDescendant = true;
+                                break;
+                            }
+                            // Encontrar o pai na lista total
+                            const parent = subModules.find(s => s.id === current.parentId);
+                            if (!parent) break;
+                            current = parent;
+                        }
+                        return !isDescendant;
+                    }).map(item => (
+                        <button 
+                            key={item.folder.id}
+                            style={{ paddingLeft: `${(item.depth * 16) + 16}px` }}
+                            onClick={() => handleMoveFolderConfirm(item.folder.id)}
+                            className={`w-full text-left py-3 rounded hover:bg-gray-800 text-sm flex items-center gap-2 ${folderToMove.parentId === item.folder.id ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'text-gray-300'}`}
+                        >
+                            <svg className="w-4 h-4 text-yellow-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                            <span className="truncate">{item.folder.title}</span>
+                        </button>
+                    ))}
+                </div>
+                <div className="p-4 border-t border-gray-800 flex justify-end">
+                    <button onClick={() => setFolderToMove(null)} className="text-gray-400 hover:text-white text-xs font-bold uppercase">Cancelar</button>
                 </div>
             </div>
         </div>
