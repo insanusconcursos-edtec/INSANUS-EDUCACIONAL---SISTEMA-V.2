@@ -68,6 +68,18 @@ const PlanEditor: React.FC = () => {
     message: string;
   }>({ isOpen: false, type: null, item: null, message: '' });
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Sync selectedDiscipline if disciplines list changes (essential for Group/Pasta updates)
+  useEffect(() => {
+    if (selectedDiscipline?.id) {
+        const fresh = disciplines.find(d => d.id === selectedDiscipline.id);
+        if (fresh) {
+            setSelectedDiscipline(fresh);
+        }
+    }
+  }, [disciplines]);
+
   // 1. Initial Load
   const fetchPlanAndStructure = useCallback(async () => {
         if (!planId) return;
@@ -120,8 +132,7 @@ const PlanEditor: React.FC = () => {
   }, [hasPendingChanges]);
 
   // 2. Load Topics
-  useEffect(() => {
-    const fetchTopicsForDiscipline = async () => {
+  const fetchTopicsForDiscipline = useCallback(async () => {
         setSelectedTopic(null);
 
         if (!planId || !selectedDiscipline?.id) {
@@ -138,10 +149,11 @@ const PlanEditor: React.FC = () => {
         } finally {
             setLoadingTopics(false);
         }
-    };
-    
-    fetchTopicsForDiscipline();
   }, [planId, selectedDiscipline]);
+
+  useEffect(() => {
+    fetchTopicsForDiscipline();
+  }, [fetchTopicsForDiscipline, refreshTrigger]);
 
   // === HANDLERS (Structure) ===
 
@@ -460,7 +472,10 @@ const PlanEditor: React.FC = () => {
                         onMove={handleMoveTopic}
                         onSelectTopic={setSelectedTopic}
                         onUpdateTopic={handleUpdateTopicLocal}
-                        onRefresh={() => window.location.reload()}
+                        onRefresh={() => {
+                            setRefreshTrigger(prev => prev + 1);
+                            fetchPlanAndStructure(); // Refresh folders/disciplines too if needed
+                        }}
                     />
                 )}
             </div>

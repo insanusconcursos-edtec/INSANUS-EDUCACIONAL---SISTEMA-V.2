@@ -3,6 +3,7 @@ import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Tra
 import { toast } from 'react-hot-toast';
 import { Product, ProductType, ProductOffer, ProductSplit } from '../../../types/product';
 import { createProduct, updateProduct, uploadProductCover } from '../../../services/productService';
+import { syncProductResourcesForStudents } from '../../../services/userService';
 import { getPlans } from '../../../services/planService';
 import { Plan } from '../../../types/plan';
 import { courseService } from '../../../services/courseService';
@@ -134,6 +135,8 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
     try {
       if (product?.id) {
         await updateProduct(product.id, productData);
+        // Sincroniza os acessos dos alunos se o produto já existir e for editado
+        await syncProductResourcesForStudents(product.id, productData.linkedResources);
       } else {
         await createProduct(productData);
       }

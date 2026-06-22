@@ -44,22 +44,30 @@ export const AdminLivePlayer: React.FC<AdminLivePlayerProps> = ({ event }) => {
   // Se o evento estiver configurado para Player Alternativo E for um vídeo do YouTube
   if (event.useAlternativePlayer && videoId) {
     return (
-      <div className="w-full aspect-video bg-black rounded-xl overflow-hidden">
-        <AlternativeYouTubePlayer videoId={videoId} />
+      <div className="w-full h-full bg-black flex items-center justify-center p-1 md:p-2">
+        <div className="w-full h-full max-w-full max-h-full flex items-center justify-center overflow-hidden">
+          <div className="aspect-video w-full h-auto max-h-full max-w-full shadow-2xl">
+            <AlternativeYouTubePlayer videoId={videoId} />
+          </div>
+        </div>
       </div>
     );
   }
 
   // Basic iframe rendering for YouTube or Panda
   return (
-    <div className="w-full aspect-video bg-black rounded-xl overflow-hidden">
-      <iframe
-        src={safeUrl}
-        title="Player de Transmissão"
-        className="w-full h-full border-0 rounded-lg"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      ></iframe>
+    <div className="w-full h-full bg-black flex items-center justify-center p-1 md:p-2">
+      <div className="w-full h-full max-w-full max-h-full flex items-center justify-center overflow-hidden">
+        <div className="aspect-video w-full h-auto max-h-full max-w-full shadow-2xl">
+          <iframe
+            src={safeUrl}
+            title="Player de Transmissão"
+            className="w-full h-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          ></iframe>
+        </div>
+      </div>
     </div>
   );
 };

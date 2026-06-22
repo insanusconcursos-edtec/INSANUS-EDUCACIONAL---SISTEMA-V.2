@@ -17,11 +17,13 @@ import {
   orderBy, 
   getDoc,
   serverTimestamp,
+  writeBatch,
   Timestamp,
   FieldValue
 } from 'firebase/firestore';
 import { db, auth as mainAuth, firebaseConfig } from './firebase';
 import { toPlainObject } from './firestoreUtils';
+import { LinkedResources } from '../types/product';
 
 // === TYPES ===
 
@@ -532,6 +534,158 @@ export const updateUserActivePlan = async (uid: string, planId: string) => {
   });
 };
 
+/**
+ * Sincroniza os recursos vinculados de um produto para todos os alunos que possuem o produto ativo.
+ * Adiciona novos recursos e remove os que foram desvinculados.
+ * Isso garante que ao editar um produto, todos os alunos ganhem ou percam acesso aos recursos automaticamente.
+ */
+export const syncProductResourcesForStudents = async (productId: string, newResources: LinkedResources) => {
+  console.log(`[UserService] Iniciando sincronização de recursos para o produto ${productId}...`);
+  
+  // 1. Fetch de títulos para manter o AccessItem amigável e informativo
+  const titlesMap: Record<string, string> = {};
+  
+  const fetchTitles = async (collectionName: string, ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    const promises = ids.map(async (id) => {
+      if (titlesMap[id]) return;
+      try {
+        const d = await getDoc(doc(db, collectionName, id));
+        if (d.exists()) {
+          const data = d.data();
+          titlesMap[id] = data.title || data.name || 'Conteúdo Vinculado';
+        }
+      } catch (e) {
+        console.error(`Erro ao buscar título para ${id} na coleção ${collectionName}`);
+      }
+    });
+    await Promise.all(promises);
+  };
+
+  await Promise.all([
+    fetchTitles('plans', newResources.plans || []),
+    fetchTitles('courses', newResources.onlineCourses || []),
+    fetchTitles('simulatedClasses', newResources.simulated || []),
+    fetchTitles('classes', newResources.presentialClasses || []),
+    fetchTitles('live_events', newResources.liveEvents || [])
+  ]);
+
+  // 2. Fetch de todos os alunos (filtra por role student no Firestore se possível)
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, where('role', '==', 'student'));
+  const snapshot = await getDocs(q);
+  const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Student));
+
+  const batch = writeBatch(db);
+  let batchCount = 0;
+  const BATCH_LIMIT = 450; 
+
+  for (const student of students) {
+    const products = student.products || [];
+    // Busca o item de acesso ao produto original
+    const pAccess = products.find(p => p.targetId === productId && p.isActive);
+    
+    if (!pAccess) continue;
+
+    const sourceId = pAccess.id;
+    const currentAccess = student.access || [];
+
+    // 1. Desativar recursos que foram removidos do produto
+    const updatedAccess = currentAccess.map(access => {
+      if (access.sourceProductId !== sourceId) return access;
+
+      // Verifica se o recurso ainda está vinculado ao produto
+      const isStillLinked = (
+        (access.type === 'plan' && (newResources.plans || []).includes(access.targetId)) ||
+        (access.type === 'course' && (newResources.onlineCourses || []).includes(access.targetId)) ||
+        (access.type === 'simulated_class' && (newResources.simulated || []).includes(access.targetId)) ||
+        (access.type === 'presential_class' && (newResources.presentialClasses || []).includes(access.targetId)) ||
+        (access.type === 'live_events' && (newResources.liveEvents || []).includes(access.targetId))
+      );
+      
+      // Se não está mais vinculado e o acesso do aluno ainda estava ativo para este produto
+      if (!isStillLinked && access.isActive) {
+        // Se for curso, também desativamos a matrícula vinculada
+        if (access.type === 'course') {
+          const enrollmentId = `${access.targetId}_${student.uid}`;
+          const enrollmentRef = doc(db, 'course_enrollments', enrollmentId);
+          batch.update(enrollmentRef, { active: false, updatedAt: serverTimestamp() });
+          batchCount++;
+        }
+        return { ...access, isActive: false };
+      }
+      return access;
+    });
+
+    // 2. Adicionar novos recursos que faltam
+    const ensureAccess = (type: AccessItem['type'], targetId: string) => {
+      // Verifica se o aluno já tem um acesso ATIVO para este recurso vindo deste produto
+      const exists = updatedAccess.some(a => a.sourceProductId === sourceId && a.type === type && a.targetId === targetId && a.isActive);
+      if (!exists) {
+        const startsAt = pAccess.diaInicio;
+        const endsAt = pAccess.diaFim;
+
+        updatedAccess.push({
+          id: crypto.randomUUID(),
+          type,
+          targetId,
+          title: titlesMap[targetId] || 'Recurso Vinculado',
+          days: pAccess.days,
+          diaInicio: startsAt,
+          diaFim: endsAt,
+          isActive: true,
+          sourceProductId: sourceId
+        });
+
+        // Se for curso, também criamos ou reativamos a matrícula vinculada
+        if (type === 'course') {
+          const enrollmentId = `${targetId}_${student.uid}`;
+          const enrollmentRef = doc(db, 'course_enrollments', enrollmentId);
+          batch.set(enrollmentRef, {
+            id: enrollmentId,
+            courseId: targetId,
+            userId: student.uid,
+            userName: student.name,
+            userEmail: student.email,
+            userCpf: student.cpf,
+            userPhone: student.whatsapp || '',
+            enrollmentType: 'REGULAR',
+            releasedAt: startsAt.toDate ? startsAt.toDate().toISOString() : new Date().toISOString(),
+            expiresAt: endsAt.toDate ? endsAt.toDate().toISOString() : new Date().toISOString(),
+            active: true,
+            createdAt: serverTimestamp(),
+            sourceProductId: sourceId
+          }, { merge: true });
+          batchCount++;
+        }
+      }
+    };
+
+    (newResources.plans || []).forEach(id => ensureAccess('plan', id));
+    (newResources.onlineCourses || []).forEach(id => ensureAccess('course', id));
+    (newResources.simulated || []).forEach(id => ensureAccess('simulated_class', id));
+    (newResources.presentialClasses || []).forEach(id => ensureAccess('presential_class', id));
+    (newResources.liveEvents || []).forEach(id => ensureAccess('live_events', id));
+
+    // Se houve mudança, adiciona ao batch de atualização do aluno
+    if (updatedAccess.length !== currentAccess.length) {
+      batch.update(doc(db, 'users', student.uid), { access: updatedAccess });
+      batchCount++;
+      
+      if (batchCount >= BATCH_LIMIT) {
+        await batch.commit();
+        batchCount = 0; 
+      }
+    }
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
+  }
+  
+  console.log(`[UserService] Sincronização concluída com sucesso.`);
+};
+
 export const userService = {
   createStudent,
   updateStudent,
@@ -543,5 +697,6 @@ export const userService = {
   revokeStudentAccess,
   extendStudentAccess,
   toggleCourseAccess,
-  updateUserActivePlan
+  updateUserActivePlan,
+  syncProductResourcesForStudents
 };

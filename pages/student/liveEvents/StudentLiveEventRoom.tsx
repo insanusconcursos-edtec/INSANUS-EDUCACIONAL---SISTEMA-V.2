@@ -300,7 +300,7 @@ export const StudentLiveEventRoom: React.FC = () => {
         {/* Left Column: Video Player AREA */}
         <div className="w-full lg:w-2/3 xl:w-3/4 flex flex-col bg-black overflow-hidden shrink-0 lg:shrink">
           {/* Action Area: Player or Waiting Room */}
-          <div className="flex-1 relative bg-zinc-950 overflow-hidden min-h-[300px] md:min-h-0">
+          <div className="flex-1 relative bg-zinc-950 overflow-hidden min-h-[40vh] md:min-h-0">
             {event.status === 'scheduled' && (
               <div className="absolute inset-0 z-[100] animate-in fade-in duration-700">
                 <StudentLiveWaitingRoom 
@@ -313,10 +313,8 @@ export const StudentLiveEventRoom: React.FC = () => {
             )}
             
             {event.status === 'live' && (
-              <div className="w-full h-full flex items-center justify-center bg-black">
-                <div className="w-full aspect-video max-h-full">
-                  <AdminLivePlayer event={event} />
-                </div>
+              <div className="w-full h-full bg-black">
+                <AdminLivePlayer event={event} />
               </div>
             )}
             
@@ -352,8 +350,8 @@ export const StudentLiveEventRoom: React.FC = () => {
 
           {/* Materials Section - Desktop only Scroll area if chat takes space */}
           {event.materials && event.materials.length > 0 && (
-            <div className="hidden lg:block p-8 bg-zinc-950 border-t border-zinc-800 overflow-y-auto max-h-[30%]">
-              <h3 className="text-[10px] font-black text-zinc-500 mb-6 flex items-center gap-3 uppercase tracking-[0.3em]">
+            <div className="hidden lg:block p-4 lg:p-6 bg-zinc-950 border-t border-zinc-800 overflow-y-auto max-h-[25%] shrink-0">
+              <h3 className="text-[10px] font-black text-zinc-500 mb-4 flex items-center gap-3 uppercase tracking-[0.3em]">
                 <FileText size={18} className="text-yellow-400" />
                 Materiais de Apoio
               </h3>

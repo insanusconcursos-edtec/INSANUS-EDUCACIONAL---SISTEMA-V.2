@@ -22,6 +22,7 @@ export interface TopicGroup {
   id: string;
   name: string;
   order: number;
+  parentId?: string | null;
 }
 
 export interface Discipline {
