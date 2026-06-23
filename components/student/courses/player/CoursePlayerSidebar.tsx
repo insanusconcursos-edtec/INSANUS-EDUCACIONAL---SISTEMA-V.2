@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Layers, Clock, Video } from 'lucide-react';
+import { ChevronDown, ChevronRight, Layers, Clock, Video, Lock } from 'lucide-react';
 import { CourseLesson, CourseSubModule, CourseGroup } from '../../../../types/course';
 
 interface CoursePlayerSidebarProps {
@@ -293,9 +293,10 @@ const FolderItem: React.FC<FolderItemProps> = ({
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     
-    // Lógica de Bloqueio (Drip Content)
-    const isLocked = folder.publishDate && new Date(folder.publishDate) > new Date();
-    const isRecording = folder.status === 'recording' || (folder.scheduledDate && new Date(folder.scheduledDate) > new Date());
+    // Lógica de Bloqueio (Drip Content + Em Gravação)
+    const isDripLocked = folder.publishDate && new Date(folder.publishDate) > new Date();
+    const isRecording = folder.isRecording || folder.status === 'recording' || (folder.scheduledDate && new Date(folder.scheduledDate) > new Date());
+    const isLocked = isDripLocked || isRecording;
     
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('pt-BR', {
@@ -359,12 +360,8 @@ const FolderItem: React.FC<FolderItemProps> = ({
             >
                 <div className="flex items-center gap-3 overflow-hidden flex-1">
                     {isLocked ? (
-                        <div className="p-1 rounded bg-zinc-800 text-zinc-500 shrink-0">
-                            <Clock size={12} className="opacity-50" />
-                        </div>
-                    ) : isRecording ? (
-                        <div className="p-1 rounded bg-blue-500/10 text-blue-500 shrink-0">
-                            <Video size={12} className="animate-pulse" />
+                        <div className={`p-1 rounded shrink-0 ${isRecording ? 'bg-red-500/10 text-red-500' : 'bg-zinc-800 text-zinc-500'}`}>
+                            {isRecording ? <Lock size={12} /> : <Clock size={12} className="opacity-50" />}
                         </div>
                     ) : (
                         <svg className={`w-4 h-4 shrink-0 transition-transform ${isOpen ? 'rotate-90 text-white' : 'text-gray-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
@@ -379,13 +376,14 @@ const FolderItem: React.FC<FolderItemProps> = ({
                         </span>
                         
                         {/* Badge de Agendamento / Em Gravação */}
-                        {folder.scheduledDate && (
-                            <span className="mt-1 text-[9px] font-medium bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded w-fit border border-blue-500/20 whitespace-nowrap">
-                                EM GRAVAÇÃO: {formatDate(folder.scheduledDate)}
+                        {isRecording && (
+                            <span className="mt-1 text-[9px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded w-fit border border-red-700 whitespace-nowrap animate-pulse">
+                                EM GRAVAÇÃO
+                                {folder.scheduledDate && `: ${formatDate(folder.scheduledDate)}`}
                             </span>
                         )}
 
-                        {isLocked && !folder.scheduledDate && (
+                        {isDripLocked && !isRecording && (
                             <span className="text-[9px] text-[var(--plan-theme)]/70 font-bold uppercase tracking-tighter truncate">
                                 Disponível em: {formattedPublishDate}
                             </span>

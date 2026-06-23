@@ -66,6 +66,11 @@ export const SubModuleItem: React.FC<SubModuleItemProps> = ({
             <Folder size={20} className="text-yellow-600" fill="currentColor" />
             
             <h4 className="text-white font-bold text-sm uppercase">{subModule.title}</h4>
+            {subModule.isRecording && (
+                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 font-black uppercase tracking-wider animate-pulse">
+                    Em Gravação
+                </span>
+            )}
             {subModule.publishDate && (
                 <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20">
                     Agendado: {new Date(subModule.publishDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}

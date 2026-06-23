@@ -276,10 +276,10 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   };
 
   // --- CRUD PASTAS ---
-  const handleSaveFolder = async (title: string, publishDate: string | null, groupId?: string | null, parentId?: string | null) => {
+  const handleSaveFolder = async (title: string, publishDate: string | null, groupId?: string | null, parentId?: string | null, isRecording?: boolean) => {
     try {
       const folderParentId = editingFolder ? (editingFolder.parentId || null) : (parentId || null);
-      const data = { title, publishDate, groupId: groupId || null, parentId: folderParentId };
+      const data = { title, publishDate, groupId: groupId || null, parentId: folderParentId, isRecording: isRecording || false };
       if (editingFolder) {
         await courseService.updateSubModule(editingFolder.id, data);
         // Atualização Otimista
@@ -292,7 +292,8 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
             order: newOrder,
             publishDate,
             groupId: groupId || null,
-            parentId: folderParentId
+            parentId: folderParentId,
+            isRecording: isRecording || false
         });
 
         // Atualização Otimista
@@ -303,7 +304,8 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
             order: newOrder,
             publishDate,
             groupId: groupId || null,
-            parentId: folderParentId
+            parentId: folderParentId,
+            isRecording: isRecording || false
         }]);
 
         // Abre a nova pasta e o pai
@@ -1003,6 +1005,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
         initialPublishDate={editingFolder?.publishDate}
         initialGroupId={editingFolder?.groupId || (parentIdForNewFolder ? subModules.find(s => s.id === parentIdForNewFolder)?.groupId : null)}
         initialParentId={editingFolder ? editingFolder.parentId : parentIdForNewFolder}
+        initialIsRecording={editingFolder?.isRecording}
         groups={groups}
       />
 

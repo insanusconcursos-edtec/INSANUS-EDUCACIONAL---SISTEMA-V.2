@@ -4,19 +4,21 @@ import { CourseGroup } from '../../../../../types/course';
 interface FolderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, publishDate: string | null, groupId?: string | null, parentId?: string | null) => Promise<void>;
+  onSave: (title: string, publishDate: string | null, groupId?: string | null, parentId?: string | null, isRecording?: boolean) => Promise<void>;
   initialTitle?: string;
   initialPublishDate?: string | null;
   initialGroupId?: string | null;
   initialParentId?: string | null;
+  initialIsRecording?: boolean;
   groups?: CourseGroup[];
 }
 
-export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPublishDate, initialGroupId, initialParentId, groups = [] }: FolderModalProps) {
+export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPublishDate, initialGroupId, initialParentId, initialIsRecording, groups = [] }: FolderModalProps) {
   const [title, setTitle] = useState('');
   const [publishDate, setPublishDate] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [parentId, setParentId] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -25,14 +27,15 @@ export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPubl
       setPublishDate(initialPublishDate || null);
       setGroupId(initialGroupId || null);
       setParentId(initialParentId || null);
+      setIsRecording(initialIsRecording || false);
     }
-  }, [isOpen, initialTitle, initialPublishDate, initialGroupId, initialParentId]);
+  }, [isOpen, initialTitle, initialPublishDate, initialGroupId, initialParentId, initialIsRecording]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     setLoading(true);
-    await onSave(title, publishDate, groupId, parentId);
+    await onSave(title, publishDate, groupId, parentId, isRecording);
     setLoading(false);
     onClose();
   };
@@ -84,6 +87,21 @@ export function FolderModal({ isOpen, onClose, onSave, initialTitle, initialPubl
             />
             <p className="text-[10px] text-gray-500 mt-1">Se vazio, a pasta será liberada imediatamente.</p>
           </div>
+
+          <div className="flex items-center justify-between p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg group">
+            <div className="flex flex-col">
+              <label className="text-xs font-bold text-blue-400 uppercase">Em Gravação</label>
+              <span className="text-[10px] text-zinc-500 font-medium">Bloqueia o acesso de alunos</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsRecording(!isRecording)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isRecording ? 'bg-blue-600' : 'bg-zinc-800'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isRecording ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white font-bold text-xs uppercase">Cancelar</button>
             <button type="submit" disabled={loading} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase rounded disabled:opacity-50">

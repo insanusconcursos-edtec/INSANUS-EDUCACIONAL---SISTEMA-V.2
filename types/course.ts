@@ -87,6 +87,7 @@ export interface CourseSubModule {
   scheduledDate?: string | null; // Novo: Data de gravação/agendamento
   status?: 'published' | 'recording' | 'scheduled' | null; // Novo: Status do módulo
   parentId?: string | null; // Adicionado para suportar subpastas aninhadas
+  isRecording?: boolean; // NOVO: Flag para "Em Gravação" manual
 }
 
 // --- NOVO: Interface da Aula ---
