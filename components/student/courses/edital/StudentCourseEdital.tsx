@@ -15,6 +15,7 @@ import MindMapFullscreen from '../../../../components/admin/metas/tools/mindmap/
 import FlashcardFullscreenEditor from '../../../../components/admin/metas/tools/FlashcardFullscreenEditor';
 import FlashcardPlayerModal from '../../FlashcardPlayerModal';
 import { CourseEditalStructure } from '../../../../types/courseEdital';
+import toast from 'react-hot-toast';
 
 // IMPORTAÇÕES DO SISTEMA DE REVISÃO
 import { courseReviewService, CourseReview } from '../../../../services/courseReviewService';
@@ -29,7 +30,7 @@ const formatShortDate = (dateStr: string) => {
 // ==========================================
 // 1. ACORDEÃO DO TÓPICO (AUTOSSUFICIENTE)
 // ==========================================
-function StudentTopicAccordion({ topic, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId, numberingPrefix = "" }: any) {
+function StudentTopicAccordion({ topic, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId, numberingPrefix = "", isMaintenance, maintenanceMessage }: any) {
   
   const { openSpacedReviewModal } = useSpacedReviewModal();
   // NOVA LÓGICA: Verifica se ESTE é o tópico exato que deve piscar
@@ -141,6 +142,10 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
   }, [isCompleted, isOpen, user, topic.id]);
 
   const handlePlayLesson = async (lessonId: string) => {
+    if (isMaintenance) {
+        toast.error(maintenanceMessage || 'O conteúdo do curso foi trancado para atualização.');
+        return;
+    }
     setIsLoadingVideo(true);
     try {
         const contents = await courseService.getContents(lessonId); 
@@ -158,6 +163,10 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
   };
 
   const handleOpenPdf = async (url: string, id: string) => {
+    if (isMaintenance) {
+        toast.error(maintenanceMessage || 'O conteúdo do curso foi trancado para atualização.');
+        return;
+    }
     if (!user || openingPdfId) return;
     setOpeningPdfId(id);
     try {
@@ -173,6 +182,10 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
   };
 
   const handleStudentMindMap = async () => {
+      if (isMaintenance) {
+          toast.error(maintenanceMessage || 'O conteúdo do curso foi trancado para atualização.');
+          return;
+      }
       if (studentContent.mindmap) {
           setIsStudentMindMapOpen(true);
       } else {
@@ -194,6 +207,10 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
   };
 
   const handleStudentFlashcards = async () => {
+      if (isMaintenance) {
+          toast.error(maintenanceMessage || 'O conteúdo do curso foi trancado para atualização.');
+          return;
+      }
       if (studentContent.flashcards) {
           setIsStudentFlashcardsOpen(true);
       } else {
@@ -351,9 +368,13 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                 <button 
                     onClick={(e) => { 
                         e.stopPropagation(); // BLOQUEIA A PROPAGAÇÃO PARA NÃO ABRIR O ACORDEÃO
+                        if (isMaintenance) {
+                            toast.error(maintenanceMessage || 'O conteúdo do curso foi trancado para atualização.');
+                            return;
+                        }
                         setShowConfirmModal(true); 
                     }}
-                    className={`flex items-center justify-center rounded-full transition-all ${isCompleted ? 'text-green-500 hover:text-green-400' : 'text-gray-600 hover:text-green-500'}`}
+                    className={`flex items-center justify-center rounded-full transition-all ${isCompleted ? 'text-green-500 hover:text-green-400' : 'text-gray-600 hover:text-green-500'} ${isMaintenance ? 'opacity-50 cursor-not-allowed' : ''}`}
                     title={isCompleted ? "Desmarcar Tópico" : "Marcar como Concluído"}
                 >
                     <CheckCircle2 size={18} />
@@ -809,7 +830,7 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
 // ==========================================
 // 1.2 ACORDEÃO DE PASTA (FOLDERS)
 // ==========================================
-function StudentFolderAccordion({ group, topics, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId, startNumber }: any) {
+function StudentFolderAccordion({ group, topics, courseId, planId, disciplineId, disciplineName, completedLessons, completedTopics, onToggleTopic, focusTopicId, startNumber, isMaintenance, maintenanceMessage }: any) {
     const hasFocusedTopic = useMemo(() => {
         if (!focusTopicId) return false;
         const check = (items: any[]): boolean => {
@@ -861,6 +882,8 @@ function StudentFolderAccordion({ group, topics, courseId, planId, disciplineId,
                             onToggleTopic={onToggleTopic}
                             focusTopicId={focusTopicId}
                             numberingPrefix={`${startNumber + index}.`}
+                            isMaintenance={isMaintenance}
+                            maintenanceMessage={maintenanceMessage}
                         />
                     ))}
                 </div>
@@ -872,7 +895,7 @@ function StudentFolderAccordion({ group, topics, courseId, planId, disciplineId,
 // ==========================================
 // 2. DISCIPLINAS (WRAPPER)
 // ==========================================
-function StudentDisciplineAccordion({ discipline, courseId, planId, completedLessons, completedTopics, onToggleTopic, focusTopicId }: any) {
+function StudentDisciplineAccordion({ discipline, courseId, planId, completedLessons, completedTopics, onToggleTopic, focusTopicId, isMaintenance, maintenanceMessage }: any) {
     // NOVA LÓGICA: Verifica se o tópico focado está escondido dentro desta disciplina
     const hasFocusedTopic = useMemo(() => {
       if (!focusTopicId) return false;
@@ -973,6 +996,8 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
                     onToggleTopic={onToggleTopic}
                     focusTopicId={focusTopicId}
                     startNumber={1}
+                    isMaintenance={isMaintenance}
+                    maintenanceMessage={maintenanceMessage}
                   />
                 );
               })}
@@ -1002,6 +1027,8 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
                             onToggleTopic={onToggleTopic}
                             focusTopicId={focusTopicId}
                             numberingPrefix={`${index + 1}.`}
+                            isMaintenance={isMaintenance}
+                            maintenanceMessage={maintenanceMessage}
                           />
                         ))}
                       </div>
@@ -1020,7 +1047,7 @@ function StudentDisciplineAccordion({ discipline, courseId, planId, completedLes
 // ==========================================
 // 3. COMPONENTE PRINCIPAL (MANAGER)
 // ==========================================
-export function StudentCourseEdital({ courseId, planId, focusTopicId }: { courseId: string, planId?: string, focusTopicId?: string | null }) {
+export function StudentCourseEdital({ courseId, planId, focusTopicId, isMaintenance, maintenanceMessage }: { courseId: string, planId?: string, focusTopicId?: string | null, isMaintenance?: boolean, maintenanceMessage?: string }) {
     const { currentUser: user } = useAuth();
     const [structure, setStructure] = useState<CourseEditalStructure | null>(null);
     const [loading, setLoading] = useState(true);
@@ -1129,12 +1156,14 @@ export function StudentCourseEdital({ courseId, planId, focusTopicId }: { course
                     <StudentDisciplineAccordion 
                         key={discipline.id} 
                         discipline={discipline} 
-                        courseId={courseId}
+                        courseId={courseId} 
                         planId={planId}
                         completedLessons={completedLessons}
                         completedTopics={completedTopics} 
                         onToggleTopic={handleToggleTopic}
-                        focusTopicId={focusTopicId} // PASSANDO O ID DE FOCO PARA BAIXO
+                        focusTopicId={focusTopicId} 
+                        isMaintenance={isMaintenance}
+                        maintenanceMessage={maintenanceMessage}
                     />
                 ))}
             </div>

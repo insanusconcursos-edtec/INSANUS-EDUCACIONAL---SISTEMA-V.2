@@ -9,7 +9,7 @@ import { LiveEvent } from '../../../types/liveEvent';
 import { StudentModuleCard } from './StudentModuleCard';
 import { CoursePlayer } from './player/CoursePlayer';
 import { useAuth } from '../../../contexts/AuthContext';
-import { CheckCircle2, LayoutList, ListTree, PlayCircle, ArrowLeft, Radio, Video, Clock, Play, Calendar, PlaySquare } from 'lucide-react';
+import { CheckCircle2, LayoutList, ListTree, PlayCircle, ArrowLeft, Radio, Video, Clock, Play, Calendar, PlaySquare, Lock } from 'lucide-react';
 import { StudentCourseEdital } from './edital/StudentCourseEdital';
 import { CourseReviewDashboard } from './reviews/CourseReviewDashboard';
 import { WelcomeVideoModal } from './WelcomeVideoModal';
@@ -33,6 +33,11 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
   const [loading, setLoading] = useState(true);
   const [selectedModule, setSelectedModule] = useState<CourseModule | null>(null);
   
+  // ESTADO DE MANUTENÇÃO
+  const isUserWhitelisted = course.maintenanceMode?.whitelistedUsers?.includes(currentUser?.email || '');
+  const isMaintenance = course.maintenanceMode?.enabled && !isUserWhitelisted;
+  const [showMaintenancePopup, setShowMaintenancePopup] = useState(isMaintenance);
+
   // Estado do Progresso e Estrutura para o "Continuar Estudos"
   const [structure, setStructure] = useState<CourseStructureModule[]>([]);
   const [detailedProgress, setDetailedProgress] = useState<Record<string, { completedAt: string }>>({});
@@ -186,7 +191,7 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
              <img 
                 src={course.bannerUrlMobile || course.coverUrl} 
                 alt={`Banner do curso ${course.title}`} 
-                className="w-full h-48 md:h-[400px] object-cover border-b border-[var(--plan-theme)]/30 shadow-lg" 
+                className={`w-full h-48 md:h-[400px] object-cover border-b border-[var(--plan-theme)]/30 shadow-lg transition-all duration-700 ${isMaintenance ? 'grayscale opacity-50 contrast-125' : ''}`} 
              />
          </picture>
 
@@ -199,8 +204,14 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
               <div className="flex flex-col md:flex-row md:items-center gap-4">
                    {/* Botão de Ação Principal */}
                    <button 
-                    onClick={handleContinue}
-                    className="flex items-center justify-center gap-2 bg-white hover:bg-gray-200 text-black px-8 py-3 rounded-lg font-black text-sm uppercase transition-transform hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.3)] shrink-0"
+                    onClick={() => {
+                        if (isMaintenance) {
+                            toast.error(course.maintenanceMode?.message || 'O conteúdo do curso foi trancado para atualização.');
+                            return;
+                        }
+                        handleContinue();
+                    }}
+                    className={`flex items-center justify-center gap-2 px-8 py-3 rounded-lg font-black text-sm uppercase transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] shrink-0 ${isMaintenance ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-50' : 'bg-white hover:bg-gray-200 text-black hover:scale-105'}`}
                    >
                        <PlayCircle size={20} fill="currentColor" />
                        {progress > 0 ? 'CONTINUAR ESTUDOS' : 'INICIAR CURSO'}
@@ -298,7 +309,14 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                               <StudentModuleCard 
                                   key={module.id} 
                                   module={module} 
-                                  onClick={setSelectedModule} 
+                                  onClick={(m) => {
+                                      if (isMaintenance) {
+                                          toast.error(course.maintenanceMode?.message || 'O conteúdo do curso foi trancado para atualização.');
+                                          return;
+                                      }
+                                      setSelectedModule(m);
+                                  }}
+                                  isLocked={isMaintenance}
                               />
                           ))}
                       </div>
@@ -308,7 +326,9 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                   <StudentCourseEdital 
                     courseId={course.id} 
                     planId={currentPlanId}
-                    focusTopicId={focusTopicId} 
+                    focusTopicId={focusTopicId}
+                    isMaintenance={isMaintenance}
+                    maintenanceMessage={course.maintenanceMode?.message}
                   />
               ) : (
                   // VISÃO DOS EVENTOS AO VIVO
@@ -395,6 +415,46 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
           videoUrl={course.welcomeVideoUrl}
           title={course.welcomeButtonTitle || 'BOAS VINDAS'}
         />
+      )}
+
+      {/* POPUP DE MANUTENÇÃO */}
+      {showMaintenancePopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-zinc-900 border border-orange-500/30 rounded-3xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(249,115,22,0.15)] text-center relative overflow-hidden group">
+              {/* Background Glow */}
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-orange-500/10 rounded-full blur-[60px]" />
+              <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-orange-500/10 rounded-full blur-[60px]" />
+
+              <div className="relative space-y-6">
+                <div className="inline-flex p-5 bg-orange-500/10 rounded-full text-orange-500 mb-2">
+                   <Lock size={40} strokeWidth={2.5} />
+                </div>
+                
+                <div className="space-y-3">
+                   <h2 className="text-2xl font-black text-white uppercase tracking-tight">Portal em <span className="text-orange-500">Manutenção</span></h2>
+                   <p className="text-zinc-400 text-sm leading-relaxed font-medium">
+                      {course.maintenanceMode?.message || 'O conteúdo deste curso está sendo atualizado para garantir a melhor experiência de estudo para você.'}
+                   </p>
+                </div>
+
+                {course.maintenanceMode?.endDate && (
+                   <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 inline-block w-full">
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Previsão de Retorno</p>
+                      <p className="text-xl font-black text-white uppercase tracking-tight">
+                         {new Date(course.maintenanceMode.endDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </p>
+                   </div>
+                )}
+
+                <button 
+                  onClick={() => setShowMaintenancePopup(false)}
+                  className="w-full bg-white hover:bg-zinc-200 text-black py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+                >
+                   Entendi, vou aguardar
+                </button>
+              </div>
+           </div>
+        </div>
       )}
     </div>
   );

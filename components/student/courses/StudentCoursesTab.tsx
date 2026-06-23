@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Loader2, PlayCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { courseService } from '../../../services/courseService';
 import { getCategories, Category } from '../../../services/planService';
@@ -157,14 +158,14 @@ export function StudentCoursesTab() {
   const activeCategoryObj = categories.find(c => c.id === selectedCategory);
   const currentSubcategories = activeCategoryObj ? activeCategoryObj.subcategories : [];
 
-  if (selectedCourse) {
+    if (selectedCourse) {
       return (
           <CourseDetails 
               course={selectedCourse} 
               onBack={() => setSelectedCourse(null)} 
           />
       );
-  }
+    }
 
   if (loading) {
     return (
@@ -271,13 +272,17 @@ export function StudentCoursesTab() {
                         <h3 className="text-xl font-black text-white uppercase tracking-tight">Cursos <span className="text-red-600">Regulares</span></h3>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                        {regularCourses.map(course => (
-                            <StudentCourseCard 
-                                key={course.id} 
-                                course={course} 
-                                onClick={setSelectedCourse}
-                            />
-                        ))}
+                        {regularCourses.map(course => {
+                            const isMaintenance = course.maintenanceMode?.enabled && !course.maintenanceMode?.whitelistedUsers?.includes(userData?.email || '');
+                            return (
+                                <StudentCourseCard 
+                                    key={course.id} 
+                                    course={course} 
+                                    isMaintenance={isMaintenance}
+                                    onClick={() => setSelectedCourse(course)}
+                                />
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -290,13 +295,17 @@ export function StudentCoursesTab() {
                         <h3 className="text-xl font-black text-white uppercase tracking-tight">Cursos <span className="text-zinc-500">Isolados</span></h3>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                        {isolatedCourses.map(course => (
-                            <StudentCourseCard 
-                                key={course.id} 
-                                course={course} 
-                                onClick={setSelectedCourse}
-                            />
-                        ))}
+                        {isolatedCourses.map(course => {
+                            const isMaintenance = course.maintenanceMode?.enabled && !course.maintenanceMode?.whitelistedUsers?.includes(userData?.email || '');
+                            return (
+                                <StudentCourseCard 
+                                    key={course.id} 
+                                    course={course} 
+                                    isMaintenance={isMaintenance}
+                                    onClick={() => setSelectedCourse(course)}
+                                />
+                            );
+                        })}
                     </div>
                 </div>
             )}

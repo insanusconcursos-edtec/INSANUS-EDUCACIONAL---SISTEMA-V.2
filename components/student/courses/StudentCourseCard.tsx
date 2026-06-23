@@ -1,16 +1,17 @@
 import React from 'react';
-import { OnlineCourse } from '../../../types/course';
-import { Calendar } from 'lucide-react';
+import { Lock } from 'lucide-react';
 
 interface StudentCourseCardProps {
-  course: any; // Using any for flexibility with product data
+  course: any; // Mantendo any por flexibilidade com estrutura de produto do Ticto
   onClick?: (course: any) => void;
   isLocked?: boolean;
+  isMaintenance?: boolean;
   price?: number;
 }
 
-export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, onClick, isLocked, price }) => {
+export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, onClick, isLocked, isMaintenance, price }) => {
   const isScholarship = course.isScholarship;
+  const maintenanceMode = course.maintenanceMode;
 
   const formatDate = (date: any) => {
     if (!date) return 'N/A';
@@ -67,15 +68,26 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
         </div>
       )}
 
-      {/* --- CADEADO (Para Cursos Trancados) --- */}
-      {isLocked && (
+      {/* --- CADEADO (Para Cursos Trancados ou Manutenção) --- */}
+      {(isLocked || isMaintenance) && (
         <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end">
-          <div className="bg-black/60 backdrop-blur-md text-zinc-400 border border-zinc-700/50 p-1.5 rounded shadow-lg">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+          <div className={`backdrop-blur-md border p-1.5 rounded shadow-lg ${isMaintenance ? 'bg-orange-500/80 text-white border-orange-400/50' : 'bg-black/60 text-zinc-400 border-zinc-700/50'}`}>
+            {isMaintenance ? (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            ) : (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+            )}
           </div>
-          {price !== undefined && (
+          {isMaintenance && (
+            <div className="bg-orange-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-lg uppercase tracking-widest">
+              Manutenção
+            </div>
+          )}
+          {isLocked && price !== undefined && (
             <div className="bg-red-600 text-white text-[9px] font-black px-2 py-1 rounded shadow-lg uppercase tracking-tighter">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price)}
             </div>
@@ -87,7 +99,7 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
       <img 
         src={course.coverUrl} 
         alt={course.title || course.name} 
-        className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${isLocked ? 'grayscale opacity-60' : ''}`}
+        className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${(isLocked || isMaintenance) ? 'grayscale opacity-60' : ''}`}
         loading="lazy"
       />
 
@@ -108,9 +120,23 @@ export const StudentCourseCard: React.FC<StudentCourseCardProps> = ({ course, on
       )}
 
       {/* --- OVERLAY DE INTERAÇÃO (Aparece no Hover) --- */}
-      <div className={`absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-[2px] ${isLocked ? 'bg-black/60' : ''}`}>
+      <div className={`absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-[2px] ${(isLocked || isMaintenance) ? 'bg-black/60' : ''}`}>
         
-        {isLocked ? (
+        {isMaintenance ? (
+            <div className="flex flex-col items-center gap-3 px-6 text-center">
+               <div className="bg-orange-600 text-white rounded-full p-4 shadow-lg shadow-orange-900/40">
+                   <Lock size={24} />
+               </div>
+               <p className="text-white text-[10px] font-bold uppercase tracking-widest leading-tight">
+                   Curso em Manutenção
+               </p>
+               {maintenanceMode?.endDate && (
+                   <p className="text-orange-400 text-[8px] font-bold uppercase tracking-tighter">
+                       Até: {new Date(maintenanceMode.endDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                   </p>
+               )}
+            </div>
+        ) : isLocked ? (
            <div className="flex flex-col items-center gap-3">
               <div className="bg-white text-black rounded-full p-4 shadow-lg transform scale-50 group-hover:scale-100 transition-all duration-300 ease-out font-black text-xs uppercase tracking-widest">
                  Comprar

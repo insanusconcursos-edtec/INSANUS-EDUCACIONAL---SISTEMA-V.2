@@ -11,16 +11,17 @@ const LockIcon = () => (
 interface StudentModuleCardProps {
   module: CourseModule;
   onClick: (module: CourseModule) => void;
+  isLocked?: boolean;
 }
 
-export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, onClick }) => {
-  // Lógica de Bloqueio (Data ou Manual)
+export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, onClick, isLocked: isMaintenanceLocked }) => {
+  // Lógica de Bloqueio (Data ou Manual ou Manutenção)
   // Fix: parsing releaseDate ("YYYY-MM-DD") correctly for comparison
   const isDateLocked = module.releaseDate 
     ? new Date(module.releaseDate + "T00:00:00") > new Date() 
     : false;
     
-  const isLocked = module.isLocked || isDateLocked;
+  const isLocked = isMaintenanceLocked || module.isLocked || isDateLocked;
 
   const formattedDate = module.releaseDate 
     ? new Date(module.releaseDate + 'T00:00:00').toLocaleDateString('pt-BR') 

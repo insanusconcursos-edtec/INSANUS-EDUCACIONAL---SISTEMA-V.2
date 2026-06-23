@@ -46,6 +46,12 @@ export interface OnlineCourse {
   createdAt: string;
   updatedAt: string;
   active: boolean;
+  maintenanceMode?: {
+    enabled: boolean;
+    message?: string;
+    endDate?: string;
+    whitelistedUsers?: string[];
+  };
 }
 
 // --- NOVO: Interface do Módulo ---
