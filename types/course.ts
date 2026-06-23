@@ -107,8 +107,14 @@ export interface CourseLesson {
   pdfCount?: number;
 }
 
+// --- NOVO: Estrutura Recursiva para Modal de Vinculação ---
+export interface CourseStructureFolder extends CourseSubModule {
+  lessons: CourseLesson[];
+  subfolders?: CourseStructureFolder[];
+}
+
 export interface CourseStructureModule extends CourseModule {
-  folders: (CourseSubModule & { lessons: CourseLesson[] })[];
+  folders: CourseStructureFolder[];
   looseLessons: CourseLesson[];
 }
 

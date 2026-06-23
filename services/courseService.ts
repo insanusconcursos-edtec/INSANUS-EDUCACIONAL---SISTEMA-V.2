@@ -22,7 +22,7 @@ import {
   arrayRemove
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { OnlineCourse, CourseFormData, CourseModule, CourseSubModule, CourseLesson, CourseContent, CourseStructureModule } from '../types/course';
+import { OnlineCourse, CourseFormData, CourseModule, CourseSubModule, CourseLesson, CourseContent, CourseStructureModule, CourseStructureFolder } from '../types/course';
 import { CourseEditalStructure } from '../types/courseEdital';
 
 const COLLECTION_NAME = 'online_courses';
@@ -756,13 +756,20 @@ export const courseService = {
         const content = contentSnap.data() as CourseContent;
         const lessonRef = doc(db, LESSONS_COLLECTION, content.lessonId);
 
+        // Atualizar contadores
         if (content.type === 'video') await updateDoc(lessonRef, { videoCount: increment(-1) });
-        else if (content.type === 'pdf') {
-            await updateDoc(lessonRef, { pdfCount: increment(-1) });
-            // Deletar arquivo do storage se for PDF
-            if (content.fileUrl) {
-                await courseService.safeDeleteStorageFile(content.fileUrl);
-            }
+        else if (content.type === 'pdf') await updateDoc(lessonRef, { pdfCount: increment(-1) });
+
+        // DELEÇÃO DE ARQUIVO FÍSICO (Storage)
+        // Regra Geral: Se tem uma URL do Firebase Storage, deleta para evitar conteúdo "morto".
+        // Isso cobre PDFs, Vídeos hospedados no Firebase, Imagens de conteúdo, etc.
+        if (content.fileUrl) {
+            await courseService.safeDeleteStorageFile(content.fileUrl);
+        }
+        
+        // Também verifica videoUrl caso o vídeo tenha sido enviado para o Storage
+        if (content.videoUrl && content.videoPlatform !== 'panda' && content.videoPlatform !== 'youtube') {
+            await courseService.safeDeleteStorageFile(content.videoUrl);
         }
 
         await deleteDoc(contentRef);
@@ -975,32 +982,44 @@ export const courseService = {
 
       const structure: CourseStructureModule[] = [];
 
+      // Função Auxiliar para montar árvore de pastas recursivamente
+      const buildFolderTree = (allFolders: CourseSubModule[], allLessons: CourseLesson[], parentId: string | null = null): CourseStructureFolder[] => {
+        return allFolders
+          .filter(f => (f.parentId || null) === parentId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map(folder => ({
+            ...folder,
+            lessons: allLessons
+              .filter(l => l.subModuleId === folder.id)
+              .sort((a, b) => (a.order || 0) - (b.order || 0)),
+            subfolders: buildFolderTree(allFolders, allLessons, folder.id)
+          }));
+      };
+
       // 2. Para cada módulo, busca pastas e aulas
       for (const modDoc of modulesSnap.docs) {
         const mod = { id: modDoc.id, ...modDoc.data() } as CourseModule;
 
-        // Busca pastas (submódulos) deste módulo
+        // Busca TODAS as pastas deste módulo
         const subRef = collection(db, SUBMODULES_COLLECTION);
-        const qSub = query(subRef, where('moduleId', '==', mod.id), orderBy('order', 'asc'));
+        const qSub = query(subRef, where('moduleId', '==', mod.id));
         const subSnap = await getDocs(qSub);
-        const subModules = subSnap.docs.map(d => ({ id: d.id, ...d.data() } as CourseSubModule));
+        const allSubModules = subSnap.docs.map(d => ({ id: d.id, ...d.data() } as CourseSubModule));
 
-        // Busca aulas deste módulo
+        // Busca TODAS as aulas deste módulo
         const lessonsRef = collection(db, LESSONS_COLLECTION);
-        const qLessons = query(lessonsRef, where('moduleId', '==', mod.id), orderBy('order', 'asc'));
+        const qLessons = query(lessonsRef, where('moduleId', '==', mod.id));
         const lessonsSnap = await getDocs(qLessons);
-        const lessons = lessonsSnap.docs.map(d => ({ id: d.id, ...d.data() } as CourseLesson));
+        const allLessons = lessonsSnap.docs.map(d => ({ id: d.id, ...d.data() } as CourseLesson));
 
         // Monta a árvore relacional
         structure.push({
           ...mod,
-          folders: subModules.map(folder => ({
-            ...folder,
-            // Aulas que pertencem a esta pasta
-            lessons: lessons.filter(l => l.subModuleId === folder.id) 
-          })),
+          folders: buildFolderTree(allSubModules, allLessons, null),
           // Aulas que estão soltas no módulo (sem pasta)
-          looseLessons: lessons.filter(l => !l.subModuleId) 
+          looseLessons: allLessons
+            .filter(l => !l.subModuleId)
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
         });
       }
       

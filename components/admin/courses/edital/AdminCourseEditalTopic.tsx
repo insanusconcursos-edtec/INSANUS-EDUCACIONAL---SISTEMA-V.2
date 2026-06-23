@@ -14,7 +14,7 @@ import MindMapManager from '../../metas/tools/mindmap/MindMapManager';
 import FlashcardEditor from '../../metas/tools/FlashcardEditor';
 import { LinkLessonModal } from './LinkLessonModal';
 import { ConfirmationModal } from '../../../../components/ui/ConfirmationModal';
-import { RichTextEditor } from '../../../../components/ui/RichTextEditor';
+import { TipTapEditor } from '../../../../components/ui/TipTapEditor';
 
 interface Props {
   topic: CourseEditalTopic;
@@ -42,6 +42,7 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
 
   // Estados para Observação
   const [isEditingObservation, setIsEditingObservation] = useState(false);
+  const [isObsOpen, setIsObsOpen] = useState(false);
 
   // Estados para Modais das Ferramentas
   const [activeTool, setActiveTool] = useState<'MAP' | 'FLASHCARD' | 'LESSON_LINK' | null>(null);
@@ -304,28 +305,51 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
               {(isEditingObservation || (topic.observation && topic.observation !== '<p><br></p>' && topic.observation !== '')) && (
                   <div className="mb-4 mt-2">
                       {isEditingObservation ? (
-                          <div className="space-y-2 animate-in fade-in">
-                              <RichTextEditor 
-                                  value={topic.observation || ''} 
+                          <div className="space-y-2 animate-in fade-in h-[400px] flex flex-col">
+                              <TipTapEditor 
+                                  content={topic.observation || ''} 
                                   onChange={(val) => onUpdate({ ...topic, observation: val })}
                                   placeholder="Digite observações, dicas ou orientações para este tópico..."
                               />
-                              <div className="flex justify-end">
+                              <div className="flex justify-end mt-2">
                                   <button onClick={() => setIsEditingObservation(false)} className="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white text-[10px] uppercase font-bold rounded transition-colors">
                                       Concluir Observação
                                   </button>
                               </div>
                           </div>
                       ) : (
-                          <div 
-                            className="p-4 bg-[#16181c] border border-gray-800 rounded-lg group/obs relative cursor-pointer hover:border-yellow-500/50 transition-colors"
-                            onClick={() => setIsEditingObservation(true)}
-                            title="Clique para editar"
-                          >
-                            <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider block mb-2 flex items-center gap-2">
-                                <StickyNote size={12} /> Observação
-                            </span>
-                            <div className="rich-content text-gray-300 text-xs" dangerouslySetInnerHTML={{ __html: topic.observation || '' }} />
+                          <div className={`p-4 bg-[#16181c] border rounded-lg transition-all duration-300 ${isObsOpen ? 'border-yellow-500/40' : 'border-gray-800 hover:border-yellow-500/30'}`}>
+                              <button 
+                                  onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsObsOpen(!isObsOpen);
+                                  }}
+                                  className="flex items-center justify-between w-full group/obs"
+                              >
+                                  <div className="flex items-center gap-2">
+                                      <div className={`p-1.5 rounded-lg transition-colors ${isObsOpen ? 'bg-yellow-500 text-black' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                                          <StickyNote size={12} />
+                                      </div>
+                                      <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider">Aviso / Observação</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1.5 text-[9px] font-bold text-yellow-500/50 uppercase tracking-widest group-hover/obs:text-yellow-500 transition-colors">
+                                      {isObsOpen ? 'Ocultar' : 'Ver Observação'}
+                                      <ChevronDown size={14} className={`transition-transform duration-300 ${isObsOpen ? 'rotate-180' : ''}`} />
+                                  </div>
+                              </button>
+                              
+                              {isObsOpen && (
+                                  <div className="mt-4 pt-4 border-t border-gray-800 animate-in slide-in-from-top-2 fade-in duration-300 relative">
+                                      <div className="rich-content text-gray-300 text-xs" dangerouslySetInnerHTML={{ __html: topic.observation || '' }} />
+                                      <button 
+                                          onClick={() => setIsEditingObservation(true)}
+                                          className="absolute top-4 right-0 p-1 text-[8px] font-bold text-blue-500 hover:text-blue-400 uppercase tracking-widest"
+                                      >
+                                          Editar
+                                      </button>
+                                  </div>
+                              )}
                           </div>
                       )}
                   </div>

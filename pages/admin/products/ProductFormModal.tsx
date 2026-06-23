@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft } from 'lucide-react';
+import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft, QrCode } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { QRCodeCanvas } from 'qrcode.react';
 import { Product, ProductType, ProductOffer, ProductSplit } from '../../../types/product';
 import { createProduct, updateProduct, uploadProductCover } from '../../../services/productService';
 import { syncProductResourcesForStudents } from '../../../services/userService';
@@ -42,6 +43,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
   const [isUploadingCheckout, setIsUploadingCheckout] = useState(false);
   const [searchTerms] = useState({ plans: '', courses: '', classes: '', simulated: '', liveEvents: '' });
   const [expanded, setExpanded] = useState({ plans: false, courses: false, classes: false, simulated: false, liveEvents: false });
+  const [qrCodeOffer, setQrCodeOffer] = useState<ProductOffer | null>(null);
 
   // Linked Resources State
   const [linkedPlans, setLinkedPlans] = useState<string[]>(product?.linkedResources.plans || []);
@@ -491,15 +493,25 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
 
                       <div className="flex items-center gap-2">
                         {product?.id && (
-                          <button
-                            type="button"
-                            onClick={() => copyOfferLink(offer.id)}
-                            className={`p-3 rounded-xl transition-all ${
-                              copiedId === offer.id ? 'bg-green-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
-                            }`}
-                          >
-                            {copiedId === offer.id ? <Check size={18} /> : <Copy size={18} />}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setQrCodeOffer(offer)}
+                              title="Gerar QR Code"
+                              className="p-3 bg-zinc-900 text-zinc-400 border border-zinc-800 rounded-xl hover:text-white hover:border-zinc-700 transition-all"
+                            >
+                              <QrCode size={18} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyOfferLink(offer.id)}
+                              className={`p-3 rounded-xl transition-all ${
+                                copiedId === offer.id ? 'bg-green-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+                              }`}
+                            >
+                              {copiedId === offer.id ? <Check size={18} /> : <Copy size={18} />}
+                            </button>
+                          </>
                         )}
 
                         <button
@@ -874,6 +886,81 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
           </section>
         </form>
       </div>
+
+      {/* QR Code Modal */}
+      {qrCodeOffer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <h4 className="text-white font-black uppercase tracking-widest text-sm">QR Code da Oferta</h4>
+                <p className="text-[10px] text-zinc-500 uppercase font-bold mt-0.5">{qrCodeOffer.name || 'Checkout'}</p>
+              </div>
+              <button
+                onClick={() => setQrCodeOffer(null)}
+                className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-10 flex flex-col items-center">
+              <div className="p-4 bg-white rounded-2xl shadow-2xl">
+                <QRCodeCanvas 
+                  value={`${window.location.origin}/checkout/${qrCodeOffer.id}`}
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                  imageSettings={{
+                    src: "/logo.png", // Assuming there's a logo
+                    x: undefined,
+                    y: undefined,
+                    height: 40,
+                    width: 40,
+                    excavate: true,
+                  }}
+                />
+              </div>
+              
+              <div className="mt-8 w-full space-y-3">
+                <button
+                  onClick={() => {
+                    const canvas = document.querySelector('canvas');
+                    if (canvas) {
+                      const url = canvas.toDataURL("image/png");
+                      const link = document.createElement("a");
+                      link.download = `qrcode-${qrCodeOffer.id}.png`;
+                      link.href = url;
+                      link.click();
+                      toast.success('QR Code baixado com sucesso!');
+                    }
+                  }}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-zinc-700 flex items-center justify-center gap-2"
+                >
+                  Baixar Imagem
+                </button>
+                <button
+                  onClick={() => {
+                    const canvas = document.querySelector('canvas');
+                    if (canvas) {
+                      canvas.toBlob((blob) => {
+                        if (blob) {
+                          const item = new ClipboardItem({ "image/png": blob });
+                          navigator.clipboard.write([item]);
+                          toast.success('Copiado para a área de transferência!');
+                        }
+                      });
+                    }
+                  }}
+                  className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+                >
+                  Copiar Imagem
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

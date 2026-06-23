@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ChevronRight, CheckCircle2, PlayCircle, FileText, FileQuestion,
-  BrainCircuit, Layers, X, BookOpen, Loader2, CalendarClock, FolderKanban
+  BrainCircuit, Layers, X, BookOpen, Loader2, CalendarClock, FolderKanban,
+  MessageSquare, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useSpacedReviewModal } from '../../../../contexts/SpacedReviewModalContext';
@@ -54,6 +55,7 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
   const [isOpen, setIsOpen] = useState(isFocused || hasFocusedChild);
   
   const [isLessonsOpen, setIsLessonsOpen] = useState(false);
+  const [isObsOpen, setIsObsOpen] = useState(false);
   const { currentUser: user, userData } = useAuth(); 
   
   // Ref para Auto-Scroll
@@ -383,6 +385,9 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                 <h4 className={`font-bold text-xs uppercase transition-colors flex items-center gap-1 ${isCompleted ? 'text-gray-400 line-through decoration-green-900/50' : isFocused ? 'text-yellow-500' : 'text-gray-200'}`}>
                     {numberingPrefix && <span className="text-gray-500">{numberingPrefix}</span>}
                     <span title={topic.name}>{topic.name}</span>
+                    {topic.observation && (
+                        <span className="ml-1 px-1 py-0.5 rounded-sm bg-yellow-500/10 border border-yellow-500/20 text-[7px] font-black text-yellow-500 uppercase tracking-widest leading-none">Obs</span>
+                    )}
                 </h4>
             </div>
 
@@ -494,9 +499,32 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
           <div className="p-4 border-t border-gray-800/50 bg-black flex flex-col gap-4">
             
             {topic.observation && (
-              <div className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl">
-                  <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider block mb-2">Aviso / Observação</span>
-                  <div className="prose prose-invert prose-sm max-w-none text-gray-300" dangerouslySetInnerHTML={{ __html: topic.observation }} />
+              <div className={`p-4 bg-yellow-500/5 border rounded-xl transition-all duration-300 ${isObsOpen ? 'border-yellow-500/40 shadow-[0_0_20px_rgba(234,179,8,0.05)]' : 'border-yellow-500/10 hover:border-yellow-500/30'}`}>
+                  <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setIsObsOpen(!isObsOpen);
+                    }}
+                    className="flex items-center justify-between w-full group/obs"
+                  >
+                      <div className="flex items-center gap-2">
+                         <div className={`p-1.5 rounded-lg transition-colors ${isObsOpen ? 'bg-yellow-500 text-black' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                             <MessageSquare size={12} />
+                         </div>
+                         <span className="text-[10px] font-black text-yellow-500 uppercase tracking-wider">Aviso / Observação</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 text-[9px] font-bold text-yellow-500/50 uppercase tracking-widest group-hover/obs:text-yellow-500 transition-colors">
+                        {isObsOpen ? 'Ocultar Detalhes' : 'Ver Observação'}
+                        <ChevronDown size={14} className={`transition-transform duration-300 ${isObsOpen ? 'rotate-180' : ''}`} />
+                      </div>
+                  </button>
+                  
+                  {isObsOpen && (
+                    <div className="mt-4 pt-4 border-t border-yellow-500/10 animate-in slide-in-from-top-2 fade-in duration-300">
+                        <div className="rich-content text-gray-300 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: topic.observation }} />
+                    </div>
+                  )}
               </div>
             )}
 

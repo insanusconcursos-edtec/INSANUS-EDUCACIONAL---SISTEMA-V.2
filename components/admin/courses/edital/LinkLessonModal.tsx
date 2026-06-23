@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, PlayCircle, Folder, CheckSquare, Square, Loader2, Save, FileText } from 'lucide-react';
 import { courseService } from '../../../../services/courseService';
-import { CourseLesson, CourseStructureModule } from '../../../../types/course';
+import { CourseLesson, CourseStructureModule, CourseStructureFolder } from '../../../../types/course';
 import { LinkedLesson } from '../../../../types/courseEdital';
 
 interface LinkLessonModalProps {
@@ -37,6 +37,51 @@ const LessonRow: React.FC<LessonRowProps> = ({ lesson, isSelected, onClick }) =>
   </div>
 );
 
+interface RecursiveFolderProps {
+    folder: CourseStructureFolder;
+    selectedIds: Set<string>;
+    toggleSelection: (lessonId: string) => void;
+    level?: number;
+}
+
+const RecursiveFolder: React.FC<RecursiveFolderProps> = ({ folder, selectedIds, toggleSelection, level = 0 }) => {
+    return (
+        <div className={`border-l-2 border-zinc-800 pl-3 ${level > 0 ? 'mt-2 ml-2' : 'ml-2'}`}>
+            <div className="flex items-center gap-2 mb-2 text-zinc-500">
+                <Folder size={12} />
+                <span className="text-[10px] font-bold uppercase tracking-wider">{folder.title}</span>
+            </div>
+            
+            <div className="pl-1">
+                {/* Aulas desta pasta */}
+                {folder.lessons?.map((lesson: CourseLesson) => (
+                    <LessonRow 
+                        key={lesson.id} 
+                        lesson={lesson} 
+                        isSelected={selectedIds.has(lesson.id)} 
+                        onClick={() => toggleSelection(lesson.id)} 
+                    />
+                ))}
+
+                {/* Subpastas recursivas */}
+                {folder.subfolders?.map((sub) => (
+                    <RecursiveFolder 
+                        key={sub.id} 
+                        folder={sub} 
+                        selectedIds={selectedIds} 
+                        toggleSelection={toggleSelection}
+                        level={level + 1}
+                    />
+                ))}
+
+                {(!folder.lessons?.length && !folder.subfolders?.length) && (
+                    <span className="text-[10px] text-zinc-600 italic">Pasta vazia</span>
+                )}
+            </div>
+        </div>
+    );
+};
+
 export function LinkLessonModal({ isOpen, onClose, courseId, onSave, initialSelectedIds = [] }: LinkLessonModalProps) {
   const [structure, setStructure] = useState<CourseStructureModule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,23 +104,16 @@ export function LinkLessonModal({ isOpen, onClose, courseId, onSave, initialSele
         // Auto-expandir módulos que já tenham aulas selecionadas
         const toExpand: Record<string, boolean> = {};
         
+        const checkFolderForSelection = (folder: CourseStructureFolder): boolean => {
+            if (folder.lessons?.some(l => initialSelectedIds.includes(l.id))) return true;
+            if (folder.subfolders?.some(sub => checkFolderForSelection(sub))) return true;
+            return false;
+        };
+
         data.forEach((mod: CourseStructureModule) => {
             let hasSelection = false;
-            
-            // Check loose lessons
-            if (mod.looseLessons?.some((l: CourseLesson) => initialSelectedIds.includes(l.id))) {
-                hasSelection = true;
-            }
-            
-            // Check folders
-            if (!hasSelection && mod.folders) {
-                mod.folders.forEach((f) => {
-                    if (f.lessons?.some((l: CourseLesson) => initialSelectedIds.includes(l.id))) {
-                        hasSelection = true;
-                    }
-                });
-            }
-
+            if (mod.looseLessons?.some((l: CourseLesson) => initialSelectedIds.includes(l.id))) hasSelection = true;
+            if (!hasSelection && mod.folders?.some(f => checkFolderForSelection(f))) hasSelection = true;
             if (hasSelection) toExpand[mod.id] = true;
         });
         
@@ -102,31 +140,22 @@ export function LinkLessonModal({ isOpen, onClose, courseId, onSave, initialSele
   const handleConfirm = () => {
     const selectedLessons: LinkedLesson[] = [];
     
-    // Varre a estrutura para reconstruir os objetos LinkedLesson baseados nos IDs selecionados
-    structure.forEach((mod: CourseStructureModule) => {
-        // 1. Aulas Soltas
-        mod.looseLessons?.forEach((lesson: CourseLesson) => {
-            if (selectedIds.has(lesson.id)) {
-                selectedLessons.push({
-                    id: lesson.id,
-                    title: lesson.title,
-                    moduleId: mod.id
-                });
+    const collectSelected = (lessons: CourseLesson[], moduleId: string) => {
+        lessons.forEach(l => {
+            if (selectedIds.has(l.id)) {
+                selectedLessons.push({ id: l.id, title: l.title, moduleId });
             }
         });
+    };
 
-        // 2. Aulas em Pastas
-        mod.folders?.forEach((folder) => {
-            folder.lessons?.forEach((lesson: CourseLesson) => {
-                if (selectedIds.has(lesson.id)) {
-                    selectedLessons.push({
-                        id: lesson.id,
-                        title: lesson.title,
-                        moduleId: mod.id
-                    });
-                }
-            });
-        });
+    const processFolder = (folder: CourseStructureFolder, moduleId: string) => {
+        collectSelected(folder.lessons || [], moduleId);
+        folder.subfolders?.forEach(sub => processFolder(sub, moduleId));
+    };
+
+    structure.forEach((mod) => {
+        collectSelected(mod.looseLessons || [], mod.id);
+        mod.folders?.forEach(f => processFolder(f, mod.id));
     });
 
     onSave(selectedLessons);
@@ -162,10 +191,14 @@ export function LinkLessonModal({ isOpen, onClose, courseId, onSave, initialSele
                     
                     // Contagem de selecionados neste módulo
                     let moduleSelectedCount = 0;
+                    
+                    const countSelectedInFolder = (folder: CourseStructureFolder) => {
+                        folder.lessons?.forEach(l => { if(selectedIds.has(l.id)) moduleSelectedCount++; });
+                        folder.subfolders?.forEach(sub => countSelectedInFolder(sub));
+                    };
+
                     mod.looseLessons?.forEach((l: CourseLesson) => { if(selectedIds.has(l.id)) moduleSelectedCount++; });
-                    mod.folders?.forEach((f) => {
-                        f.lessons?.forEach((l: CourseLesson) => { if(selectedIds.has(l.id)) moduleSelectedCount++; });
-                    });
+                    mod.folders?.forEach(f => countSelectedInFolder(f));
 
                     return (
                         <div key={mod.id} className="border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/20">
@@ -189,26 +222,14 @@ export function LinkLessonModal({ isOpen, onClose, courseId, onSave, initialSele
                             {isExpanded && (
                                 <div className="p-3 space-y-3 bg-black/20">
                                     
-                                    {/* 1. Pastas (Submódulos) */}
+                                    {/* 1. Pastas (Módulos e Subpastas Recursivas) */}
                                     {mod.folders?.map((folder) => (
-                                        <div key={folder.id} className="ml-2 border-l-2 border-zinc-800 pl-3">
-                                            <div className="flex items-center gap-2 mb-2 text-zinc-500">
-                                                <Folder size={12} />
-                                                <span className="text-[10px] font-bold uppercase tracking-wider">{folder.title}</span>
-                                            </div>
-                                            
-                                            <div className="pl-1">
-                                                {folder.lessons?.length === 0 && <span className="text-[10px] text-zinc-600 italic">Pasta vazia</span>}
-                                                {folder.lessons?.map((lesson: CourseLesson) => (
-                                                    <LessonRow 
-                                                        key={lesson.id} 
-                                                        lesson={lesson} 
-                                                        isSelected={selectedIds.has(lesson.id)} 
-                                                        onClick={() => toggleSelection(lesson.id)} 
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <RecursiveFolder 
+                                            key={folder.id} 
+                                            folder={folder} 
+                                            selectedIds={selectedIds} 
+                                            toggleSelection={toggleSelection} 
+                                        />
                                     ))}
 
                                     {/* 2. Aulas Soltas no Módulo */}
