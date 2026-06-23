@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Folder, Trash2, Link, Save, Check } from 'lucide-react';
+import { X, Folder, Trash2, Link, Save, Check, Edit2 } from 'lucide-react';
 import { CourseEditalDiscipline, CourseEditalTopicGroup } from '../../../../types/courseEdital';
 
 interface CourseTopicGroupManagerProps {
@@ -14,6 +14,8 @@ export const CourseTopicGroupManagerModal: React.FC<CourseTopicGroupManagerProps
   onUpdate
 }) => {
   const [newGroupName, setNewGroupName] = useState('');
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editGroupName, setEditGroupName] = useState('');
   
   // Link Modal State
   const [linkingGroup, setLinkingGroup] = useState<CourseEditalTopicGroup | null>(null);
@@ -36,6 +38,19 @@ export const CourseTopicGroupManagerModal: React.FC<CourseTopicGroupManagerProps
       topicGroups: updatedGroups
     });
     setNewGroupName('');
+  };
+
+  const handleUpdateGroupName = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGroupId || !editGroupName.trim()) return;
+
+    onUpdate({
+        ...discipline,
+        topicGroups: (discipline.topicGroups || []).map(g => 
+            g.id === editingGroupId ? { ...g, name: editGroupName } : g
+        )
+    });
+    setEditingGroupId(null);
   };
 
   const handleDeleteGroup = (groupId: string) => {
@@ -160,18 +175,52 @@ export const CourseTopicGroupManagerModal: React.FC<CourseTopicGroupManagerProps
             <div className="flex-1 overflow-y-auto p-6 space-y-3">
               {(discipline.topicGroups || []).map(group => {
                 const count = discipline.topics.filter(t => t.groupId === group.id).length;
+                const isEditing = editingGroupId === group.id;
+
                 return (
                   <div key={group.id} className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-zinc-800 rounded-lg">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="p-2 bg-zinc-800 rounded-lg shrink-0">
                         <Folder size={16} className="text-zinc-400" />
                       </div>
-                      <div>
-                        <h4 className="text-sm font-black text-white">{group.name}</h4>
-                        <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase">{count} tópicos vinculados</p>
+                      <div className="flex-1 min-w-0">
+                        {isEditing ? (
+                          <form onSubmit={handleUpdateGroupName} className="flex gap-2">
+                             <input 
+                                value={editGroupName}
+                                onChange={e => setEditGroupName(e.target.value)}
+                                autoFocus
+                                className="flex-1 bg-black border border-zinc-700 rounded px-2 py-1 text-sm font-bold text-white focus:outline-none focus:border-red-600"
+                             />
+                             <button type="submit" className="p-1 text-green-500 hover:bg-green-500/10 rounded">
+                                <Check size={16} />
+                             </button>
+                             <button type="button" onClick={() => setEditingGroupId(null)} className="p-1 text-red-500 hover:bg-red-500/10 rounded">
+                                <X size={16} />
+                             </button>
+                          </form>
+                        ) : (
+                          <>
+                            <h4 className="text-sm font-black text-white truncate max-w-[200px]">{group.name}</h4>
+                            <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase">{count} tópicos vinculados</p>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isEditing && (
+                        <button
+                          onClick={() => {
+                            setEditingGroupId(group.id);
+                            setEditGroupName(group.name);
+                          }}
+                          className="p-2 bg-zinc-950 border border-zinc-800 hover:border-blue-500 text-zinc-600 hover:text-blue-500 rounded-lg transition-colors"
+                          title="Editar Nome"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      )}
+                      
                       <button
                         onClick={() => openLinkModal(group)}
                         className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-red-600 text-zinc-400 hover:text-white rounded-lg text-xs font-black transition-colors"

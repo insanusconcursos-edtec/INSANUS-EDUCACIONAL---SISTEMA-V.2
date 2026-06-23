@@ -1,16 +1,18 @@
 
 import React, { useState } from 'react';
-import { ChevronRight, Plus, Trash2, BookOpen, ArrowUp, ArrowDown, FolderKanban } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, BookOpen, ArrowUp, ArrowDown, FolderKanban, ArrowRightLeft } from 'lucide-react';
 import { CourseEditalDiscipline, CourseEditalTopic } from '../../../../types/courseEdital';
 import { AdminCourseEditalTopic } from './AdminCourseEditalTopic';
 import { ConfirmationModal } from '../../ui/ConfirmationModal';
 import { CourseTopicGroupManagerModal } from './CourseTopicGroupManagerModal';
+import { courseService } from '../../../../services/courseService';
 
 interface Props {
   discipline: CourseEditalDiscipline;
   courseId: string;
   onUpdate: (updated: CourseEditalDiscipline) => void;
   onDelete: () => void;
+  onMigrate: () => void;
   // Props de reordenação recebidas do pai (Manager)
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -21,7 +23,7 @@ interface Props {
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export const AdminCourseEditalDiscipline: React.FC<Props> = ({ 
-    discipline, courseId, onUpdate, onDelete, 
+    discipline, courseId, onUpdate, onDelete, onMigrate,
     onMoveUp, onMoveDown, isFirst, isLast 
 }) => {
   const [isOpen, setIsOpen] = useState(false); // Padrão fechado para melhor organização visual
@@ -29,6 +31,10 @@ export const AdminCourseEditalDiscipline: React.FC<Props> = ({
   const [localName, setLocalName] = useState(discipline.name);
   const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  
+  // Estados para edição direta de nome de pasta
+  const [editingGroupFolderNameId, setEditingGroupFolderNameId] = useState<string | null>(null);
+  const [localGroupFolderName, setLocalGroupFolderName] = useState('');
 
   const toggleGroup = (groupId: string, e: React.MouseEvent) => {
       e.stopPropagation();
@@ -36,6 +42,18 @@ export const AdminCourseEditalDiscipline: React.FC<Props> = ({
       if (next.has(groupId)) next.delete(groupId);
       else next.add(groupId);
       setExpandedGroups(next);
+  };
+
+  const handleGroupFolderNameBlur = (groupId: string) => {
+    setEditingGroupFolderNameId(null);
+    if (localGroupFolderName.trim() && localGroupFolderName !== (discipline.topicGroups || []).find(g => g.id === groupId)?.name) {
+        onUpdate({
+            ...discipline,
+            topicGroups: (discipline.topicGroups || []).map(g => 
+                g.id === groupId ? { ...g, name: localGroupFolderName } : g
+            )
+        });
+    }
   };
 
   // Estados para Modal de Exclusão de Tópico
@@ -83,8 +101,18 @@ export const AdminCourseEditalDiscipline: React.FC<Props> = ({
   };
 
   // Confirmar Exclusão de Tópico
-  const confirmDeleteTopic = () => {
+  const confirmDeleteTopic = async () => {
     if (topicToDelete) {
+        const topic = discipline.topics.find(t => t.id === topicToDelete);
+        if (topic) {
+            const removedIds = await courseService.deleteTopicResourcesRecursively(topic);
+
+            // Lógica de Limpeza de Dados do Aluno (Progresso e Revisões)
+            if (courseId) {
+                await courseService.cleanupStudentTopicData(courseId, removedIds);
+            }
+        }
+
         onUpdate({
             ...discipline,
             topics: discipline.topics.filter(t => t.id !== topicToDelete)
@@ -182,6 +210,14 @@ export const AdminCourseEditalDiscipline: React.FC<Props> = ({
             </div>
 
             <button 
+                onClick={(e) => { e.stopPropagation(); onMigrate(); }}
+                className="p-1.5 text-zinc-500 hover:text-blue-500 hover:bg-blue-500/10 rounded transition-colors"
+                title="Migrar para outra Disciplina"
+            >
+                <ArrowRightLeft size={16} />
+            </button>
+
+            <button 
                 onClick={(e) => { e.stopPropagation(); setIsGroupManagerOpen(true); }}
                 className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded transition-colors"
                 title="Gerenciar Pastas"
@@ -229,7 +265,32 @@ export const AdminCourseEditalDiscipline: React.FC<Props> = ({
                                         <ChevronRight size={14} />
                                     </div>
                                     <FolderKanban size={14} className="text-red-500" />
-                                    <span className="text-xs font-black text-red-500 uppercase tracking-tight">{group.name}</span>
+                                    {editingGroupFolderNameId === group.id ? (
+                                        <input 
+                                            value={localGroupFolderName}
+                                            onChange={(e) => setLocalGroupFolderName(e.target.value)}
+                                            onBlur={() => handleGroupFolderNameBlur(group.id)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleGroupFolderNameBlur(group.id);
+                                                if (e.key === 'Escape') setEditingGroupFolderNameId(null);
+                                            }}
+                                            autoFocus
+                                            className="bg-black border border-zinc-700 rounded px-1 py-0.5 text-xs font-black text-red-500 uppercase tracking-tight focus:outline-none"
+                                        />
+                                    ) : (
+                                        <span 
+                                            className="text-xs font-black text-red-500 uppercase tracking-tight hover:text-red-400"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditingGroupFolderNameId(group.id);
+                                                setLocalGroupFolderName(group.name);
+                                            }}
+                                            title="Clique para editar nome da pasta"
+                                        >
+                                            {group.name}
+                                        </span>
+                                    )}
                                     <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest ml-2">{groupTopics.length} tópicos</span>
                                 </div>
                                 {expandedGroups.has(group.id) && (

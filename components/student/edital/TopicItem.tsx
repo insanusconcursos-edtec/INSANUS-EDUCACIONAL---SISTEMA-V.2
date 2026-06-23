@@ -620,12 +620,8 @@ const TopicItem: React.FC<TopicItemProps> = memo(({
                     </div>
                     <div 
                         dangerouslySetInnerHTML={{ __html: observation }} 
-                        className="prose prose-invert prose-sm max-w-none text-zinc-400 text-xs"
+                        className="rich-content text-zinc-400 text-xs"
                     />
-                    <style>{`
-                        .rich-content ul { list-style-type: disc; padding-left: 1.5em; }
-                        .rich-content ol { list-style-type: decimal; padding-left: 1.5em; }
-                    `}</style>
                 </div>
             )}
 

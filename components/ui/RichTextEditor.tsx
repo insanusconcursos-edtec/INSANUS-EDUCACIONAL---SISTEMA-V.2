@@ -104,12 +104,6 @@ export function RichTextEditor({ value, onChange, placeholder }: RichTextEditorP
       </div>
 
       {/* --- ÁREA EDITÁVEL (CORRIGIDA) --- */}
-      {/* Adicionado suporte CSS para listas visuais dentro do editor */}
-      <style>{`
-        .rich-content ul { list-style-type: disc; padding-left: 1.5em; }
-        .rich-content ol { list-style-type: decimal; padding-left: 1.5em; }
-        .rich-content blockquote { border-left: 4px solid #4b5563; padding-left: 1em; font-style: italic; color: #9ca3af; }
-      `}</style>
       <div
         ref={editorRef}
         className="rich-content flex-1 p-4 text-gray-300 outline-none focus:bg-[#0f1114] transition-colors overflow-y-auto min-h-[150px] max-w-none text-sm"

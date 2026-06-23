@@ -90,8 +90,18 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
   };
 
   // 2. Confirma exclusão (Remove do array e fecha modal)
-  const confirmSubtopicDelete = () => {
+  const confirmSubtopicDelete = async () => {
     if(subtopicToDelete) {
+        const subtopic = topic.subtopics.find(s => s.id === subtopicToDelete);
+        if (subtopic) {
+            const removedIds = await courseService.deleteTopicResourcesRecursively(subtopic);
+            
+            // Lógica de Limpeza de Dados do Aluno (Progresso e Revisões)
+            if (courseId) {
+                await courseService.cleanupStudentTopicData(courseId, removedIds);
+            }
+        }
+
         onUpdate({
             ...topic,
             subtopics: topic.subtopics.filter(s => s.id !== subtopicToDelete)
@@ -157,7 +167,8 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
       }
   };
 
-  const handleRemovePDF = (url: string) => {
+  const handleRemovePDF = async (url: string) => {
+      await courseService.safeDeleteStorageFile(url);
       const newPdfs = (topic.materialPdfs || []).filter(p => p.url !== url);
       onUpdate({ ...topic, materialPdfs: newPdfs });
   };
@@ -314,7 +325,7 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
                             <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider block mb-2 flex items-center gap-2">
                                 <StickyNote size={12} /> Observação
                             </span>
-                            <div className="prose prose-invert prose-sm max-w-none text-gray-300 text-xs" dangerouslySetInnerHTML={{ __html: topic.observation || '' }} />
+                            <div className="rich-content text-gray-300 text-xs" dangerouslySetInnerHTML={{ __html: topic.observation || '' }} />
                           </div>
                       )}
                   </div>

@@ -5,6 +5,7 @@ import { deepCloneSafe } from '../../../../services/firestoreUtils';
 import { AdminCourseEditalDiscipline } from './AdminCourseEditalDiscipline';
 import { Loader2, Plus } from 'lucide-react';
 import ConfirmationModal from '../../../../components/ui/ConfirmationModal';
+import { DisciplineMigrationModal } from './DisciplineMigrationModal';
 
 interface EditalManagerProps {
     courseId: string;
@@ -23,6 +24,10 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [disciplineToDelete, setDisciplineToDelete] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    // Estados para Migração
+    const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
+    const [disciplineToMigrate, setDisciplineToMigrate] = useState<CourseEditalDiscipline | null>(null);
 
     // 1. Carregar dados do Edital
     useEffect(() => {
@@ -153,11 +158,71 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
         setIsDeleteModalOpen(true);
     };
 
+    const handleMigrateClick = (discipline: CourseEditalDiscipline) => {
+        setDisciplineToMigrate(discipline);
+        setIsMigrationModalOpen(true);
+    };
+
+    const handleMigrateConfirmed = async (targetDisciplineId: string) => {
+        if (!disciplineToMigrate) return;
+
+        try {
+            const source = disciplineToMigrate;
+            const targetIndex = disciplines.findIndex(d => d.id === targetDisciplineId);
+            if (targetIndex === -1) return;
+
+            const newDisciplines = [...disciplines];
+            const target = { ...newDisciplines[targetIndex] };
+
+            // 1. Criar novo grupo no destino
+            const newGroup = {
+                id: generateId(),
+                name: source.name,
+                order: (target.topicGroups || []).length
+            };
+
+            target.topicGroups = [...(target.topicGroups || []), newGroup];
+
+            // 2. Mover todos os tópicos da origem para este novo grupo no destino
+            const movedTopics = source.topics.map(t => ({ ...t, groupId: newGroup.id }));
+            target.topics = [...target.topics, ...movedTopics];
+
+            // 3. Atualizar lista de disciplinas
+            newDisciplines[targetIndex] = target;
+            const filteredDisciplines = newDisciplines.filter(d => d.id !== source.id);
+
+            setDisciplines(filteredDisciplines);
+            await saveToFirestore(editalStatus, filteredDisciplines);
+            
+            setIsMigrationModalOpen(false);
+            setDisciplineToMigrate(null);
+            alert(`Disciplina "${source.name}" migrada com sucesso para dentro de "${target.name}".`);
+        } catch (error) {
+            console.error("Erro ao migrar disciplina:", error);
+            alert("Erro ao realizar migração.");
+        }
+    };
+
     const confirmDelete = async () => {
         if (!disciplineToDelete) return;
         
         setIsDeleting(true);
         try {
+            const discipline = disciplines.find(d => d.id === disciplineToDelete);
+            if (discipline && discipline.topics && discipline.topics.length > 0) {
+                // Deletar recursivamente todos os recursos físicos (PDFs) dos tópicos desta disciplina
+                const allRemovedTopicIds: string[] = [];
+                for (const topic of discipline.topics) {
+                    const removedIds = await courseService.deleteTopicResourcesRecursively(topic);
+                    allRemovedTopicIds.push(...removedIds);
+                }
+
+                // Lógica de Limpeza de Dados do Aluno (Progresso e Revisões)
+                if (courseId && allRemovedTopicIds.length > 0) {
+                    await courseService.cleanupStudentTopicData(courseId, allRemovedTopicIds);
+                }
+            }
+
             const updatedDisciplines = disciplines.filter(d => d.id !== disciplineToDelete);
             await saveToFirestore(editalStatus, updatedDisciplines);
             setDisciplines(updatedDisciplines);
@@ -241,6 +306,7 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
                         courseId={courseId}
                         onUpdate={handleDisciplineUpdate}
                         onDelete={() => handleDeleteClick(discipline.id)}
+                        onMigrate={() => handleMigrateClick(discipline)}
                         // Props de Reordenação
                         onMoveUp={() => handleMoveDiscipline(index, 'up')}
                         onMoveDown={() => handleMoveDiscipline(index, 'down')}
@@ -263,6 +329,18 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
                 confirmText="Sim, Excluir"
                 variant="danger"
                 isLoading={isDeleting}
+            />
+
+            {/* MODAL DE MIGRAÇÃO */}
+            <DisciplineMigrationModal 
+                isOpen={isMigrationModalOpen}
+                onClose={() => {
+                    setIsMigrationModalOpen(false);
+                    setDisciplineToMigrate(null);
+                }}
+                sourceDiscipline={disciplineToMigrate}
+                allDisciplines={disciplines}
+                onConfirm={handleMigrateConfirmed}
             />
         </div>
     );

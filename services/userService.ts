@@ -576,9 +576,17 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
   const snapshot = await getDocs(q);
   const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Student));
 
-  const batch = writeBatch(db);
+  let batch = writeBatch(db);
   let batchCount = 0;
   const BATCH_LIMIT = 450; 
+
+  const commitIfNeeded = async () => {
+    if (batchCount >= BATCH_LIMIT) {
+      await batch.commit();
+      batch = writeBatch(db);
+      batchCount = 0;
+    }
+  };
 
   for (const student of students) {
     const products = student.products || [];
@@ -618,7 +626,10 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
     });
 
     // 2. Adicionar novos recursos que faltam
-    const ensureAccess = (type: AccessItem['type'], targetId: string) => {
+    const ensureAccess = async (type: AccessItem['type'], targetId: string) => {
+      // Garante que não estouramos o lote durante a adição de um recurso
+      await commitIfNeeded();
+
       // Verifica se o aluno já tem um acesso ATIVO para este recurso vindo deste produto
       const exists = updatedAccess.some(a => a.sourceProductId === sourceId && a.type === type && a.targetId === targetId && a.isActive);
       if (!exists) {
@@ -661,27 +672,37 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
       }
     };
 
-    (newResources.plans || []).forEach(id => ensureAccess('plan', id));
-    (newResources.onlineCourses || []).forEach(id => ensureAccess('course', id));
-    (newResources.simulated || []).forEach(id => ensureAccess('simulated_class', id));
-    (newResources.presentialClasses || []).forEach(id => ensureAccess('presential_class', id));
-    (newResources.liveEvents || []).forEach(id => ensureAccess('live_events', id));
+    for (const id of (newResources.plans || [])) {
+      await ensureAccess('plan', id);
+    }
+    for (const id of (newResources.onlineCourses || [])) {
+      await ensureAccess('course', id);
+    }
+    for (const id of (newResources.simulated || [])) {
+      await ensureAccess('simulated_class', id);
+    }
+    for (const id of (newResources.presentialClasses || [])) {
+      await ensureAccess('presential_class', id);
+    }
+    for (const id of (newResources.liveEvents || [])) {
+      await ensureAccess('live_events', id);
+    }
 
-    // Se houve mudança, adiciona ao batch de atualização do aluno
-    if (updatedAccess.length !== currentAccess.length) {
+    // Se houve mudança no array de acessos, atualiza o documento do aluno
+    const hasAccessCountChanged = updatedAccess.length !== currentAccess.length;
+    const hasStatusChanged = updatedAccess.some((a, i) => a.isActive !== currentAccess[i]?.isActive);
+
+    if (hasAccessCountChanged || hasStatusChanged) {
+      await commitIfNeeded();
       batch.update(doc(db, 'users', student.uid), { access: updatedAccess });
       batchCount++;
-      
-      if (batchCount >= BATCH_LIMIT) {
-        await batch.commit();
-        batchCount = 0; 
-      }
     }
   }
 
   if (batchCount > 0) {
     await batch.commit();
   }
+
   
   console.log(`[UserService] Sincronização concluída com sucesso.`);
 };

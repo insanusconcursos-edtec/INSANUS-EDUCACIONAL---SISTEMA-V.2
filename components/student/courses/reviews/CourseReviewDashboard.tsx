@@ -82,6 +82,14 @@ export function CourseReviewDashboard({ courseId, planId, onReviewNow }: { cours
 
     useEffect(() => {
         fetchReviews();
+
+        // Escuta eventos globais de atualização de revisões
+        const handleUpdate = () => fetchReviews();
+        window.addEventListener('course-reviews-updated', handleUpdate);
+        
+        return () => {
+            window.removeEventListener('course-reviews-updated', handleUpdate);
+        };
     }, [courseId, planId, user]);
 
     const handleComplete = async (review: CourseReview) => {

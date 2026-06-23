@@ -1027,6 +1027,99 @@ export const courseService = {
         console.error("Erro upload PDF edital:", error);
         throw error;
       }
+  },
+
+  /**
+   * Deleta todos os dados de progresso e revisões dos alunos vinculados a um tópico (ou lista de IDs).
+   * Isso evita lixo no banco de dados e inconsistências na agenda do aluno.
+   */
+  cleanupStudentTopicData: async (courseId: string, topicIds: string[]) => {
+    if (!courseId || topicIds.length === 0) return;
+
+    try {
+      // 1. Buscar o curso para pegar a lista de alunos matriculados
+      const courseSnap = await getDoc(doc(db, COLLECTION_NAME, courseId));
+      if (!courseSnap.exists()) return;
+      
+      const enrolledStudents = (courseSnap.data().enrolledStudents || []) as string[];
+      if (enrolledStudents.length === 0) return;
+
+      console.log(`[Cleanup] Iniciando limpeza de ${topicIds.length} tópicos para ${enrolledStudents.length} alunos.`);
+
+      // 2. Processar alunos em lotes grandes (para evitar muitos commits individuais)
+      let batch = writeBatch(db);
+      let batchCount = 0;
+      const BATCH_LIMIT = 450;
+
+      for (const userId of enrolledStudents) {
+        // A. Limpar progresso (completedTopics array)
+        const progressRef = doc(db, 'course_edital_progress', `${userId}_${courseId}`);
+        const progressSnap = await getDoc(progressRef);
+        if (progressSnap.exists()) {
+          const currentTopics = (progressSnap.data().completedTopics || []) as string[];
+          const filteredTopics = currentTopics.filter(id => !topicIds.includes(id));
+          if (filteredTopics.length !== currentTopics.length) {
+            batch.update(progressRef, { completedTopics: filteredTopics });
+            batchCount++;
+          }
+        }
+
+        // B. Limpar revisões (Subcoleção users/userId/course_reviews)
+        // O Firestore limita a cláusula 'in' a 10 valores. Processamos em fatias.
+        const reviewsRef = collection(db, 'users', userId, 'course_reviews');
+        
+        for (let i = 0; i < topicIds.length; i += 10) {
+          const chunk = topicIds.slice(i, i + 10);
+          const qReviews = query(reviewsRef, where('topicId', 'in', chunk));
+          const revSnap = await getDocs(qReviews);
+          
+          revSnap.docs.forEach(d => {
+            batch.delete(d.ref);
+            batchCount++;
+          });
+
+          // Verificar se o batch atingiu o limite dentro do loop de tópicos
+          if (batchCount >= BATCH_LIMIT) {
+            await batch.commit();
+            batch = writeBatch(db);
+            batchCount = 0;
+          }
+        }
+      }
+
+      // Commit final se sobrar algo
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+      
+      console.log(`[Cleanup] Limpeza de dados dos alunos concluída.`);
+    } catch (error) {
+      console.error("Erro ao limpar dados dos alunos após exclusão de tópico:", error);
+    }
+  },
+
+  /**
+   * Deleta recursivamente todos os recursos físicos (PDFs) de um tópico 
+   * e de todos os seus subtópicos. Retorna a lista de todos os IDs de tópicos removidos.
+   */
+  deleteTopicResourcesRecursively: async (topic: any): Promise<string[]> => {
+    let removedIds = [topic.id];
+
+    // 1. Deletar PDFs deste tópico
+    if (topic.materialPdfs && topic.materialPdfs.length > 0) {
+      const deletePromises = topic.materialPdfs.map((pdf: any) => courseService.safeDeleteStorageFile(pdf.url));
+      await Promise.all(deletePromises);
+    }
+
+    // 2. Recursividade para subtópicos
+    if (topic.subtopics && topic.subtopics.length > 0) {
+      for (const sub of topic.subtopics) {
+        const subIds = await courseService.deleteTopicResourcesRecursively(sub);
+        removedIds = [...removedIds, ...subIds];
+      }
+    }
+
+    return removedIds;
   }
 };
 

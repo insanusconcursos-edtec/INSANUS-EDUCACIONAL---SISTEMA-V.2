@@ -186,7 +186,7 @@ export const courseReviewService = {
   },
 
   /**
-   * 4. Deleta todas as revisões de um tópico (Quando o aluno desmarca conclusão)
+   * 4. Deleta todas as revisões de um tópico (Quando o aluno desmarca conclusão ou admin deleta)
    */
   deleteReviewsByTopic: async (userId: string, topicId: string, courseId?: string, planId?: string) => {
     const reviewsRef = collection(db, 'users', userId, 'course_reviews');
@@ -218,6 +218,9 @@ export const courseReviewService = {
     });
 
     await batch.commit();
+    
+    // Notifica a UI para re-sincronizar se necessário
+    window.dispatchEvent(new CustomEvent('course-reviews-updated', { detail: { userId, topicId, courseId, planId } }));
   },
 
   /**
@@ -275,6 +278,9 @@ export const courseReviewService = {
     }
 
     await batch.commit();
+
+    // Notifica a UI
+    window.dispatchEvent(new CustomEvent('course-reviews-updated', { detail: { userId, reviewId: review.id } }));
   },
 
   /**
