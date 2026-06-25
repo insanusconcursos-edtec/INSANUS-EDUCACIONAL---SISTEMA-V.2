@@ -121,6 +121,19 @@ export const ContentItem: React.FC<ContentItemProps> = ({ content, onEdit, onDel
           </button>
         </div>
       </div>
+
+      {/* Gabarito Comentado (Admin View) */}
+      {content.commentedAnswerKeyUrl && (
+        <div className="relative ml-8 mt-1">
+          <div className="absolute -left-6 top-0 h-1/2 w-4 border-b-2 border-l-2 border-blue-500/30 rounded-bl-lg"></div>
+          <div className="flex items-center gap-2 p-1.5 px-3 bg-blue-900/10 border border-blue-900/20 rounded-lg w-fit">
+            <FileText size={12} className="text-blue-500" />
+            <span className="text-[10px] text-blue-400 font-black uppercase tracking-wider">
+              Possui Gabarito Comentado
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

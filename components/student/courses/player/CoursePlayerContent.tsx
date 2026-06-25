@@ -181,6 +181,37 @@ export function CoursePlayerContent({ lesson }: CoursePlayerContentProps) {
                                         <Download className="w-5 h-5 text-gray-500 group-hover:text-white" />
                                     )}
                                 </div>
+
+                                {/* Gabarito Comentado (se houver) */}
+                                {item.commentedAnswerKeyUrl && (
+                                    <div className="relative ml-16 mt-2">
+                                        <div className="absolute -left-8 top-0 w-8 h-1/2 border-l-2 border-b-2 border-blue-500/30 rounded-bl-lg"></div>
+                                        <div 
+                                            onClick={() => handleOpenPdf(item.commentedAnswerKeyUrl!, `${item.id}-answerkey`)}
+                                            className={`
+                                                flex items-center gap-3 p-3 bg-blue-900/5 border border-blue-500/20 rounded-xl transition-all group mb-4 cursor-pointer
+                                                ${openingPdfId === `${item.id}-answerkey` ? 'opacity-75 pointer-events-none' : `hover:border-blue-500/50 hover:bg-blue-900/10` }
+                                            `}
+                                        >
+                                            <div className={`w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform shrink-0`}>
+                                                {openingPdfId === `${item.id}-answerkey` ? (
+                                                    <div className={`animate-spin h-4 w-4 border-2 text-blue-500 border-t-transparent rounded-full`}></div>
+                                                ) : (
+                                                    <FileText size={18} />
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="text-white font-bold text-xs">Gabarito Comentado</h4>
+                                                <span className={`text-[9px] uppercase transition-colors ${openingPdfId === `${item.id}-answerkey` ? 'text-blue-400 animate-pulse' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                                                    {openingPdfId === `${item.id}-answerkey` ? 'Gerando documento seguro...' : `Material Complementar • Clique para acessar`}
+                                                </span>
+                                            </div>
+                                            {openingPdfId !== `${item.id}-answerkey` && (
+                                                <Download className="w-4 h-4 text-gray-500 group-hover:text-white" />
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })()}

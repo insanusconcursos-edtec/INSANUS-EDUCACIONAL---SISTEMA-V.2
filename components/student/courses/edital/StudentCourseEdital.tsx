@@ -570,73 +570,75 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                  </div>
               )}
 
-              {/* PDFs VINCULADOS - SEPARADOS POR TIPO */}
-              {(() => {
-                  const theoryPdfs = topic.materialPdfs?.filter((pdf: any) => (pdf.pdfType || 'TEORIA') === 'TEORIA') || [];
-                  const questionsPdfs = topic.materialPdfs?.filter((pdf: any) => pdf.pdfType === 'QUESTOES') || [];
+              {/* PDFs VINCULADOS - LISTA ÚNICA COM MESMA HIERARQUIA */}
+              {topic.materialPdfs && topic.materialPdfs.length > 0 && (
+                <div className="col-span-1 md:col-span-2 space-y-2 mt-2">
+                  <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 mb-1">
+                    <FileText size={12} /> Materiais de Estudo
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1">
+                    {topic.materialPdfs.map((pdf: any, idx: number) => {
+                      const isTheory = (pdf.pdfType || 'TEORIA') === 'TEORIA';
+                      const pdfId = pdf.id || `pdf-${idx}`;
+                      return (
+                        <div key={pdfId} className="flex flex-col">
+                          <button 
+                            onClick={() => handleOpenPdf(pdf.url, pdfId)} 
+                            className={`
+                              flex items-center gap-3 p-3 bg-[#1a1d24] border rounded-lg transition-all text-left group 
+                              ${openingPdfId === pdfId ? 'opacity-70 cursor-not-allowed' : `hover:bg-zinc-800/50 ${isTheory ? 'border-yellow-500/10 hover:border-yellow-500/50' : 'border-orange-500/10 hover:border-orange-500/50'}`}
+                            `}
+                          >
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform ${isTheory ? 'bg-yellow-900/20 text-yellow-500' : 'bg-orange-900/20 text-orange-500'}`}>
+                                  {openingPdfId === pdfId ? (
+                                    <div className={`animate-spin rounded-full h-4 w-4 border-2 border-t-transparent ${isTheory ? 'border-yellow-500' : 'border-orange-500'}`}></div>
+                                  ) : (
+                                    isTheory ? <BookOpen size={16} /> : <FileQuestion size={16} />
+                                  )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-0.5">
+                                      <span className="text-[9px] text-gray-500 font-bold uppercase block">{openingPdfId === pdfId ? <span className={`${isTheory ? 'text-yellow-400' : 'text-orange-400'} animate-pulse`}>Gerando Seguro...</span> : (isTheory ? "Teoria" : "Questões")}</span>
+                                      <span className={`text-[7px] font-black px-1 rounded border uppercase ${isTheory ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'}`}>
+                                          {pdf.pdfType || 'TEORIA'}
+                                      </span>
+                                  </div>
+                                  <span className="text-xs text-white font-bold block truncate">{pdf.title}</span>
+                              </div>
+                          </button>
 
-                  return (
-                    <>
-                      {/* MATERIAIS TEÓRICOS */}
-                      {theoryPdfs.length > 0 && (
-                        <div className="col-span-1 md:col-span-2 space-y-2 mt-2">
-                          <h4 className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider flex items-center gap-2 mb-1">
-                            <BookOpen size={12} /> Materiais Teóricos
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {theoryPdfs.map((pdf: any, idx: number) => {
-                              const pdfId = pdf.id || `pdf-theory-${idx}`;
-                              return (
-                                <button 
-                                  key={pdfId} 
-                                  onClick={() => handleOpenPdf(pdf.url, pdfId)} 
-                                  className={`flex items-center gap-3 p-3 bg-[#1a1d24] border border-yellow-500/10 rounded-lg transition-all text-left group ${openingPdfId === pdfId ? 'opacity-70 cursor-not-allowed' : 'hover:border-yellow-500/50 hover:bg-yellow-500/5'}`}
-                                >
-                                    <div className="w-8 h-8 rounded-full bg-yellow-900/20 text-yellow-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        {openingPdfId === pdfId ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-yellow-500 border-t-transparent"></div> : <FileText size={16} />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <span className="text-[9px] text-gray-500 font-bold uppercase block mb-0.5">{openingPdfId === pdfId ? <span className="text-yellow-400 animate-pulse">Gerando Seguro...</span> : "Material de Teoria"}</span>
-                                        <span className="text-xs text-white font-bold block truncate">{pdf.title || `Teoria ${idx + 1}`}</span>
-                                    </div>
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {/* Gabarito Comentado (se houver) */}
+                          {pdf.commentedAnswerKeyUrl && (
+                              <div className="relative ml-8 mt-1">
+                                  <div className="absolute -left-5 top-0 h-1/2 w-4 border-b-2 border-l-2 border-blue-500/30 rounded-bl-lg"></div>
+                                  <button 
+                                      onClick={() => handleOpenPdf(pdf.commentedAnswerKeyUrl!, `${pdfId}-answerkey`)}
+                                      className={`
+                                          flex items-center gap-2 p-1.5 px-3 bg-blue-900/10 border border-blue-900/20 rounded-lg transition-all group w-full text-left
+                                          ${openingPdfId === `${pdfId}-answerkey` ? 'opacity-75 pointer-events-none' : `hover:border-blue-500/50 hover:bg-blue-900/20` }
+                                      `}
+                                  >
+                                      <div className={`shrink-0 transition-transform group-hover:scale-110 ${openingPdfId === `${pdfId}-answerkey` ? 'animate-spin' : ''}`}>
+                                          {openingPdfId === `${pdfId}-answerkey` ? (
+                                              <div className={`h-3 w-3 border-2 text-blue-500 border-t-transparent rounded-full`}></div>
+                                          ) : (
+                                              <FileText size={12} className="text-blue-500" />
+                                          )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                          <span className="text-[9px] text-blue-400 font-black uppercase tracking-wider block">
+                                              {openingPdfId === `${pdfId}-answerkey` ? 'Gerando...' : 'Gabarito Comentado'}
+                                          </span>
+                                      </div>
+                                  </button>
+                              </div>
+                          )}
                         </div>
-                      )}
-
-                      {/* CADERNOS DE QUESTÕES */}
-                      {questionsPdfs.length > 0 && (
-                        <div className="col-span-1 md:col-span-2 space-y-2 mt-2">
-                          <h4 className="text-[10px] font-bold text-orange-500 uppercase tracking-wider flex items-center gap-2 mb-1">
-                            <FileQuestion size={12} /> Cadernos de Questões
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {questionsPdfs.map((pdf: any, idx: number) => {
-                              const pdfId = pdf.id || `pdf-quest-${idx}`;
-                              return (
-                                <button 
-                                  key={pdfId} 
-                                  onClick={() => handleOpenPdf(pdf.url, pdfId)} 
-                                  className={`flex items-center gap-3 p-3 bg-[#1a1d24] border border-orange-500/10 rounded-lg transition-all text-left group ${openingPdfId === pdfId ? 'opacity-70 cursor-not-allowed' : 'hover:border-orange-500/50 hover:bg-orange-500/5'}`}
-                                >
-                                    <div className="w-8 h-8 rounded-full bg-orange-900/20 text-orange-500 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        {openingPdfId === pdfId ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-500 border-t-transparent"></div> : <FileQuestion size={16} />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <span className="text-[9px] text-gray-500 font-bold uppercase block mb-0.5">{openingPdfId === pdfId ? <span className="text-orange-400 animate-pulse">Gerando Seguro...</span> : "Caderno de Questões"}</span>
-                                        <span className="text-xs text-white font-bold block truncate">{pdf.title || `Questões ${idx + 1}`}</span>
-                                    </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-              })()}
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* SUBTÓPICOS RECURSIVOS (A CHAVE DA SOLUÇÃO) */}

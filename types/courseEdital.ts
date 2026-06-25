@@ -12,6 +12,8 @@ export interface MaterialPDF {
   url: string;
   storagePath?: string; // Para facilitar exclusão futura
   pdfType?: 'TEORIA' | 'QUESTOES';
+  commentedAnswerKeyUrl?: string | null;
+  commentedAnswerKeyName?: string | null;
 }
 
 export interface CourseEditalTopicGroup {

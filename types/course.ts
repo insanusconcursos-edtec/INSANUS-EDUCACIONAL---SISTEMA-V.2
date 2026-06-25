@@ -170,6 +170,10 @@ export interface CourseContent {
   textContent?: string; // Para Texto (HTML)
   
   embedCode?: string; // Para Códigos (Google Forms, etc)
+
+  // Gabarito Comentado (Para PDF do tipo QUESTÕES)
+  commentedAnswerKeyUrl?: string | null;
+  commentedAnswerKeyName?: string | null;
 }
 
 // --- NOVO: Interface de Matrícula (Enrollment) ---

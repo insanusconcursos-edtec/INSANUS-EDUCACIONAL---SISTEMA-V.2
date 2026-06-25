@@ -36,6 +36,12 @@ export function ContentModal({ isOpen, onClose, onSave, initialData, lessonId, c
   const [pdfClassification, setPdfClassification] = useState<'TEORIA' | 'QUESTÕES' | 'TEORIA_QUESTÕES'>('TEORIA');
   const [isLinkedToPreviousTheory, setIsLinkedToPreviousTheory] = useState(false);
   const [selectingVideo, setSelectingVideo] = useState(false);
+
+  // Gabarito Comentado (Para PDF QUESTÕES)
+  const [commentedAnswerKeyFile, setCommentedAnswerKeyFile] = useState<File | null>(null);
+  const [existingCommentedAnswerKeyUrl, setExistingCommentedAnswerKeyUrl] = useState('');
+  const [existingCommentedAnswerKeyName, setExistingCommentedAnswerKeyName] = useState('');
+  const commentedAnswerKeyInputRef = useRef<HTMLInputElement>(null);
   
   // Panda Media Picker
   const [showPandaPicker, setShowPandaPicker] = useState(false);
@@ -167,6 +173,9 @@ export function ContentModal({ isOpen, onClose, onSave, initialData, lessonId, c
         setExistingPdfUrl(initialData.fileUrl || '');
         setPdfClassification(initialData.pdfClassification || 'TEORIA');
         setIsLinkedToPreviousTheory(initialData.isLinkedToPreviousTheory || false);
+        setExistingCommentedAnswerKeyUrl(initialData.commentedAnswerKeyUrl || '');
+        setExistingCommentedAnswerKeyName(initialData.commentedAnswerKeyName || '');
+        setCommentedAnswerKeyFile(null);
       } else {
         // Reset
         setType('video');
@@ -181,6 +190,9 @@ export function ContentModal({ isOpen, onClose, onSave, initialData, lessonId, c
         setPdfFile(null);
         setPdfClassification('TEORIA');
         setIsLinkedToPreviousTheory(false);
+        setExistingCommentedAnswerKeyUrl('');
+        setExistingCommentedAnswerKeyName('');
+        setCommentedAnswerKeyFile(null);
       }
     }
   }, [isOpen, initialData]);
@@ -230,6 +242,23 @@ export function ContentModal({ isOpen, onClose, onSave, initialData, lessonId, c
         }
         data.fileUrl = finalPdfUrl;
         data.pdfClassification = pdfClassification;
+
+        // Gabarito Comentado
+        if (pdfClassification === 'QUESTÕES') {
+            let finalCommentedUrl = existingCommentedAnswerKeyUrl;
+            let finalCommentedName = existingCommentedAnswerKeyName;
+            
+            if (commentedAnswerKeyFile) {
+                finalCommentedUrl = await courseService.uploadPDF(commentedAnswerKeyFile);
+                finalCommentedName = commentedAnswerKeyFile.name;
+            }
+            
+            data.commentedAnswerKeyUrl = finalCommentedUrl || null;
+            data.commentedAnswerKeyName = finalCommentedName || null;
+        } else {
+            data.commentedAnswerKeyUrl = null;
+            data.commentedAnswerKeyName = null;
+        }
 
         // Lógica de Identificação do "Pai" (Teoria Imediatamente Acima)
         if (isActuallyLinked) {
@@ -409,18 +438,55 @@ export function ContentModal({ isOpen, onClose, onSave, initialData, lessonId, c
                 </div>
 
                 {pdfClassification === 'QUESTÕES' && (
-                    <div className="flex items-center gap-3 p-3 bg-orange-900/10 border border-orange-900/30 rounded">
-                        <input 
-                            type="checkbox" 
-                            id="linkTheory"
-                            checked={isLinkedToPreviousTheory}
-                            onChange={e => setIsLinkedToPreviousTheory(e.target.checked)}
-                            className="w-4 h-4 accent-orange-500 cursor-pointer"
-                        />
-                        <label htmlFor="linkTheory" className="text-sm text-orange-500 font-bold cursor-pointer">
-                            Vincular à Teoria imediatamente acima?
-                        </label>
-                    </div>
+                    <>
+                        <div className="flex items-center gap-3 p-3 bg-orange-900/10 border border-orange-900/30 rounded">
+                            <input 
+                                type="checkbox" 
+                                id="linkTheory"
+                                checked={isLinkedToPreviousTheory}
+                                onChange={e => setIsLinkedToPreviousTheory(e.target.checked)}
+                                className="w-4 h-4 accent-orange-500 cursor-pointer"
+                            />
+                            <label htmlFor="linkTheory" className="text-sm text-orange-500 font-bold cursor-pointer">
+                                Vincular à Teoria imediatamente acima?
+                            </label>
+                        </div>
+
+                        <div className="p-4 bg-blue-900/5 border border-blue-900/20 rounded-lg space-y-3">
+                            <label className="block text-xs font-bold text-blue-400 uppercase">Gabarito Comentado (.PDF):</label>
+                            
+                            <div className="flex flex-col items-center justify-center p-4 border border-dashed border-blue-900/30 rounded bg-black/20">
+                                <input 
+                                    type="file" 
+                                    ref={commentedAnswerKeyInputRef}
+                                    accept="application/pdf"
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            setCommentedAnswerKeyFile(e.target.files[0]);
+                                        }
+                                    }}
+                                    className="hidden"
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => commentedAnswerKeyInputRef.current?.click()}
+                                    className="px-3 py-1.5 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 border border-blue-900/40 rounded text-[10px] font-black uppercase flex items-center gap-2 transition-all"
+                                >
+                                    <Upload size={12} /> Selecionar Gabarito
+                                </button>
+                                {commentedAnswerKeyFile ? (
+                                    <span className="mt-2 text-[10px] text-blue-400 font-bold">{commentedAnswerKeyFile.name}</span>
+                                ) : existingCommentedAnswerKeyUrl ? (
+                                    <div className="mt-2 flex flex-col items-center">
+                                        <span className="text-[10px] text-zinc-500">Arquivo atual:</span>
+                                        <span className="text-[10px] text-blue-400 font-bold max-w-full truncate px-4">{existingCommentedAnswerKeyName || 'Gabarito Comentado'}</span>
+                                    </div>
+                                ) : (
+                                    <span className="mt-2 text-[10px] text-zinc-600 italic">Opcional</span>
+                                )}
+                            </div>
+                        </div>
+                    </>
                 )}
 
                 {/* Preview da Identificação Visual */}

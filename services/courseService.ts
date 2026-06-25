@@ -766,6 +766,10 @@ export const courseService = {
         if (content.fileUrl) {
             await courseService.safeDeleteStorageFile(content.fileUrl);
         }
+
+        if (content.commentedAnswerKeyUrl) {
+            await courseService.safeDeleteStorageFile(content.commentedAnswerKeyUrl);
+        }
         
         // Também verifica videoUrl caso o vídeo tenha sido enviado para o Storage
         if (content.videoUrl && content.videoPlatform !== 'panda' && content.videoPlatform !== 'youtube') {
