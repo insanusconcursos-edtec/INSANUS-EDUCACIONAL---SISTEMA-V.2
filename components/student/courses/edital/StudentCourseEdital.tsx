@@ -656,7 +656,7 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
                        onToggleTopic={onToggleTopic}
                        focusTopicId={focusTopicId}
                        planId={planId}
-                       numberingPrefix={`${numberingPrefix ? numberingPrefix.replace('.', '') : ''}.${idx + 1}.`}
+                       numberingPrefix={`${numberingPrefix}${idx + 1}.`}
                     />
                   ))}
               </div>

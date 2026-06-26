@@ -36,6 +36,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   const [targetFolderIdForNewLesson, setTargetFolderIdForNewLesson] = useState<string | null>(null);
 
   const [itemToDelete, setItemToDelete] = useState<{ type: 'folder' | 'lesson' | 'group', id: string, title: string } | null>(null);
+  const [groupToMigrate, setGroupToMigrate] = useState<CourseGroup | null>(null);
   const [lessonToMove, setLessonToMove] = useState<CourseLesson | null>(null);
   const [folderToMove, setFolderToMove] = useState<CourseSubModule | null>(null);
 
@@ -543,6 +544,18 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
     }
   };
 
+  const handleMigrateGroupToDiscipline = async () => {
+    if (!groupToMigrate) return;
+    try {
+      await courseService.migrateGroupToStandaloneModule(groupToMigrate.id);
+      await loadContent();
+      setGroupToMigrate(null);
+    } catch (error) {
+      console.error("Erro ao migrar grupo:", error);
+      alert("Erro ao realizar a migração.");
+    }
+  };
+
   // Filtrar aulas por pasta
   const getLessonsInFolder = (folderId: string) => lessons
     .filter(l => l.subModuleId === folderId)
@@ -913,6 +926,13 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                               </button>
                               <button 
+                                onClick={() => setGroupToMigrate(group)}
+                                className="p-1 hover:bg-orange-900/20 rounded text-gray-500 hover:text-orange-500 transition-colors"
+                                title="Migrar este grupo para fora como uma nova disciplina"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                              </button>
+                              <button 
                                 onClick={() => setItemToDelete({ type: 'group', id: group.id, title: group.title })}
                                 className="p-1 hover:bg-red-900/20 rounded text-gray-500 hover:text-red-500 transition-colors"
                               >
@@ -1028,6 +1048,16 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
         onConfirm={itemToDelete?.type === 'folder' ? handleDeleteFolder : itemToDelete?.type === 'group' ? handleDeleteGroup : handleDeleteLesson}
         onCancel={() => setItemToDelete(null)}
         isDanger
+      />
+
+      <ConfirmationModal 
+        isOpen={!!groupToMigrate}
+        title="Migrar Grupo para Disciplina?"
+        message={`Deseja transformar o grupo "${groupToMigrate?.title}" em uma nova disciplina? Ele sairá deste módulo e se tornará um item independente na lista de disciplinas do curso.`}
+        onConfirm={handleMigrateGroupToDiscipline}
+        onCancel={() => setGroupToMigrate(null)}
+        confirmLabel="Sim, Migrar"
+        cancelLabel="Cancelar"
       />
 
       {/* Modal para Mover Aula */}

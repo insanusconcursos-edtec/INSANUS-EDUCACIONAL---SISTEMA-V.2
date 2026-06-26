@@ -70,6 +70,18 @@ export const courseService = {
     }
   },
 
+  getGroup: async (id: string): Promise<CourseGroup | null> => {
+    try {
+      const docRef = doc(db, GROUPS_COLLECTION, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) return { id: docSnap.id, ...docSnap.data() } as CourseGroup;
+      return null;
+    } catch (error) {
+      console.error("Erro ao buscar grupo:", error);
+      return null;
+    }
+  },
+
   getGroups: async (moduleId: string): Promise<CourseGroup[]> => {
     try {
       const q = query(
@@ -430,6 +442,18 @@ export const courseService = {
     }
   },
 
+  getModule: async (id: string): Promise<CourseModule | null> => {
+    try {
+      const docRef = doc(db, MODULES_COLLECTION, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) return { id: docSnap.id, ...docSnap.data() } as CourseModule;
+      return null;
+    } catch (error) {
+      console.error("Erro ao buscar módulo:", error);
+      return null;
+    }
+  },
+
   getModules: async (courseId: string): Promise<CourseModule[]> => {
     try {
       const q = query(
@@ -696,6 +720,119 @@ export const courseService = {
       await batch.commit();
     } catch (error) {
       console.error("Erro ao reordenar conteúdo misto:", error);
+      throw error;
+    }
+  },
+
+  // --- MIGRAÇÃO DE ESTRUTURA (NOVO) ---
+
+  migrateModuleToGroup: async (sourceModuleId: string, targetModuleId: string) => {
+    try {
+      const sourceModule = await courseService.getModule(sourceModuleId);
+      if (!sourceModule) throw new Error("Módulo de origem não encontrado");
+
+      // 1. Criar novo grupo no módulo de destino
+      const newGroupId = await courseService.createGroup({
+        moduleId: targetModuleId,
+        title: sourceModule.title
+      });
+
+      const batch = writeBatch(db);
+
+      // 2. Mover Pastas (Submódulos)
+      const subModulesRef = collection(db, SUBMODULES_COLLECTION);
+      const qSub = query(subModulesRef, where('moduleId', '==', sourceModuleId));
+      const subSnap = await getDocs(qSub);
+      
+      subSnap.docs.forEach(d => {
+        batch.update(d.ref, { 
+          moduleId: targetModuleId,
+          groupId: newGroupId 
+        });
+      });
+
+      // 3. Mover Aulas
+      const lessonsRef = collection(db, LESSONS_COLLECTION);
+      const qLessons = query(lessonsRef, where('moduleId', '==', sourceModuleId));
+      const lessonsSnap = await getDocs(qLessons);
+
+      lessonsSnap.docs.forEach(d => {
+        batch.update(d.ref, {
+          moduleId: targetModuleId,
+          groupId: newGroupId
+        });
+      });
+
+      await batch.commit();
+
+      // 4. Deletar módulo de origem (Sem deletar os filhos agora, pois já os movemos)
+      // Mas o deleteModule original deleta os filhos. Precisamos de um deleteModule shallow ou ajustar.
+      // Vou usar um deleteDoc direto para o módulo.
+      await deleteDoc(doc(db, MODULES_COLLECTION, sourceModuleId));
+      
+      // Deletar capa do módulo se houver
+      if (sourceModule.coverUrl) {
+          await courseService.safeDeleteStorageFile(sourceModule.coverUrl);
+      }
+
+    } catch (error) {
+      console.error("Erro na migração de módulo para grupo:", error);
+      throw error;
+    }
+  },
+
+  migrateGroupToStandaloneModule: async (groupId: string) => {
+    try {
+      const group = await courseService.getGroup(groupId);
+      if (!group) throw new Error("Grupo não encontrado");
+
+      const parentModule = await courseService.getModule(group.moduleId);
+      if (!parentModule) throw new Error("Módulo pai não encontrado");
+
+      // 1. Criar novo módulo (Disciplina)
+      // Sem imagem de capa por padrão como solicitado
+      const newModuleId = await courseService.createModule({
+        courseId: parentModule.courseId,
+        title: group.title,
+        coverUrl: '', // Sem capa inicial
+        isLocked: false,
+        order: 999 // Será o último (createModule já lida com ordem se passarmos certo, mas vamos forçar)
+      });
+
+      const batch = writeBatch(db);
+
+      // 2. Mover Pastas do Grupo
+      const subModulesRef = collection(db, SUBMODULES_COLLECTION);
+      const qSub = query(subModulesRef, where('groupId', '==', groupId));
+      const subSnap = await getDocs(qSub);
+
+      subSnap.docs.forEach(d => {
+        batch.update(d.ref, {
+          moduleId: newModuleId,
+          groupId: null // Sai do grupo
+        });
+      });
+
+      // 3. Mover Aulas do Grupo
+      const lessonsRef = collection(db, LESSONS_COLLECTION);
+      const qLessons = query(lessonsRef, where('groupId', '==', groupId));
+      const lessonsSnap = await getDocs(qLessons);
+
+      lessonsSnap.docs.forEach(d => {
+        batch.update(d.ref, {
+          moduleId: newModuleId,
+          groupId: null // Sai do grupo
+        });
+      });
+
+      await batch.commit();
+
+      // 4. Deletar o grupo
+      await courseService.deleteGroup(groupId);
+
+      return newModuleId;
+    } catch (error) {
+      console.error("Erro na migração de grupo para disciplina:", error);
       throw error;
     }
   },

@@ -10,6 +10,7 @@ import { AdminCourseStudentsTab } from './AdminCourseStudentsTab'; // Importando
 import { Layout, FileText, Users, Settings, Code } from 'lucide-react';
 import { AdminCourseMaintenanceTab } from './AdminCourseMaintenanceTab'; // Nova Aba de Manutenção
 import { ExportCourseStructureModal } from './modals/ExportCourseStructureModal';
+import { MigrateModuleModal } from './modals/MigrateModuleModal';
 
 interface CourseContentManagerProps {
   course: OnlineCourse;
@@ -26,6 +27,7 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
   const [isModuleModalOpen, setIsModuleModalOpen] = useState(false);
   const [editingModule, setEditingModule] = useState<CourseModule | null>(null);
   const [moduleToDelete, setModuleToDelete] = useState<CourseModule | null>(null);
+  const [moduleToMigrate, setModuleToMigrate] = useState<CourseModule | null>(null);
   const [managingModule, setManagingModule] = useState<CourseModule | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -81,6 +83,18 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
 
   const handleManageInternal = (module: CourseModule) => {
     setManagingModule(module);
+  };
+
+  const handleMigrateModule = async (targetModuleId: string) => {
+    if (!moduleToMigrate) return;
+    try {
+      await courseService.migrateModuleToGroup(moduleToMigrate.id, targetModuleId);
+      await loadModules();
+      setModuleToMigrate(null);
+    } catch (error) {
+      console.error("Erro ao migrar módulo:", error);
+      alert("Erro ao realizar a migração. Verifique o console.");
+    }
   };
 
   if (managingModule) {
@@ -179,6 +193,7 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
                         module={module}
                         onEdit={(m) => { setEditingModule(m); setIsModuleModalOpen(true); }}
                         onDelete={setModuleToDelete}
+                        onMigrate={setModuleToMigrate}
                         onMoveLeft={() => { handleReorder(index, 'left'); }}
                         onMoveRight={() => { handleReorder(index, 'right'); }}
                         onManageContent={handleManageInternal}
@@ -213,6 +228,14 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         course={course}
+      />
+
+      <MigrateModuleModal 
+        isOpen={!!moduleToMigrate}
+        onClose={() => setModuleToMigrate(null)}
+        sourceModule={moduleToMigrate}
+        availableModules={modules}
+        onConfirm={handleMigrateModule}
       />
     </div>
   );
