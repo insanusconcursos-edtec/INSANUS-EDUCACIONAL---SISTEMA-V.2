@@ -336,9 +336,9 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   };
 
   // --- CRUD AULAS ---
-  const handleSaveLesson = async (title: string, coverUrl: string, type: 'video' | 'pdf', groupId?: string | null) => {
+  const handleSaveLesson = async (title: string, coverUrl: string, type: 'video' | 'pdf', groupId?: string | null, isProduction?: boolean) => {
     try {
-      const data = { title, coverUrl, type, groupId: groupId || null };
+      const data = { title, coverUrl, type, groupId: groupId || null, isProduction: isProduction || false };
       if (editingLesson) {
         await courseService.updateLesson(editingLesson.id, data);
         // Atualização Otimista
@@ -1009,7 +1009,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
         groups={groups}
       />
 
-      <LessonModal
+      <LessonModal 
         isOpen={isLessonModalOpen}
         onClose={() => setIsLessonModalOpen(false)}
         onSave={handleSaveLesson}
@@ -1017,6 +1017,7 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
         initialCover={editingLesson?.coverUrl}
         initialType={editingLesson?.type}
         initialGroupId={editingLesson?.groupId}
+        initialIsProduction={editingLesson?.isProduction}
         groups={groups}
       />
 

@@ -56,14 +56,19 @@ export const ExportCourseStructureModal: React.FC<ExportCourseStructureModalProp
     const renderLessons = (lessons: CourseLesson[]) => {
       if (!lessons || lessons.length === 0) return '';
       return lessons.map(lesson => `
-        <div class="insanus-lesson">
+        <div class="insanus-lesson ${lesson.isProduction ? 'is-production' : ''}">
           <div class="insanus-lesson-icon">
-            ${lesson.type === 'video' 
-              ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.33z"/><path d="M9.75 15.02l5.75-3.27-5.75-3.27v6.54z"/></svg>'
-              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>'
+            ${lesson.isProduction 
+              ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+              : (lesson.type === 'video' 
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.33z"/><path d="M9.75 15.02l5.75-3.27-5.75-3.27v6.54z"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>')
             }
           </div>
-          <span class="insanus-lesson-title">${lesson.title}</span>
+          <div class="insanus-lesson-text">
+            <span class="insanus-lesson-title">${lesson.title}</span>
+            ${lesson.isProduction ? '<span class="insanus-lesson-status">CONTEÚDO EM PRODUÇÃO</span>' : ''}
+          </div>
         </div>
       `).join('');
     };
@@ -409,6 +414,23 @@ export const ExportCourseStructureModal: React.FC<ExportCourseStructureModalProp
     .insanus-lesson:hover {
       background: rgba(255,255,255,0.05);
       border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .insanus-lesson.is-production {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .insanus-lesson-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .insanus-lesson-status {
+      font-size: 8px;
+      color: #ef4444;
+      font-weight: 900;
+      margin-top: 2px;
     }
 
     .insanus-lesson-icon {

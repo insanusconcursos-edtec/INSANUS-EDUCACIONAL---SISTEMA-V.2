@@ -4,10 +4,10 @@ import { createPortal } from 'react-dom';
 import { 
   Plus, Trash2, ChevronRight, ChevronDown, 
   PlayCircle, FileText, BrainCircuit, Layers, X,
-  ArrowUp, ArrowDown, StickyNote
+  ArrowUp, ArrowDown, StickyNote, Lock, Video, Gavel
 } from 'lucide-react';
 import { MindMapNode, Flashcard } from '../../../services/metaService';
-import { CourseEditalTopic, LinkedLesson, MaterialPDF } from '../../../../types/courseEdital';
+import { CourseEditalTopic, LinkedLesson, MaterialPDF, TopicStatus } from '../../../../types/courseEdital';
 import { courseService } from '../../../../services/courseService';
 
 import MindMapManager from '../../metas/tools/mindmap/MindMapManager';
@@ -150,6 +150,10 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
       setActiveTool(null);
   };
 
+  const handleStatusChange = (status: TopicStatus) => {
+    onUpdate({ ...topic, status });
+  };
+
   const handleRemoveLesson = (lessonId: string) => {
       const newLessons = (topic.linkedLessons || []).filter(l => l.id !== lessonId);
       onUpdate({ ...topic, linkedLessons: newLessons });
@@ -210,6 +214,8 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
                 
                 {lessonsCount > 0 && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 flex items-center gap-0.5"><PlayCircle size={8}/> {lessonsCount}</span>}
                 {pdfsCount > 0 && <span className="text-[9px] bg-orange-500/10 text-orange-400 px-1.5 py-0.5 rounded border border-orange-500/20 flex items-center gap-0.5"><FileText size={8}/> {pdfsCount}</span>}
+                {topic.status === 'EM_PRODUCAO' && <span className="text-[9px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20 flex items-center gap-0.5 font-bold uppercase tracking-widest"><Lock size={8}/> Produção</span>}
+                {topic.status === 'AULAS_EM_GRAVACAO' && <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20 flex items-center gap-0.5 font-bold uppercase tracking-widest"><Video size={8}/> Gravação</span>}
                 {mapCount > 0 && <span className="text-[9px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 flex items-center gap-0.5"><BrainCircuit size={8}/> Mapa</span>}
                 {flashCount > 0 && <span className="text-[9px] bg-pink-500/10 text-pink-400 px-1.5 py-0.5 rounded border border-pink-500/20 flex items-center gap-0.5"><Layers size={8}/> Cards</span>}
                 {hasObservation && <span className="text-[9px] bg-yellow-500/10 text-yellow-400 px-1.5 py-0.5 rounded border border-yellow-500/20 flex items-center gap-0.5"><StickyNote size={8}/> Obs</span>}
@@ -239,6 +245,20 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
             >
                 <StickyNote size={14} />
             </button>
+
+            {/* Status Selector */}
+            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 mr-2">
+                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mr-2">Status:</span>
+                <select 
+                    value={topic.status || 'NORMAL'} 
+                    onChange={(e) => handleStatusChange(e.target.value as TopicStatus)}
+                    className="bg-transparent border-none text-[9px] text-zinc-300 font-bold focus:outline-none cursor-pointer"
+                >
+                    <option value="NORMAL" className="bg-zinc-900">Normal</option>
+                    <option value="EM_PRODUCAO" className="bg-zinc-900 text-red-500">Em Produção</option>
+                    <option value="AULAS_EM_GRAVACAO" className="bg-zinc-900 text-blue-500">Em Gravação</option>
+                </select>
+            </div>
 
             {/* Atalhos Rápidos */}
             <div className="flex bg-zinc-900 border border-zinc-800 rounded mr-2 overflow-hidden shadow-sm">
@@ -344,14 +364,19 @@ export const AdminCourseEditalTopic: React.FC<Props> = ({
               {topic.materialPdfs && topic.materialPdfs.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
                       {topic.materialPdfs.map((pdf, idx) => {
-                          const isTheory = (pdf.pdfType || 'TEORIA') === 'TEORIA';
+                          const isLaw = pdf.pdfType === 'LEI_SECA';
+                          
+                          let colorClass = 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300';
+                          if (pdf.pdfType === 'QUESTOES') colorClass = 'bg-orange-500/10 border-orange-500/20 text-orange-300';
+                          if (pdf.pdfType === 'LEI_SECA') colorClass = 'bg-blue-500/10 border-blue-500/20 text-blue-300';
+
                           return (
                             <div 
                                 key={idx} 
                                 onClick={(e) => { e.stopPropagation(); setEditingMaterial(pdf); setActiveTool('MATERIAL'); }}
-                                className={`flex items-center gap-1.5 cursor-pointer ${isTheory ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300' : 'bg-orange-500/10 border-orange-500/20 text-orange-300'} border px-2 py-1 rounded text-[10px] group/item hover:border-opacity-100 transition-all`}
+                                className={`flex items-center gap-1.5 cursor-pointer ${colorClass} border px-2 py-1 rounded text-[10px] group/item hover:border-opacity-100 transition-all`}
                             >
-                                <FileText size={10} />
+                                {isLaw ? <Gavel size={10} /> : <FileText size={10} />}
                                 <span className="truncate max-w-[120px]">{pdf.title}</span>
                                 {pdf.commentedAnswerKeyUrl && (
                                     <span className="text-[7px] bg-blue-500/20 text-blue-400 px-1 rounded font-black uppercase">Gabarito</span>

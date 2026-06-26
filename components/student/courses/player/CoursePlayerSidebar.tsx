@@ -440,9 +440,13 @@ interface LessonRowProps {
 }
 
 const LessonRow: React.FC<LessonRowProps> = ({ lesson, isActive, isCompleted, onClick }) => {
+    const isLocked = lesson.isProduction;
     
     // Define qual ícone mostrar baseado no tipo e status
     const Icon = () => {
+        if (isLocked) {
+            return <Lock size={10} />;
+        }
         if (isCompleted) {
             return (
                 <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
@@ -468,21 +472,25 @@ const LessonRow: React.FC<LessonRowProps> = ({ lesson, isActive, isCompleted, on
 
     return (
         <button 
-            onClick={onClick}
+            onClick={isLocked ? undefined : onClick}
+            disabled={isLocked}
             className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all group
+                ${isLocked ? 'opacity-40 cursor-not-allowed bg-black/20' : ''}
                 ${isActive 
                     ? 'bg-[var(--plan-theme)]/10 border border-[var(--plan-theme)]/20' 
-                    : 'hover:bg-[#1a1d24] border border-transparent'
+                    : !isLocked ? 'hover:bg-[#1a1d24] border border-transparent' : 'border-transparent'
                 }
             `}
         >
             {/* Ícone Dinâmico (Círculo) */}
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border transition-colors 
-                ${isCompleted 
-                    ? 'bg-green-500/10 border-green-500/30' 
-                    : isActive 
-                        ? 'bg-[var(--plan-theme)] border-[var(--plan-theme)] text-white' 
-                        : 'bg-black border-gray-800 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-300'
+                ${isLocked
+                    ? 'bg-red-500/10 border-red-500/20 text-red-500'
+                    : isCompleted 
+                        ? 'bg-green-500/10 border-green-500/30' 
+                        : isActive 
+                            ? 'bg-[var(--plan-theme)] border-[var(--plan-theme)] text-white' 
+                            : 'bg-black border-gray-800 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-300'
                 }
             `}>
                 <Icon />
@@ -490,14 +498,21 @@ const LessonRow: React.FC<LessonRowProps> = ({ lesson, isActive, isCompleted, on
             
             {/* Título */}
             <div className="flex-1 min-w-0">
-                <span 
-                    className={`text-xs font-medium block truncate 
-                    ${isCompleted ? 'text-gray-500 line-through' : isActive ? 'text-[var(--plan-theme)]' : 'text-gray-400 group-hover:text-gray-200'}
-                `}
-                    title={lesson.title}
-                >
-                    {lesson.title}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span 
+                        className={`text-xs font-medium block truncate 
+                        ${isLocked ? 'text-gray-500' : isCompleted ? 'text-gray-500 line-through' : isActive ? 'text-[var(--plan-theme)]' : 'text-gray-400 group-hover:text-gray-200'}
+                    `}
+                        title={lesson.title}
+                    >
+                        {lesson.title}
+                    </span>
+                    {isLocked && (
+                        <span className="text-[8px] bg-red-600 text-white px-1 py-0.5 rounded font-black uppercase tracking-tighter shrink-0">
+                            EM PRODUÇÃO
+                        </span>
+                    )}
+                </div>
             </div>
         </button>
     );

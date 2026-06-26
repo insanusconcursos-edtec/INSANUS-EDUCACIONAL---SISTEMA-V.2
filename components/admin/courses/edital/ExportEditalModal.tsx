@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Copy, Code, Check } from 'lucide-react';
-import { CourseEditalDiscipline } from '../../../../types/courseEdital';
+import { CourseEditalDiscipline, CourseEditalTopic } from '../../../../types/courseEdital';
 import { toast } from 'react-hot-toast';
 
 interface ExportEditalModalProps {
@@ -19,18 +19,58 @@ export const ExportEditalModal: React.FC<ExportEditalModalProps> = ({ isOpen, on
       return topics.map((topic, idx) => {
         const currentNumber = prefix ? `${prefix}.${idx + 1}` : `${idx + 1}`;
         const hasSubtopics = topic.subtopics && topic.subtopics.length > 0;
+        const isProduction = topic.status === 'EM_PRODUCAO';
+        const isRecording = topic.status === 'AULAS_EM_GRAVACAO';
+        
+        const lawPdfs = (topic.materialPdfs || []).filter(p => p.pdfType === 'LEI_SECA');
+        const normalPdfs = (topic.materialPdfs || []).filter(p => p.pdfType !== 'LEI_SECA');
+        
+        const hasAnyContent = hasSubtopics || isRecording || (topic.materialPdfs && topic.materialPdfs.length > 0);
         
         return `
-      <div class="insanus-topic ${hasSubtopics ? 'has-subtopics' : ''}">
-        <div class="insanus-topic-header" ${hasSubtopics ? `onclick="event.stopPropagation(); this.parentElement.classList.toggle('active')"` : ''}>
+      <div class="insanus-topic ${hasAnyContent ? 'has-content' : ''} ${hasSubtopics ? 'has-subtopics' : ''}">
+        <div class="insanus-topic-header" ${hasAnyContent ? `onclick="event.stopPropagation(); this.parentElement.classList.toggle('active')"` : ''}>
           <div class="insanus-topic-title">
             <span class="insanus-enumeration">${currentNumber}</span>
-            <span>${topic.name}</span>
+            <div class="insanus-topic-name-wrapper">
+                ${topic.name}
+                ${isProduction ? '<svg class="insanus-status-icon lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' : ''}
+                ${isRecording ? '<svg class="insanus-status-icon recording" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>' : ''}
+            </div>
           </div>
-          ${hasSubtopics ? '<div class="insanus-arrow"></div>' : ''}
+          ${hasAnyContent ? '<div class="insanus-arrow"></div>' : ''}
         </div>
-        ${hasSubtopics ? `
+        ${hasAnyContent ? `
         <div class="insanus-topic-content">
+          ${isRecording ? '<div class="insanus-recording-notice">AULAS EM GRAVAÇÃO</div>' : ''}
+          
+          ${lawPdfs.length > 0 ? `
+            <div class="insanus-law-section">
+                <div class="insanus-section-title">LEI SECA (DOWNLOAD PDF)</div>
+                <div class="insanus-pdf-list">
+                    ${lawPdfs.map(p => `
+                        <a href="${p.url}" target="_blank" class="insanus-pdf-item law">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            ${p.title}
+                        </a>
+                    `).join('')}
+                </div>
+            </div>
+          ` : ''}
+
+          ${normalPdfs.length > 0 ? `
+            <div class="insanus-pdf-section">
+                <div class="insanus-pdf-list">
+                    ${normalPdfs.map(p => `
+                        <a href="${p.url}" target="_blank" class="insanus-pdf-item">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            ${p.title}
+                        </a>
+                    `).join('')}
+                </div>
+            </div>
+          ` : ''}
+
           ${renderTopics(topic.subtopics, currentNumber)}
         </div>
         ` : ''}
@@ -236,16 +276,96 @@ export const ExportEditalModal: React.FC<ExportEditalModalProps> = ({ isOpen, on
       max-height: 2000px;
       transition: max-height 0.8s ease-in-out;
       border-top: 1px solid #2d2f36;
-      padding: 8px 8px 8px 24px;
+      padding: 12px 12px 12px 24px;
     }
-    .insanus-topic:not(.has-subtopics) {
+    .insanus-topic:not(.has-content) {
       background: rgba(26, 29, 36, 0.5);
     }
-    .insanus-topic:not(.has-subtopics) .insanus-topic-header {
+    .insanus-topic:not(.has-content) .insanus-topic-header {
       cursor: default;
     }
-    .insanus-topic:not(.has-subtopics) .insanus-topic-header:hover {
+    .insanus-topic:not(.has-content) .insanus-topic-header:hover {
       background: transparent;
+    }
+
+    /* Status Icons */
+    .insanus-topic-name-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .insanus-status-icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+    .insanus-status-icon.lock { color: #ef4444; }
+    .insanus-status-icon.recording { color: #3b82f6; }
+
+    /* Notices and Sections */
+    .insanus-recording-notice {
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      text-align: center;
+      border: 1px dashed rgba(59, 130, 246, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .insanus-law-section {
+      margin-bottom: 15px;
+      padding: 12px;
+      background: rgba(59, 130, 246, 0.05);
+      border-radius: 8px;
+      border: 1px solid rgba(59, 130, 246, 0.1);
+    }
+    .insanus-pdf-section {
+      margin-bottom: 15px;
+    }
+    .insanus-section-title {
+      font-size: 9px;
+      font-weight: 900;
+      color: #3b82f6;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .insanus-pdf-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .insanus-pdf-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #242831;
+      border: 1px solid #2d2f36;
+      padding: 8px 12px;
+      border-radius: 6px;
+      color: #d1d5db;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .insanus-pdf-item:hover {
+      background: #2d333f;
+      border-color: #ef4444;
+      color: #ffffff;
+    }
+    .insanus-pdf-item.law {
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    .insanus-pdf-item.law:hover {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
     }
 
     .insanus-arrow {

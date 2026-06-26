@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Upload, Save, FileText, AlertCircle } from 'lucide-react';
+import { X, Upload, Save, FileText, AlertCircle, Gavel } from 'lucide-react';
 import { courseService } from '../../../../services/courseService';
 import { MaterialPDF } from '../../../../types/courseEdital';
 import { toast } from 'react-hot-toast';
@@ -15,7 +15,7 @@ interface MaterialPDFModalProps {
 
 export function MaterialPDFModal({ isOpen, onClose, onSave, courseId, topicId, initialData }: MaterialPDFModalProps) {
   const [title, setTitle] = useState('');
-  const [pdfType, setPdfType] = useState<'TEORIA' | 'QUESTOES'>('TEORIA');
+  const [pdfType, setPdfType] = useState<'TEORIA' | 'QUESTOES' | 'LEI_SECA'>('TEORIA');
   const [loading, setLoading] = useState(false);
   
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -178,7 +178,7 @@ export function MaterialPDFModal({ isOpen, onClose, onSave, courseId, topicId, i
             {/* Classificação */}
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Classificação do PDF:</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2">
                     <button
                         type="button"
                         onClick={() => setPdfType('TEORIA')}
@@ -202,6 +202,18 @@ export function MaterialPDFModal({ isOpen, onClose, onSave, courseId, topicId, i
                     >
                         <AlertCircle size={20} />
                         <span className="text-[10px] font-black uppercase tracking-wider">Questões</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setPdfType('LEI_SECA')}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
+                            pdfType === 'LEI_SECA' 
+                            ? 'bg-blue-500/10 border-blue-500/50 text-blue-500' 
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                        }`}
+                    >
+                        <Gavel size={20} />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-center">Lei Seca</span>
                     </button>
                 </div>
             </div>
@@ -244,14 +256,19 @@ export function MaterialPDFModal({ isOpen, onClose, onSave, courseId, topicId, i
             <div className="pt-4 border-t border-zinc-900">
                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block mb-3">Preview na Lista:</span>
                 <div className="p-3 bg-[#121418] border border-zinc-800 rounded-xl flex items-center gap-3">
-                    <div className={`p-2 rounded bg-zinc-800 ${pdfType === 'TEORIA' ? 'text-yellow-500' : 'text-red-500'}`}>
-                        <FileText size={16} />
+                    <div className={`p-2 rounded bg-zinc-800 ${
+                        pdfType === 'TEORIA' ? 'text-yellow-500' : 
+                        pdfType === 'QUESTOES' ? 'text-red-500' : 'text-blue-500'
+                    }`}>
+                        {pdfType === 'LEI_SECA' ? <Gavel size={16} /> : <FileText size={16} />}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                             <span className="text-white font-bold text-xs truncate">{title || 'Título do Material'}</span>
                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${
-                                pdfType === 'TEORIA' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                pdfType === 'TEORIA' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
+                                pdfType === 'QUESTOES' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                'bg-blue-500/10 text-blue-500 border-blue-500/20'
                             }`}>
                                 {pdfType}
                             </span>

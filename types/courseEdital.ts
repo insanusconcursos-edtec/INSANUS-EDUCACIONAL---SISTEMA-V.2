@@ -11,10 +11,12 @@ export interface MaterialPDF {
   title: string;
   url: string;
   storagePath?: string; // Para facilitar exclusão futura
-  pdfType?: 'TEORIA' | 'QUESTOES';
+  pdfType?: 'TEORIA' | 'QUESTOES' | 'LEI_SECA';
   commentedAnswerKeyUrl?: string | null;
   commentedAnswerKeyName?: string | null;
 }
+
+export type TopicStatus = 'NORMAL' | 'EM_PRODUCAO' | 'AULAS_EM_GRAVACAO';
 
 export interface CourseEditalTopicGroup {
   id: string;
@@ -30,6 +32,9 @@ export interface CourseEditalTopic {
   
   // Novo Campo: Observação Rica
   observation?: string;
+
+  // Status de Produção
+  status?: TopicStatus;
 
   // Conteúdos Vinculados/Criados
   linkedLessons?: LinkedLesson[];

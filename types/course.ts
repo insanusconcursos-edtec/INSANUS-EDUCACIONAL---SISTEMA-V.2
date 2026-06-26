@@ -106,6 +106,9 @@ export interface CourseLesson {
   // Contadores (já existentes)
   videoCount?: number;
   pdfCount?: number;
+
+  // --- NOVO: Status de Produção ---
+  isProduction?: boolean; 
 }
 
 // --- NOVO: Estrutura Recursiva para Modal de Vinculação ---

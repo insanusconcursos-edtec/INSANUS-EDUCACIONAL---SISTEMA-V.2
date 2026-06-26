@@ -15,6 +15,7 @@ const ArrowDown = () => <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
 // NOVOS ÍCONES PARA INDICADORES
 const VideoSmallIcon = () => <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" /></svg>;
 const PdfSmallIcon = () => <svg className="w-3 h-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" /></svg>;
+const LockIcon = () => <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>;
 
 interface LessonItemProps {
   lesson: CourseLesson;
@@ -67,7 +68,14 @@ export const LessonItem: React.FC<LessonItemProps> = ({
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <h4 className="text-sm font-medium text-gray-200 truncate group-hover:text-white leading-tight">{lesson.title}</h4>
+        <h4 className="text-sm font-medium text-gray-200 truncate group-hover:text-white leading-tight flex items-center gap-2">
+            {lesson.title}
+            {lesson.isProduction && (
+                <span className="text-[8px] bg-red-500/10 text-red-500 px-1 py-0.5 rounded border border-red-500/20 font-black uppercase flex items-center gap-1 shrink-0">
+                    <LockIcon /> EM PRODUÇÃO
+                </span>
+            )}
+        </h4>
         
         {/* --- INDICADORES DE CONTEÚDO (NOVO) --- */}
         {(hasVideos || hasPdfs) && (

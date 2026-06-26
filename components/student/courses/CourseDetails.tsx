@@ -105,16 +105,20 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
   const handleContinue = () => {
     if (!currentUser || structure.length === 0) return;
 
-    // 1. Achatamento (Flatten) da grade curricular para uma fila única 1D
+    // 1. Achatamento (Flatten) da grade curricular para uma fila única 1D (Pulando itens EM PRODUÇÃO)
     const flatCurriculum: { moduleId: string, lessonId: string }[] = [];
     structure.forEach(mod => {
         mod.folders.forEach(folder => {
             folder.lessons.forEach(lesson => {
-                flatCurriculum.push({ moduleId: mod.id, lessonId: lesson.id });
+                if (!lesson.isProduction) {
+                  flatCurriculum.push({ moduleId: mod.id, lessonId: lesson.id });
+                }
             });
         });
         mod.looseLessons.forEach(lesson => {
-            flatCurriculum.push({ moduleId: mod.id, lessonId: lesson.id });
+            if (!lesson.isProduction) {
+              flatCurriculum.push({ moduleId: mod.id, lessonId: lesson.id });
+            }
         });
     });
 

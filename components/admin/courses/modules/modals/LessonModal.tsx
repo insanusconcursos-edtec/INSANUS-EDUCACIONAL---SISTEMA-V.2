@@ -4,19 +4,31 @@ import { courseService } from '../../../../../services/courseService';
 interface LessonModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (title: string, coverUrl: string, type: 'video' | 'pdf', groupId?: string | null) => Promise<void>;
+  onSave: (title: string, coverUrl: string, type: 'video' | 'pdf', groupId?: string | null, isProduction?: boolean) => Promise<void>;
   initialTitle?: string;
   initialCover?: string;
   initialType?: 'video' | 'pdf';
   initialGroupId?: string | null;
+  initialIsProduction?: boolean;
   groups?: CourseGroup[];
 }
 
-export function LessonModal({ isOpen, onClose, onSave, initialTitle, initialCover, initialType, initialGroupId, groups = [] }: LessonModalProps) {
+export function LessonModal({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  initialTitle, 
+  initialCover, 
+  initialType, 
+  initialGroupId, 
+  initialIsProduction,
+  groups = [] 
+}: LessonModalProps) {
   const [title, setTitle] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
   const [type, setType] = useState<'video' | 'pdf'>('video');
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [isProduction, setIsProduction] = useState(false);
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -30,9 +42,10 @@ export function LessonModal({ isOpen, onClose, onSave, initialTitle, initialCove
       setPreviewUrl(initialCover || '');
       setType(initialType || 'video');
       setGroupId(initialGroupId || null);
+      setIsProduction(initialIsProduction || false);
       setSelectedFile(null);
     }
-  }, [isOpen, initialTitle, initialCover, initialType, initialGroupId]);
+  }, [isOpen, initialTitle, initialCover, initialType, initialGroupId, initialIsProduction]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -58,7 +71,7 @@ export function LessonModal({ isOpen, onClose, onSave, initialTitle, initialCove
         }
     }
 
-    await onSave(title, finalUrl, type, groupId);
+    await onSave(title, finalUrl, type, groupId, isProduction);
     setLoading(false);
     onClose();
   };
@@ -77,7 +90,22 @@ export function LessonModal({ isOpen, onClose, onSave, initialTitle, initialCove
           
           {/* Título */}
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Título da Aula</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-gray-400 uppercase">Título da Aula</label>
+              
+              <button 
+                type="button"
+                onClick={() => setIsProduction(!isProduction)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all border ${
+                  isProduction 
+                  ? 'bg-red-500/20 border-red-500/50 text-red-500' 
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-500 hover:text-zinc-400'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full ${isProduction ? 'bg-red-500 animate-pulse' : 'bg-zinc-600'}`}></div>
+                <span className="text-[9px] font-black uppercase tracking-widest">EM PRODUÇÃO</span>
+              </button>
+            </div>
             <input 
               type="text" 
               value={title}
@@ -85,6 +113,11 @@ export function LessonModal({ isOpen, onClose, onSave, initialTitle, initialCove
               className="w-full bg-black border border-gray-800 rounded p-3 text-white focus:border-red-600 outline-none"
               required
             />
+            {isProduction && (
+              <p className="mt-1 text-[9px] text-red-500/70 font-bold uppercase tracking-tighter">
+                * Esta aula ficará BLOQUEADA para os alunos.
+              </p>
+            )}
           </div>
 
           {/* Seleção de Grupo */}
