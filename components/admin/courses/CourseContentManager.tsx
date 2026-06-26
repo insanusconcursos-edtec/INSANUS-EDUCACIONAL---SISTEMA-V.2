@@ -7,8 +7,9 @@ import { ModuleContentManager } from './modules/ModuleContentManager';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { AdminCourseEditalManager } from './edital/AdminCourseEditalManager'; // Importando o Gerenciador de Edital
 import { AdminCourseStudentsTab } from './AdminCourseStudentsTab'; // Importando a Aba de Alunos
-import { Layout, FileText, Users, Settings } from 'lucide-react';
+import { Layout, FileText, Users, Settings, Code } from 'lucide-react';
 import { AdminCourseMaintenanceTab } from './AdminCourseMaintenanceTab'; // Nova Aba de Manutenção
+import { ExportCourseStructureModal } from './modals/ExportCourseStructureModal';
 
 interface CourseContentManagerProps {
   course: OnlineCourse;
@@ -26,6 +27,7 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
   const [editingModule, setEditingModule] = useState<CourseModule | null>(null);
   const [moduleToDelete, setModuleToDelete] = useState<CourseModule | null>(null);
   const [managingModule, setManagingModule] = useState<CourseModule | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Carregar Módulos
   const loadModules = async () => {
@@ -144,7 +146,16 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
               <AdminCourseMaintenanceTab course={course} />
           ) : (
              <div className="space-y-6 h-full overflow-y-auto custom-scrollbar p-1">
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-3">
+                    <button 
+                      onClick={() => setIsExportModalOpen(true)}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold uppercase text-[10px] rounded shadow-lg flex items-center gap-2 transition-all"
+                      title="Gera um código HTML da estrutura do curso para usar em landing pages."
+                    >
+                      <Code size={14} className="text-red-500" />
+                      Exportar HTML
+                    </button>
+
                     <button 
                     onClick={() => { setEditingModule(null); setIsModuleModalOpen(true); }}
                     className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold uppercase text-xs rounded shadow-lg shadow-red-900/20 flex items-center gap-2"
@@ -196,6 +207,12 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
         onConfirm={handleDeleteModule}
         onCancel={() => setModuleToDelete(null)}
         isDanger
+      />
+
+      <ExportCourseStructureModal 
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        course={course}
       />
     </div>
   );

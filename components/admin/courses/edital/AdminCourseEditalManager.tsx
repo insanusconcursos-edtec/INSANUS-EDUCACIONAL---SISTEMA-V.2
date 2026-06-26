@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { CourseEditalStructure, CourseEditalDiscipline } from '../../../../types/courseEdital';
+import { CourseEditalStructure, CourseEditalDiscipline, CourseEditalTopic } from '../../../../types/courseEdital';
 import { courseService } from '../../../../services/courseService';
 import { deepCloneSafe } from '../../../../services/firestoreUtils';
 import { AdminCourseEditalDiscipline } from './AdminCourseEditalDiscipline';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, Code } from 'lucide-react';
 import ConfirmationModal from '../../../../components/ui/ConfirmationModal';
 import { DisciplineMigrationModal } from './DisciplineMigrationModal';
+import { ExportEditalModal } from './ExportEditalModal';
 
 interface EditalManagerProps {
     courseId: string;
@@ -28,6 +29,9 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
     // Estados para Migração
     const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false);
     const [disciplineToMigrate, setDisciplineToMigrate] = useState<CourseEditalDiscipline | null>(null);
+
+    // Estado para Exportação
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     // 1. Carregar dados do Edital
     useEffect(() => {
@@ -71,9 +75,9 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
 
         setIsRegenerating(true);
         try {
-            const newDisciplines = deepCloneSafe(disciplines);
+            const newDisciplines: CourseEditalDiscipline[] = deepCloneSafe(disciplines);
             
-            const regenerateTopicIds = (topics: any[]) => {
+            const regenerateTopicIds = (topics: CourseEditalTopic[]) => {
                 topics.forEach(t => {
                     t.id = crypto.randomUUID();
                     if (t.subtopics && t.subtopics.length > 0) {
@@ -82,7 +86,7 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
                 });
             };
 
-            newDisciplines.forEach((d: any) => {
+            newDisciplines.forEach((d) => {
                 d.id = crypto.randomUUID();
                 if (d.topics) regenerateTopicIds(d.topics);
             });
@@ -272,6 +276,15 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
                 </div>
 
                 <button
+                    onClick={() => setIsExportModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-[10px] font-bold uppercase transition-all shadow-lg shadow-orange-900/20"
+                    title="Gera um código HTML do edital para usar em páginas de vendas."
+                >
+                    <Code size={14} />
+                    Exportar HTML
+                </button>
+
+                <button
                     onClick={handleRegenerateAllIds}
                     disabled={isRegenerating || loading}
                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold uppercase transition-all disabled:opacity-50"
@@ -341,6 +354,12 @@ export const AdminCourseEditalManager: React.FC<EditalManagerProps> = ({ courseI
                 sourceDiscipline={disciplineToMigrate}
                 allDisciplines={disciplines}
                 onConfirm={handleMigrateConfirmed}
+            />
+
+            <ExportEditalModal 
+                isOpen={isExportModalOpen}
+                onClose={() => setIsExportModalOpen(false)}
+                disciplines={disciplines}
             />
         </div>
     );
