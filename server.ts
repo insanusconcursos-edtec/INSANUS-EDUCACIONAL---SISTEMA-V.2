@@ -650,6 +650,80 @@ async function setupVite(app: any) {
     }
   });
 
+  // Rota para registrar log de acesso (Anti-Pirataria)
+  app.post('/api/auth/log-session', async (req, res) => {
+    try {
+      const { userId, userEmail } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: "userId é obrigatório" });
+      }
+
+      const ipRaw = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim();
+      // Limpa endereços IPv6 mapeados para IPv4 se necessário (ex: ::ffff:127.0.0.1)
+      const ip = ipRaw.startsWith('::ffff:') ? ipRaw.substring(7) : ipRaw;
+      
+      const userAgent = req.headers['user-agent'] || 'unknown';
+
+      // Busca geolocalização simples
+      let geoData = {};
+      try {
+        if (ip && ip !== '::1' && ip !== '127.0.0.1') {
+          const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
+          if (geoRes.ok) {
+            const data = await geoRes.json();
+            if (data.status === 'success') {
+              geoData = data;
+            }
+          }
+        }
+      } catch (geoError) {
+        console.error("[GEO] Erro ao buscar localização:", geoError);
+      }
+
+      const { dbAdmin } = getAdminConfig();
+      const now = new Date();
+      
+      await dbAdmin.collection('user_sessions').add({
+        userId,
+        userEmail: userEmail || null,
+        ip,
+        userAgent,
+        geo: geoData,
+        timestamp: now.toISOString(),
+        createdAt: now
+      });
+
+      return res.status(200).json({ success: true });
+    } catch (error: any) {
+      console.error("[SESSION LOG] Erro crítico:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Rota para o admin listar sessões de um usuário
+  app.get('/api/admin/students/:userId/sessions', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { dbAdmin } = getAdminConfig();
+      
+      const snapshot = await dbAdmin.collection('user_sessions')
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get();
+
+      const sessions = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      return res.status(200).json({ success: true, sessions });
+    } catch (error: any) {
+      console.error("[ADMIN SESSIONS] Erro:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // Rota de Coprodutores (Admin)
   app.get('/api/admin/coproducers', async (req, res) => {
     try {

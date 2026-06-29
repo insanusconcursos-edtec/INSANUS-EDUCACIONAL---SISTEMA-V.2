@@ -87,6 +87,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const userDocRef = doc(db, 'users', user.uid);
             const userDocSnap = await getDoc(userDocRef);
             
+            // Log session (Anti-piracy)
+            try {
+              fetch('/api/auth/log-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.uid, userEmail: user.email })
+              }).catch(e => console.error("Session logging failed", e));
+            } catch (logErr) {
+              console.error("Log session fetch error", logErr);
+            }
+            
             if (userDocSnap.exists()) {
                 const data = userDocSnap.data();
                 setUserData(data);

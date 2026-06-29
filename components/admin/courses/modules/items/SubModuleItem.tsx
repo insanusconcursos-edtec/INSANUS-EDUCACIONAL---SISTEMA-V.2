@@ -54,29 +54,29 @@ export const SubModuleItem: React.FC<SubModuleItemProps> = ({
         
         {/* Área clicável para abrir/fechar */}
         <div 
-            className="flex items-center gap-3 cursor-pointer flex-1" 
+            className="flex items-center gap-3 cursor-pointer flex-1 min-w-0" 
             onClick={onToggle} // Usa a função do pai
         >
             {/* Ícone da Seta (Gira conforme isOpen) */}
-            <svg className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-4 h-4 shrink-0 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
             
             {/* Ícone de Pasta (LUCIDE) */}
-            <Folder size={20} className="text-yellow-600" fill="currentColor" />
+            <Folder size={20} className="text-yellow-600 shrink-0" fill="currentColor" />
             
             <h4 className="text-white font-bold text-sm uppercase">{subModule.title}</h4>
             {subModule.isRecording && (
-                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 font-black uppercase tracking-wider animate-pulse">
+                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 font-black uppercase tracking-wider animate-pulse shrink-0">
                     Em Gravação
                 </span>
             )}
             {subModule.publishDate && (
-                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20">
+                <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20 shrink-0">
                     Agendado: {new Date(subModule.publishDate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </span>
             )}
-            <span className="text-[10px] text-gray-500 bg-black/30 px-2 py-0.5 rounded border border-gray-700">
+            <span className="text-[10px] text-gray-500 bg-black/30 px-2 py-0.5 rounded border border-gray-700 shrink-0">
                 {lessons.length} aulas
             </span>
         </div>

@@ -906,12 +906,12 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
                         className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${isExpanded ? 'bg-zinc-900/60' : 'hover:bg-zinc-900/40'}`}
                         onClick={() => toggleGroup(group.id)}
                       >
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="p-2 bg-zinc-800 rounded-lg text-zinc-400">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="p-2 bg-zinc-800 rounded-lg text-zinc-400 shrink-0">
                             <FolderTree size={18} />
                           </div>
                           <h3 className="font-black text-xs text-white uppercase tracking-wider">{group.title}</h3>
-                          <span className="text-[10px] font-bold text-gray-500 bg-black/50 px-2 py-0.5 rounded-full border border-gray-800">
+                          <span className="text-[10px] font-bold text-gray-500 bg-black/50 px-2 py-0.5 rounded-full border border-gray-800 shrink-0">
                             {groupItems.length} ITENS
                           </span>
                         </div>

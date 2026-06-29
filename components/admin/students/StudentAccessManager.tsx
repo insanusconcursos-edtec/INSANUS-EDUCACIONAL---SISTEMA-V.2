@@ -3,7 +3,7 @@ import {
   X, Clock, Trash2, Plus, 
   CheckCircle, Layers, GraduationCap,
   Loader2, PlayCircle, Users, Radio,
-  ArrowLeft, Package
+  ArrowLeft, Package, Shield, Globe, Monitor
 } from 'lucide-react';
 import { 
   Student, 
@@ -47,6 +47,8 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   
   // Modal State
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [selectedContentId, setSelectedContentId] = useState('');
   const [daysInput, setDaysInput] = useState<number>(30);
   const [targetAccessId, setTargetAccessId] = useState<string | null>(null); // For extension
@@ -102,6 +104,27 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   useEffect(() => {
     fetchStudentData();
   }, [fetchStudentData]);
+
+  // 3. Fetch Session Logs (Anti-piracy)
+  const fetchSessions = useCallback(async () => {
+    if (!localStudent.uid) return;
+    setIsLoadingSessions(true);
+    try {
+      const response = await fetch(`/api/admin/students/${localStudent.uid}/sessions`);
+      const data = await response.json();
+      if (data.success) {
+        setSessions(data.sessions);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar sessões:", error);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  }, [localStudent.uid]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   // === HELPERS ===
   const ensureDate = (val: any): Date | null => {
@@ -649,6 +672,33 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                 </div>
             </div>
 
+            {/* COLUMN 6: SESSION HISTORY (ANTI-PIRACY) */}
+            <div className="flex flex-col min-w-[350px] snap-start border border-emerald-900/30 bg-emerald-900/5 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-emerald-900/30 flex items-center justify-between bg-zinc-950/50">
+                    <div className="flex items-center gap-2 text-emerald-500">
+                        <Shield size={18} />
+                        <span className="text-sm font-black uppercase tracking-widest">Histórico de Acessos</span>
+                    </div>
+                    <button 
+                        onClick={fetchSessions}
+                        className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                        title="Atualizar Logs"
+                    >
+                        <Loader2 size={16} className={isLoadingSessions ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                    {sessions.length === 0 ? (
+                        <EmptyState text="Nenhum acesso registrado" icon={Shield} />
+                    ) : (
+                        sessions.map(session => (
+                            <SessionCard key={session.id} session={session} />
+                        ))
+                    )}
+                </div>
+            </div>
+
         </div>
       </div>
 
@@ -881,6 +931,42 @@ const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, 
                 >
                     <Trash2 size={14} />
                 </button>
+            </div>
+        </div>
+    );
+};
+
+const SessionCard = ({ session }: { session: any }) => {
+    const date = session.createdAt ? (session.createdAt.toDate ? session.createdAt.toDate() : new Date(session.timestamp)) : new Date(session.timestamp);
+    
+    return (
+        <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl space-y-3 hover:border-emerald-500/30 transition-all group">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-500">
+                    <Globe size={14} />
+                    <span className="text-xs font-mono font-bold">{session.ip}</span>
+                </div>
+                <span className="text-[10px] text-zinc-500 font-bold uppercase">
+                    {date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+            </div>
+
+            {session.geo && (session.geo.status === 'success' || session.geo.country) && (
+                <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-2 space-y-1">
+                    <div className="text-[10px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
+                        {session.geo.city || 'Desconhecido'}, {session.geo.regionName || session.geo.region || ''} - {session.geo.countryCode || session.geo.country || ''}
+                    </div>
+                    <div className="text-[9px] text-zinc-500 font-bold uppercase truncate">
+                        {session.geo.isp || session.geo.org || 'ISP Desconhecido'}
+                    </div>
+                </div>
+            )}
+
+            <div className="flex items-start gap-2 pt-1 border-t border-zinc-900">
+                <Monitor size={12} className="text-zinc-600 mt-0.5 shrink-0" />
+                <div className="text-[9px] text-zinc-500 font-medium leading-tight line-clamp-2 italic">
+                    {session.userAgent}
+                </div>
             </div>
         </div>
     );
