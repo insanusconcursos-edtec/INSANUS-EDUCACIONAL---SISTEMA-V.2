@@ -653,7 +653,7 @@ async function setupVite(app: any) {
   // Rota para registrar log de acesso (Anti-Pirataria)
   app.post('/api/auth/log-session', async (req, res) => {
     try {
-      const { userId, userEmail } = req.body;
+      const { userId, userEmail, lat, lon, accuracy, fingerprint } = req.body;
       if (!userId) {
         return res.status(400).json({ success: false, error: "userId é obrigatório" });
       }
@@ -664,8 +664,8 @@ async function setupVite(app: any) {
       
       const userAgent = req.headers['user-agent'] || 'unknown';
 
-      // Busca geolocalização simples
-      let geoData = {};
+      // Busca geolocalização simples via IP (como fallback ou complemento)
+      let geoData: any = {};
       try {
         if (ip && ip !== '::1' && ip !== '127.0.0.1') {
           const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query`);
@@ -689,6 +689,8 @@ async function setupVite(app: any) {
         ip,
         userAgent,
         geo: geoData,
+        browserGeo: lat && lon ? { lat, lon, accuracy } : null,
+        fingerprint: fingerprint || null,
         timestamp: now.toISOString(),
         createdAt: now
       });

@@ -89,11 +89,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             // Log session (Anti-piracy)
             try {
-              fetch('/api/auth/log-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.uid, userEmail: user.email })
-              }).catch(e => console.error("Session logging failed", e));
+              const logSession = async () => {
+                let browserGeo = null;
+                
+                // Fingerprinting (Canvas + Screen + Browser info)
+                const getFingerprint = () => {
+                  try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return 'canvas-not-supported';
+                    
+                    canvas.width = 200;
+                    canvas.height = 40;
+                    ctx.textBaseline = "top";
+                    ctx.font = "14px 'Arial'";
+                    ctx.fillStyle = "#f60";
+                    ctx.fillRect(125,1,62,20);
+                    ctx.fillStyle = "#069";
+                    ctx.fillText("Insanus, <canvas> 1.0", 2, 15);
+                    
+                    const b64 = canvas.toDataURL().replace("data:image/png;base64,","");
+                    let hash = 0;
+                    for (let i = 0; i < b64.length; i++) {
+                      hash = ((hash << 5) - hash) + b64.charCodeAt(i);
+                      hash |= 0;
+                    }
+                    
+                    const screenInfo = `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`;
+                    const language = navigator.language;
+                    return `f_${Math.abs(hash)}_${screenInfo}_${language}`.replace(/\s+/g, '');
+                  } catch (e) {
+                    return 'fingerprint-err';
+                  }
+                };
+
+                // Precision Geolocation
+                if (navigator.geolocation) {
+                  try {
+                    const pos: any = await new Promise((resolve) => {
+                      navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { 
+                        enableHighAccuracy: true, 
+                        timeout: 5000 
+                      });
+                    });
+                    if (pos && pos.coords) {
+                      browserGeo = {
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy
+                      };
+                    }
+                  } catch (e) {
+                    console.error("Geo error", e);
+                  }
+                }
+
+                fetch('/api/auth/log-session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    userId: user.uid, 
+                    userEmail: user.email,
+                    fingerprint: getFingerprint(),
+                    lat: browserGeo?.lat,
+                    lon: browserGeo?.lon,
+                    accuracy: browserGeo?.accuracy
+                  })
+                }).catch(e => console.error("Session logging failed", e));
+              };
+
+              logSession();
             } catch (logErr) {
               console.error("Log session fetch error", logErr);
             }

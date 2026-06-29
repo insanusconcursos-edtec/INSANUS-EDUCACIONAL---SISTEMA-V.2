@@ -3,7 +3,7 @@ import {
   X, Clock, Trash2, Plus, 
   CheckCircle, Layers, GraduationCap,
   Loader2, PlayCircle, Users, Radio,
-  ArrowLeft, Package, Shield, Globe, Monitor
+  ArrowLeft, Package, Shield, Globe, Monitor, MapPin, Fingerprint
 } from 'lucide-react';
 import { 
   Student, 
@@ -951,6 +951,33 @@ const SessionCard = ({ session }: { session: any }) => {
                 </span>
             </div>
 
+            {/* Fingerprint Badge */}
+            {session.fingerprint && (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-md">
+                    <Fingerprint size={12} className="text-purple-500" />
+                    <span className="text-[9px] font-mono text-zinc-400 truncate" title={session.fingerprint}>
+                        ID: {session.fingerprint}
+                    </span>
+                </div>
+            )}
+
+            {/* Browser Geolocation (GPS) */}
+            {session.browserGeo && session.browserGeo.lat && (
+                <a 
+                    href={`https://www.google.com/maps?q=${session.browserGeo.lat},${session.browserGeo.lon}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 p-2 bg-brand-red/5 border border-brand-red/10 rounded-lg hover:bg-brand-red/10 transition-colors"
+                >
+                    <MapPin size={14} className="text-brand-red" />
+                    <div className="flex-1">
+                        <div className="text-[10px] text-white font-black uppercase tracking-tight">GPS: Ver no Mapa</div>
+                        <div className="text-[9px] text-zinc-500 font-bold">Precisão: {Math.round(session.browserGeo.accuracy)}m</div>
+                    </div>
+                </a>
+            )}
+
+            {/* IP Geolocation (Fallback) */}
             {session.geo && (session.geo.status === 'success' || session.geo.country) && (
                 <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-2 space-y-1">
                     <div className="text-[10px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
