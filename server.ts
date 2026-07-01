@@ -7,7 +7,7 @@ import { fetchPandaVideoTranscription } from './src/backend/services/pandaVideoS
 import { generateStudyMaterial } from './src/backend/services/geminiService.js';
 import { getAdminConfig } from './src/backend/services/firebaseAdmin.js';
 import { provisionExternalPurchase, revokePurchase } from './src/backend/services/provisioningService.js';
-import { createPagarmeOrder, handlePagarmeWebhook, getPagarmeOrderStatus, requestPagarmeTransfer, getPagarmeRecipientBalance, getPagarmeRecipients } from './src/backend/services/pagarmeService.js';
+import { createPagarmeOrder, handlePagarmeWebhook, getPagarmeOrderStatus, requestPagarmeTransfer, getPagarmeRecipientBalance, getPagarmeRecipients, MASTER_RECIPIENT_ID } from './src/backend/services/pagarmeService.js';
 import { initOrderNotificationListener } from './src/backend/services/orderNotificationService.js';
 import { initStudyReminderCron } from './src/backend/services/studyReminderService.js';
 import { addWatermarkToPdf } from './src/backend/services/pdfWatermarkService.js';
@@ -1159,6 +1159,17 @@ async function setupVite(app: any) {
       return res.status(200).json({ success: true, balance });
     } catch (error: any) {
       console.error("Erro ao consultar saldo Pagar.me:", error.message);
+      return res.status(500).json({ success: false, error: error.message || 'Erro interno no servidor' });
+    }
+  });
+
+  // Rota de consulta de saldo MASTER Pagar.me
+  app.get('/api/payments/pagarme/balance/master', async (req, res) => {
+    try {
+      const balance = await getPagarmeRecipientBalance(MASTER_RECIPIENT_ID);
+      return res.status(200).json({ success: true, balance });
+    } catch (error: any) {
+      console.error("Erro ao consultar saldo MASTER Pagar.me:", error.message);
       return res.status(500).json({ success: false, error: error.message || 'Erro interno no servidor' });
     }
   });

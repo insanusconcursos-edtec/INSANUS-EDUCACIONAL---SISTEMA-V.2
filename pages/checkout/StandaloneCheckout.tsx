@@ -126,6 +126,8 @@ export default function StandaloneCheckout() {
       if (!f.name.trim()) errors[`friend_name_${i}`] = 'Nome é obrigatório';
       if (!f.email.trim()) errors[`friend_email_${i}`] = 'E-mail é obrigatório';
       if (f.cpf.replace(/\D/g, '').length !== 11) errors[`friend_cpf_${i}`] = 'CPF inválido';
+      const cleanPhone = f.phone.replace(/\D/g, '');
+      if (cleanPhone.length < 10) errors[`friend_phone_${i}`] = 'WhatsApp inválido';
     });
 
     setFormErrors(errors);
@@ -649,6 +651,22 @@ export default function StandaloneCheckout() {
                                     }}
                                   />
                                 </div>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">WhatsApp / Celular</label>
+                                <input 
+                                  type="text"
+                                  className={`w-full bg-zinc-900 border ${formErrors[`friend_phone_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
+                                  placeholder="(00) 00000-0000"
+                                  value={friend.phone}
+                                  onChange={(e) => {
+                                    const newFriends = [...friends];
+                                    newFriends[index].phone = maskPhone(e.target.value);
+                                    setFriends(newFriends);
+                                  }}
+                                />
+                                {formErrors[`friend_phone_${index}`] && <p className="text-[9px] text-red-500 font-bold ml-1">{formErrors[`friend_phone_${index}`]}</p>}
                               </div>
                             </motion.div>
                           ))}

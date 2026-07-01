@@ -5,7 +5,8 @@ import { sendPushNotification } from './notificationAdminService.js';
 
 // CONFIGURAÇÃO GLOBAL DA API V5
 const PAGARME_BASE_URL = 'https://api.pagar.me/core/v5';
-const MASTER_RECIPIENT_ID = 're_cmouicmz204gz0l9tyr4jkmut';
+const DEFAULT_MASTER_RECIPIENT_ID = 're_cmouicmz204gz0l9tyr4jkmut';
+export const MASTER_RECIPIENT_ID = (process.env.PAGARME_MASTER_RECIPIENT_ID || DEFAULT_MASTER_RECIPIENT_ID).trim();
 
 /**
  * Helper para Autenticação Basic com Base64
@@ -522,13 +523,13 @@ async function recordAdminSalesReport(orderData: any) {
 
     if (actualSplits.length > 0) {
       // Descobre o master real para não subtrair do próprio master
-      const envMasterId = process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID;
-      const hasRealMaster = actualSplits.find((s: any) => (s.recipient_id || s.recipient?.id || s.id) === envMasterId);
-      const appliedMasterId = hasRealMaster ? envMasterId : [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.recipient_id || [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.recipient?.id || [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.id;
+      const appliedMasterId = MASTER_RECIPIENT_ID;
+      const hasRealMaster = actualSplits.find((s: any) => (s.recipient_id || s.recipient?.id || s.id) === appliedMasterId);
+      const finalMasterId = hasRealMaster ? appliedMasterId : [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.recipient_id || [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.recipient?.id || [...actualSplits].sort((a,b) => b.amount - a.amount)[0]?.id;
 
       actualSplits.forEach((s: any) => {
         const sRecipientId = s.recipient_id || s.recipient?.id || s.id;
-        if (sRecipientId !== appliedMasterId) {
+        if (sRecipientId !== finalMasterId) {
           coproductionPart += s.amount;
         }
       });
@@ -639,8 +640,6 @@ async function recordCoproductionCommissions(orderData: any) {
     if (actualSplits.length > 0) {
       console.log(`[SPLIT] Usando ${actualSplits.length} splits reais da Pagar.me para registro.`);
       
-      const envMasterId = process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID;
-
       for (const split of actualSplits) {
         const recipientId = split.recipient_id || split.recipient?.id || split.id;
         const commissionValue = split.amount;
@@ -648,7 +647,7 @@ async function recordCoproductionCommissions(orderData: any) {
         if (!recipientId) continue;
 
         // Ignorar o Master Recipient no relatório de coprodução individual
-        if (recipientId === envMasterId) continue;
+        if (recipientId === MASTER_RECIPIENT_ID) continue;
 
         // Tenta encontrar o UID pelo RecipientId para vínculo correto
         let identifier = recipientId;

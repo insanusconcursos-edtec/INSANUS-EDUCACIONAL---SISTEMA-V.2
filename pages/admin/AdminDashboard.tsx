@@ -39,8 +39,6 @@ import { TictoProduct } from '../../types/product';
 import { format, subDays, startOfDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const MASTER_RECIPIENT_ID = 're_cmouicmz204gz0l9tyr4jkmut';
-
 interface SalesReport {
   id: string;
   orderId: string;
@@ -99,7 +97,7 @@ const AdminDashboard: React.FC = () => {
   const fetchBalance = async () => {
     setLoadingBalance(true);
     try {
-      const response = await fetch(`/api/payments/pagarme/balance?recipientId=${MASTER_RECIPIENT_ID}`);
+      const response = await fetch('/api/payments/pagarme/balance/master');
       if (!response.ok) throw new Error('Falha ao buscar saldo');
       const data = await response.json();
       
