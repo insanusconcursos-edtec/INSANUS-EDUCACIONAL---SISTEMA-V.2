@@ -1,6 +1,6 @@
 import * as nodemailer from 'nodemailer';
-import { PresentialEvent } from '../../../types/presentialEvent';
-import { generateEventTicketPdf } from './ticketService';
+import { PresentialEvent } from '../../../types/presentialEvent.js';
+import { generateEventTicketPdf } from './ticketService.js';
 
 let transporter: nodemailer.Transporter | null = null;
 

@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { PresentialEvent } from '../../../types/presentialEvent';
+import { PresentialEvent } from '../../../types/presentialEvent.js';
 
 export async function generateEventTicketPdf(
   event: PresentialEvent,
