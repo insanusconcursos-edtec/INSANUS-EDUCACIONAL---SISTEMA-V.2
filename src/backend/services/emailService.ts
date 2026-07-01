@@ -1,4 +1,6 @@
 import * as nodemailer from 'nodemailer';
+import { PresentialEvent } from '../../../types/presentialEvent';
+import { generateEventTicketPdf } from './ticketService';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -113,5 +115,72 @@ export const sendAccessNotificationEmail = async (name: string, email: string, p
     console.log(`[E-MAIL] Notificação de novo acesso enviada para ${email}`);
   } catch (error) {
     console.error("❌ ERRO CRÍTICO NO SMTP (FALHA AO ENVIAR NOTIFICAÇÃO):", error);
+  }
+};
+
+export const sendPresentialEventTicketEmail = async (
+  name: string, 
+  email: string, 
+  cpf: string,
+  productName: string, 
+  event: PresentialEvent
+) => {
+  try {
+    const ticketBuffer = await generateEventTicketPdf(event, { name, email, cpf });
+    const eventDate = event.date instanceof Date ? event.date : (event.date as any).toDate();
+    const dateStr = eventDate.toLocaleDateString('pt-BR');
+    
+    const location = event.locationType === 'POLO_RI' ? 'Polo INSANUS CONCURSOS (Rio Branco/AC)' : 
+                     event.locationType === 'POLO_PV' ? 'Polo GABARITO CONCURSOS (Porto Velho/RO)' : 
+                     event.customLocation || 'Não definido';
+
+    const mailOptions = {
+      from: `"Insanus Educacional" <${process.env.SMTP_USER || 'contato@portal-insanus.com'}>`,
+      to: email,
+      subject: `Confirmação de Inscrição: ${event.title} 🎟️`,
+      html: `
+        <div style="font-family: Arial, sans-serif; background-color: #f4f4f5; padding: 40px; color: #18181b;">
+          <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+            <div style="background: #e11d48; padding: 40px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; font-weight: 900;">Inscrição Confirmada!</h1>
+            </div>
+            <div style="padding: 40px;">
+              <p style="font-size: 18px; font-weight: bold; margin-top: 0;">Parabéns, ${name}!</p>
+              <p style="line-height: 1.6; color: #52525b;">Sua vaga para o evento <strong>${event.title}</strong> está garantida. Estamos ansiosos para te ver lá!</p>
+              
+              <div style="background: #f4f4f5; padding: 24px; border-radius: 16px; margin: 24px 0;">
+                <h3 style="margin: 0 0 16px 0; color: #18181b; text-transform: uppercase; font-size: 14px; letter-spacing: 1px;">Informações do Evento:</h3>
+                <p style="margin: 0 0 8px 0; color: #52525b;"><strong>Data:</strong> ${dateStr}</p>
+                <p style="margin: 0 0 8px 0; color: #52525b;"><strong>Horário de Início:</strong> ${event.startTime}</p>
+                <p style="margin: 0; color: #52525b;"><strong>Local:</strong> ${location}</p>
+              </div>
+
+              <p style="line-height: 1.6; color: #52525b;">Anexamos a este e-mail o seu <strong>Ticket de Ingresso</strong>. Por favor, apresente-o (impresso ou no celular) na recepção do evento.</p>
+
+              <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 20px; border-radius: 12px; margin-top: 24px;">
+                <p style="margin: 0; font-size: 12px; color: #92400e; line-height: 1.5;">
+                  <strong>Aviso de Reembolso:</strong> O cancelamento da inscrição com direito a reembolso só é permitido até 48 horas antes do evento. O não comparecimento não gera direito a crédito ou estorno.
+                </p>
+              </div>
+            </div>
+            <div style="background: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #f4f4f5;">
+              <p style="font-size: 12px; color: #a1a1aa; margin: 0;">Equipe Insanus Educacional - Nos vemos no evento!</p>
+            </div>
+          </div>
+        </div>
+      `,
+      attachments: [
+        {
+          filename: `Ingresso_${event.title.replace(/\s+/g, '_')}.pdf`,
+          content: ticketBuffer
+        }
+      ]
+    };
+
+    const client = getTransporter();
+    await client.sendMail(mailOptions);
+    console.log(`[E-MAIL] Ticket de evento enviado com sucesso para ${email}`);
+  } catch (error) {
+    console.error("❌ ERRO AO ENVIAR TICKET DE EVENTO:", error);
   }
 };

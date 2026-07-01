@@ -16,6 +16,7 @@ import PresentialClassManager from './pages/admin/PresentialClassManager';
 import { AdminLiveEvents } from './pages/admin/AdminLiveEvents'; // Nova Importação Eventos ao Vivo
 import { AdminLiveEventDetails } from './pages/admin/AdminLiveEventDetails'; // Nova Importação Gerenciar Evento
 import { AdminLiveRoom } from './pages/admin/AdminLiveRoom'; // Nova Importação Sala de Transmissão
+import AdminPresentialEvents from './pages/admin/PresentialEvents';
 import AffiliateDashboard from './pages/admin/AffiliateDashboard';
 import FinancePage from './pages/admin/FinancePage';
 import SalesPage from './pages/admin/SalesPage';
@@ -186,6 +187,8 @@ const App: React.FC = () => {
                 
                 <Route path="eventos-ao-vivo" element={<AdminRoleGuard permission="eventos_ao_vivo"><AdminLiveEvents /></AdminRoleGuard>} />
                 <Route path="eventos-ao-vivo/:eventId" element={<AdminRoleGuard permission="eventos_ao_vivo"><AdminLiveEventDetails /></AdminRoleGuard>} />
+                
+                <Route path="eventos-presenciais" element={<AdminRoleGuard permission="eventos_presenciais"><AdminPresentialEvents /></AdminRoleGuard>} />
                 
                 <Route path="equipe" element={<AdminRoleGuard permission="equipe"><TeamManager /></AdminRoleGuard>} />
                 

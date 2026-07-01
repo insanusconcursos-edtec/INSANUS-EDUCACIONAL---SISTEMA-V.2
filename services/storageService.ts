@@ -13,3 +13,9 @@ export const uploadSupportImage = async (ticketId: string, file: File): Promise<
   await uploadBytes(fileRef, file);
   return await getDownloadURL(fileRef);
 };
+
+export const uploadFile = async (file: File, path: string): Promise<string> => {
+  const fileRef = ref(storage, path);
+  await uploadBytes(fileRef, file);
+  return await getDownloadURL(fileRef);
+};

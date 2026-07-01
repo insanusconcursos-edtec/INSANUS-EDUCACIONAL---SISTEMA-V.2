@@ -18,9 +18,11 @@ import { getSimulatedClasses, SimulatedClass } from '../../../services/simulated
 import { courseService } from '../../../services/courseService';
 import { classService } from '../../../services/classService';
 import { liveEventService } from '../../../services/liveEventService';
+import { presentialEventService } from '../../../services/presentialEventService';
 import { Class } from '../../../types/class';
 import { OnlineCourse } from '../../../types/course';
 import { LiveEvent } from '../../../types/liveEvent';
+import { PresentialEvent } from '../../../types/presentialEvent';
 import { TictoProduct } from '../../../types/product';
 import { db } from '../../../services/firebase';
 import { doc, writeBatch, Timestamp, collection, getDocs } from 'firebase/firestore';
@@ -33,7 +35,7 @@ interface StudentAccessManagerProps {
   onUpdate: () => void; // Trigger refresh on parent
 }
 
-type ModalType = 'ADD_PLAN' | 'ADD_SIMULADO' | 'ADD_COURSE' | 'ADD_PRESENTIAL' | 'ADD_LIVE_EVENT' | 'ADD_PRODUCT' | 'EXTEND' | null;
+type ModalType = 'ADD_PLAN' | 'ADD_SIMULADO' | 'ADD_COURSE' | 'ADD_PRESENTIAL' | 'ADD_LIVE_EVENT' | 'ADD_PRESENTIAL_EVENT' | 'ADD_PRODUCT' | 'EXTEND' | null;
 
 const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: initialStudent, onClose, onUpdate }) => {
   // State
@@ -43,6 +45,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   const [courses, setCourses] = useState<OnlineCourse[]>([]);
   const [presentialClasses, setPresentialClasses] = useState<Class[]>([]);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [presentialEvents, setPresentialEvents] = useState<PresentialEvent[]>([]);
   const [availableProducts, setAvailableProducts] = useState<TictoProduct[]>([]);
   
   // Modal State
@@ -66,12 +69,13 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   useEffect(() => {
     const loadContent = async () => {
       try {
-        const [p, s, c, pc, le, prodSnap] = await Promise.all([
+        const [p, s, c, pc, le, pe, prodSnap] = await Promise.all([
           getPlans(),
           getSimulatedClasses(),
           courseService.getCourses(),
           classService.getClasses(),
           liveEventService.getLiveEvents(),
+          presentialEventService.getEvents(),
           getDocs(collection(db, 'ticto_products'))
         ]);
         setPlans(p);
@@ -79,6 +83,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
         setCourses(c);
         setPresentialClasses(pc);
         setLiveEvents(le.filter(e => e.isIsolatedProduct));
+        setPresentialEvents(pe);
         setAvailableProducts(prodSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as TictoProduct)));
       } catch (error) {
         console.error("Error loading content:", error);
@@ -213,7 +218,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
       }
 
       let title = '';
-      let type: 'plan' | 'simulated_class' | 'course' | 'presential_class' | 'live_events' = 'plan';
+      let type: 'plan' | 'simulated_class' | 'course' | 'presential_class' | 'live_events' | 'presential_event' = 'plan';
 
       if (activeModal === 'ADD_PLAN') {
         type = 'plan';
@@ -235,6 +240,10 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
         type = 'live_events';
         const le = liveEvents.find(x => x.id === selectedContentId);
         title = le?.title || 'Evento Desconhecido';
+      } else if (activeModal === 'ADD_PRESENTIAL_EVENT') {
+        type = 'presential_event';
+        const pe = presentialEvents.find(x => x.id === selectedContentId);
+        title = pe?.title || 'Evento Presencial Desconhecido';
       }
 
       await grantStudentAccess(localStudent.uid, {
@@ -242,7 +251,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
         targetId: selectedContentId,
         title,
         days: daysInput,
-        isScholarship: (activeModal === 'ADD_PRESENTIAL' || activeModal === 'ADD_COURSE' || activeModal === 'ADD_PLAN') ? isScholarship : false
+        isScholarship: (activeModal === 'ADD_PRESENTIAL' || activeModal === 'ADD_COURSE' || activeModal === 'ADD_PLAN' || activeModal === 'ADD_PRESENTIAL_EVENT') ? isScholarship : false
       });
 
       toast.success("Acesso liberado com sucesso!");
@@ -338,6 +347,14 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
         }
       }
 
+      // Linked Presential Events
+      if (product.linkedResources?.presentialEvents) {
+        for (const peId of product.linkedResources.presentialEvents) {
+          const pe = presentialEvents.find(p => p.id === peId);
+          if (pe) addAccess('presential_event', peId, pe.title);
+        }
+      }
+
       batch.update(userRef, {
         products: updatedProducts,
         access: currentAccess
@@ -419,6 +436,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   const simAccess = localStudent.access?.filter(a => a.type === 'simulated_class' && a.isActive) || [];
   const courseAccess = localStudent.access?.filter(a => a.type === 'course' && a.isActive) || [];
   const presentialAccess = localStudent.access?.filter(a => a.type === 'presential_class' && a.isActive) || [];
+  const presentialEventAccess = localStudent.access?.filter(a => a.type === 'presential_event' && a.isActive) || [];
   const liveEventAccess = localStudent.access?.filter(a => a.type === 'live_events' && a.isActive) || [];
 
   return (
@@ -672,7 +690,43 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                 </div>
             </div>
 
-            {/* COLUMN 6: SESSION HISTORY (ANTI-PIRACY) */}
+            {/* COLUMN 6: PRESENTIAL EVENTS (SKY) */}
+            <div className="flex flex-col min-w-[320px] snap-start border border-zinc-900 bg-zinc-900/10 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-zinc-900 flex items-center justify-between bg-zinc-950/50">
+                    <div className="flex items-center gap-2 text-sky-500">
+                        <MapPin size={18} />
+                        <span className="text-sm font-black uppercase tracking-widest">Eventos Presenciais</span>
+                    </div>
+                    <button 
+                        onClick={() => setActiveModal('ADD_PRESENTIAL_EVENT')}
+                        className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-sky-900/20 transition-all flex items-center gap-2"
+                    >
+                        <Plus size={12} /> Liberar Evento
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                    {presentialEventAccess.length === 0 ? (
+                        <EmptyState text="Nenhum evento ativo" icon={MapPin} />
+                    ) : (
+                        presentialEventAccess.map(access => (
+                            <AccessCard 
+                                key={access.id} 
+                                access={access} 
+                                colorClass="sky"
+                                onRevoke={() => handleRequestRevoke(access)}
+                                onExtend={() => openExtendModal(access.id)}
+                                getDaysRemaining={getDaysRemaining}
+                                calculateProgress={calculateProgress}
+                                getAccessStatus={getAccessStatus}
+                                formatDate={formatDate}
+                            />
+                        ))
+                    )}
+                </div>
+            </div>
+
+            {/* COLUMN 7: SESSION HISTORY (ANTI-PIRACY) */}
             <div className="flex flex-col min-w-[350px] snap-start border border-emerald-900/30 bg-emerald-900/5 rounded-xl overflow-hidden">
                 <div className="p-4 border-b border-emerald-900/30 flex items-center justify-between bg-zinc-950/50">
                     <div className="flex items-center gap-2 text-emerald-500">
@@ -735,7 +789,9 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                             ? courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)
                                             : activeModal === 'ADD_LIVE_EVENT'
                                                 ? liveEvents.map(le => <option key={le.id} value={le.id}>{le.title}</option>)
-                                                : presentialClasses.map(pc => <option key={pc.id} value={pc.id}>{pc.name}</option>)
+                                                : activeModal === 'ADD_PRESENTIAL_EVENT'
+                                                    ? presentialEvents.map(pe => <option key={pe.id} value={pe.id}>{pe.title}</option>)
+                                                    : presentialClasses.map(pc => <option key={pc.id} value={pc.id}>{pc.name}</option>)
                                 }
                             </select>
                         </div>
@@ -767,7 +823,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                         </div>
                     </div>
 
-                    {(activeModal === 'ADD_PRESENTIAL' || activeModal === 'ADD_COURSE' || activeModal === 'ADD_PLAN') && (
+                    {(activeModal === 'ADD_PRESENTIAL' || activeModal === 'ADD_COURSE' || activeModal === 'ADD_PLAN' || activeModal === 'ADD_PRESENTIAL_EVENT') && (
                       <div className="flex items-center gap-3 mt-4 mb-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
                         <input
                           type="checkbox"
@@ -866,6 +922,8 @@ const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, 
         colors = { border: 'border-emerald-500/30 hover:border-emerald-500/60', text: 'text-emerald-400', bg: 'bg-emerald-500', barBg: 'bg-emerald-900/20' };
     } else if (colorClass === 'yellow') {
         colors = { border: 'border-yellow-500/30 hover:border-yellow-500/60', text: 'text-yellow-400', bg: 'bg-yellow-500', barBg: 'bg-yellow-900/20' };
+    } else if (colorClass === 'sky') {
+        colors = { border: 'border-sky-500/30 hover:border-sky-500/60', text: 'text-sky-400', bg: 'bg-sky-500', barBg: 'bg-sky-900/20' };
     }
 
     return (

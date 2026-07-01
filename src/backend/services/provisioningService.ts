@@ -1,7 +1,8 @@
 import { getAdminConfig } from './firebaseAdmin.js';
-import { sendWelcomeEmail, sendAccessNotificationEmail } from './emailService.js';
+import { sendWelcomeEmail, sendAccessNotificationEmail, sendPresentialEventTicketEmail } from './emailService.js';
 import crypto from 'crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { PresentialEvent } from '../../../types/presentialEvent.js';
 
 interface CustomerData {
   email: string;
@@ -79,6 +80,7 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
       simulated: [],
       liveEvents: []
     };
+    let productType: string = 'DIGITAL';
     let productDocId = '';
 
     if (origin === 'ticto' || origin === 'mp' || origin === 'pagarme') {
@@ -89,14 +91,18 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
         .where('externalId', '==', safeTargetId)
         .limit(1)
         .get();
+      
+      const setProductData = (data: any, id: string) => {
+        productDocId = id;
+        productName = data.name;
+        accessDays = data.accessDays || 365;
+        linkedResources = data.linkedResources || linkedResources;
+        productType = data.type || 'DIGITAL';
+      };
 
       if (!productsSnapshot.empty) {
         const productDoc = productsSnapshot.docs[0];
-        productDocId = productDoc.id;
-        const productData = productDoc.data();
-        productName = productData.name;
-        accessDays = productData.accessDays || 365;
-        linkedResources = productData.linkedResources || linkedResources;
+        setProductData(productDoc.data(), productDoc.id);
         console.log(`[PROVISIONING] ✅ Produto encontrado em 'products': ${productName}`);
       } else {
         // 2. Tentar na coleção 'ticto_products' (Principal) - Por ID de Documento
@@ -106,6 +112,7 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
           productDocId = tictoProductSnap.id;
           productName = productData?.name || productData?.title || 'Produto';
           accessDays = productData?.accessDays || productData?.validity || 365;
+          productType = productData?.type || 'DIGITAL';
           
           if (productData?.linkedResources) {
             linkedResources = productData.linkedResources;
@@ -128,6 +135,7 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
               productName = matchingOffer.title || data.name || 'Produto via Oferta';
               accessDays = matchingOffer.accessDays || data.accessDays || data.validity || 365;
               linkedResources = data.linkedResources || { onlineCourses: [doc.id] };
+              productType = data.type || 'DIGITAL';
               foundByOffer = true;
               console.log(`[PROVISIONING] ✅ Produto encontrado via Oferta (${safeTargetId}) em 'ticto_products': ${productName}`);
               break;
@@ -147,10 +155,7 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
               const directProductSnap = await dbAdmin.collection('products').doc(safeTargetId).get();
               if (directProductSnap.exists) {
                 const productData = directProductSnap.data();
-                productDocId = directProductSnap.id;
-                productName = productData?.name || 'Produto';
-                accessDays = productData?.accessDays || 365;
-                linkedResources = productData?.linkedResources || linkedResources;
+                setProductData(productData, directProductSnap.id);
                 console.log(`[PROVISIONING] ✅ Produto encontrado via ID em 'products': ${productName}`);
               } else {
                 console.warn(`[PROVISIONING] ⚠️ AVISO: Alvo ${safeTargetId} não localizado em NENHUMA coleção. Access array ficará vazio.`);
@@ -160,6 +165,70 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
         }
       }
     }
+
+    // --- LÓGICA ESPECIAL PARA EVENTO PRESENCIAL ---
+    if (productType === 'EVENTO_PRESENCIAL') {
+      console.log(`[PROVISIONING] 🎟️ Tratando Produto de Evento Presencial: ${productName}`);
+      
+      const eventIds = (linkedResources as any).presentialEvents || [];
+      if (eventIds.length > 0) {
+        for (const eventId of eventIds) {
+          const eventSnap = await dbAdmin.collection('presential_events').doc(eventId).get();
+          if (eventSnap.exists) {
+            const event = { id: eventSnap.id, ...eventSnap.data() } as PresentialEvent;
+            
+            // 1. Registrar o aluno no evento
+            await dbAdmin.collection('presential_event_registrations').add({
+              eventId: eventId,
+              userName: customerData.name,
+              userEmail: customerData.email,
+              userCpf: cpf,
+              userPhone: phone,
+              type: 'PAYING',
+              registeredAt: FieldValue.serverTimestamp()
+            });
+            console.log(`[PROVISIONING] ✅ Aluno registrado no Evento Presencial: ${eventId}`);
+
+            // 2. Enviar e-mail de ticket
+            await sendPresentialEventTicketEmail(customerData.name, customerData.email, cpf, productName, event);
+            console.log(`[PROVISIONING] ✅ E-mail de Ticket enviado para: ${customerData.email}`);
+          }
+        }
+      }
+
+      // Se for APENAS evento presencial, podemos parar por aqui?
+      // O usuário disse: "não é necessário criar usuário de acesso"
+      // Mas para manter o histórico de compras unificado, talvez seja melhor criar o usuário anyway?
+      // "não é necessário criar usuário" -> I'll skip the user creation part if it's strictly a presential event product.
+      // However, the system might expect a user for other things. 
+      // Let's follow the user's wish: skip welcome email and access email if it's an event.
+      // I'll return early if it's ONLY an event.
+      
+      // Check if it has OTHER resources
+      const hasOtherResources = 
+        (linkedResources.plans?.length || 0) > 0 || 
+        (linkedResources.onlineCourses?.length || 0) > 0 ||
+        (linkedResources.simulated?.length || 0) > 0 ||
+        (linkedResources.presentialClasses?.length || 0) > 0 ||
+        (linkedResources.liveEvents?.length || 0) > 0;
+
+      if (!hasOtherResources) {
+        // Registrar a venda em 'enrollments' para histórico
+        await dbAdmin.collection('enrollments').add({
+          userEmail: customerData.email,
+          userName: customerData.name,
+          productId: productDocId || safeTargetId,
+          productName: productName,
+          productType: 'EVENTO_PRESENCIAL',
+          origin: origin,
+          createdAt: FieldValue.serverTimestamp(),
+          status: 'completed'
+        });
+        
+        return { success: true, message: 'Presential event registration completed.' };
+      }
+    }
+    // --- FIM DA LÓGICA ESPECIAL ---
 
     // Calcular data de expiração
     const expirationDate = new Date();

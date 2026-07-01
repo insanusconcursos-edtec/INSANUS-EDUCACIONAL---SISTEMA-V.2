@@ -29,7 +29,7 @@ import { LinkedResources } from '../types/product';
 
 export interface AccessItem {
   id: string; // Unique ID for this specific access grant
-  type: 'plan' | 'simulated_class' | 'course' | 'presential_class' | 'live_events' | 'product';
+  type: 'plan' | 'simulated_class' | 'course' | 'presential_class' | 'live_events' | 'product' | 'presential_event';
   targetId: string; // The ID of the Plan, Simulated Class, Course or Product
   title: string;
   days: number;
@@ -277,7 +277,7 @@ export const getStudentById = async (uid: string): Promise<Student | null> => {
 export const grantStudentAccess = async (
   uid: string, 
   data: { 
-    type: 'plan' | 'simulated_class' | 'course' | 'presential_class' | 'live_events'; 
+    type: 'plan' | 'simulated_class' | 'course' | 'presential_class' | 'live_events' | 'presential_event'; 
     targetId: string; 
     title: string; 
     days: number;
@@ -567,7 +567,8 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
     fetchTitles('courses', newResources.onlineCourses || []),
     fetchTitles('simulatedClasses', newResources.simulated || []),
     fetchTitles('classes', newResources.presentialClasses || []),
-    fetchTitles('live_events', newResources.liveEvents || [])
+    fetchTitles('live_events', newResources.liveEvents || []),
+    fetchTitles('presential_events', newResources.presentialEvents || [])
   ]);
 
   // 2. Fetch de todos os alunos (filtra por role student no Firestore se possível)
@@ -608,7 +609,8 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
         (access.type === 'course' && (newResources.onlineCourses || []).includes(access.targetId)) ||
         (access.type === 'simulated_class' && (newResources.simulated || []).includes(access.targetId)) ||
         (access.type === 'presential_class' && (newResources.presentialClasses || []).includes(access.targetId)) ||
-        (access.type === 'live_events' && (newResources.liveEvents || []).includes(access.targetId))
+        (access.type === 'live_events' && (newResources.liveEvents || []).includes(access.targetId)) ||
+        (access.type === 'presential_event' && (newResources.presentialEvents || []).includes(access.targetId))
       );
       
       // Se não está mais vinculado e o acesso do aluno ainda estava ativo para este produto
@@ -686,6 +688,9 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
     }
     for (const id of (newResources.liveEvents || [])) {
       await ensureAccess('live_events', id);
+    }
+    for (const id of (newResources.presentialEvents || [])) {
+      await ensureAccess('presential_event', id);
     }
 
     // Se houve mudança no array de acessos, atualiza o documento do aluno

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft, QrCode } from 'lucide-react';
+import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft, QrCode, MapPin, CreditCard, Receipt } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Product, ProductType, ProductOffer, ProductSplit } from '../../../types/product';
@@ -14,6 +14,8 @@ import { classService } from '../../../services/classService';
 import { Class } from '../../../types/class';
 import { liveEventService } from '../../../services/liveEventService';
 import { LiveEvent } from '../../../types/liveEvent';
+import { presentialEventService } from '../../../services/presentialEventService';
+import { PresentialEvent } from '../../../types/presentialEvent';
 import { coproducerService } from '../../../services/coproducerService';
 import { Coproducer } from '../../../types/coproducer';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -41,8 +43,8 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
   const [checkoutCoverUrl, setCheckoutCoverUrl] = useState(product?.checkoutCoverUrl || '');
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCheckout, setIsUploadingCheckout] = useState(false);
-  const [searchTerms] = useState({ plans: '', courses: '', classes: '', simulated: '', liveEvents: '' });
-  const [expanded, setExpanded] = useState({ plans: false, courses: false, classes: false, simulated: false, liveEvents: false });
+  const [searchTerms] = useState({ plans: '', courses: '', classes: '', simulated: '', liveEvents: '', presentialEvents: '' });
+  const [expanded, setExpanded] = useState({ plans: false, courses: false, classes: false, simulated: false, liveEvents: false, presentialEvents: false });
   const [qrCodeOffer, setQrCodeOffer] = useState<ProductOffer | null>(null);
 
   // Linked Resources State
@@ -51,6 +53,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
   const [linkedClasses, setLinkedClasses] = useState<string[]>(product?.linkedResources.presentialClasses || []);
   const [linkedSimulated, setLinkedSimulated] = useState<string[]>(product?.linkedResources.simulated || []);
   const [linkedLiveEvents, setLinkedLiveEvents] = useState<string[]>(product?.linkedResources.liveEvents || product?.liveEventIds || []);
+  const [linkedPresentialEvents, setLinkedPresentialEvents] = useState<string[]>(product?.linkedResources.presentialEvents || []);
 
   // Available Resources State
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
@@ -58,18 +61,20 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
   const [availableClasses, setAvailableClasses] = useState<Class[]>([]);
   const [availableSimulated, setAvailableSimulated] = useState<SimulatedExam[]>([]);
   const [availableLiveEvents, setAvailableLiveEvents] = useState<LiveEvent[]>([]);
+  const [availablePresentialEvents, setAvailablePresentialEvents] = useState<PresentialEvent[]>([]);
   const [availableCoproducers, setAvailableCoproducers] = useState<Coproducer[]>([]);
   const [activeTab, setActiveTab] = useState<'resources' | 'split'>('resources');
 
   useEffect(() => {
     const loadResources = async () => {
       try {
-        const [plans, courses, classes, simulated, liveEvents, coproducers] = await Promise.all([
+        const [plans, courses, classes, simulated, liveEvents, presentialEvents, coproducers] = await Promise.all([
           getPlans(),
           courseService.getCourses(),
           classService.getClasses(),
           getSimulatedClasses(),
           liveEventService.getLiveEvents(),
+          presentialEventService.getEvents(),
           coproducerService.getAll()
         ]);
         setAvailablePlans(plans);
@@ -77,6 +82,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
         setAvailableClasses(classes);
         setAvailableSimulated(simulated);
         setAvailableLiveEvents(liveEvents);
+        setAvailablePresentialEvents(presentialEvents);
         setAvailableCoproducers(coproducers);
       } catch (err) {
         console.error('Failed to load resources:', err);
@@ -85,6 +91,16 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
     };
     loadResources();
   }, []);
+
+  // Auto-fill name for Presential Events if empty
+  useEffect(() => {
+    if (type === 'EVENTO_PRESENCIAL' && linkedPresentialEvents.length === 1 && !name) {
+      const event = availablePresentialEvents.find(e => e.id === linkedPresentialEvents[0]);
+      if (event) {
+        setName(event.title);
+      }
+    }
+  }, [type, linkedPresentialEvents, availablePresentialEvents]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +145,8 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
         onlineCourses: linkedCourses,
         presentialClasses: linkedClasses,
         simulated: linkedSimulated,
-        liveEvents: linkedLiveEvents
+        liveEvents: linkedLiveEvents,
+        presentialEvents: linkedPresentialEvents
       },
       liveEventIds: linkedLiveEvents
     };
@@ -217,7 +234,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
     setCoproduction(coproduction.map(c => c.id === id ? { ...c, ...updates } : c));
   };
 
-  const productTypes: ProductType[] = ['COMBO', 'PLANO', 'TURMA_ONLINE', 'CURSO_ISOLADO', 'SIMULADO', 'EVENTO'];
+  const productTypes: ProductType[] = ['COMBO', 'PLANO', 'TURMA_ONLINE', 'CURSO_ISOLADO', 'SIMULADO', 'EVENTO', 'EVENTO_PRESENCIAL'];
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
@@ -326,19 +343,64 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                    Acesso (Dias) *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={accessDays}
-                    onChange={(e) => setAccessDays(parseInt(e.target.value))}
-                    className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500 transition-colors"
-                    required
-                  />
-                </div>
+                {type !== 'EVENTO_PRESENCIAL' ? (
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                      Acesso (Dias) *
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={accessDays || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setAccessDays(isNaN(val) ? 0 : val);
+                      }}
+                      className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500 transition-colors"
+                      required
+                    />
+                  </div>
+                ) : (
+                  linkedPresentialEvents.length > 0 && (
+                    <div className="md:col-span-2 p-6 bg-zinc-950/50 border border-zinc-800 rounded-2xl space-y-6">
+                      <div className="flex items-center gap-2 text-red-500 mb-2">
+                        <MapPin size={18} />
+                        <h3 className="text-sm font-black uppercase tracking-widest">Informações do Evento Presencial</h3>
+                      </div>
+                      
+                      {linkedPresentialEvents.map(eventId => {
+                        const event = availablePresentialEvents.find(e => e.id === eventId);
+                        if (!event) return null;
+                        return (
+                          <div key={eventId} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Ingressos</span>
+                              <p className="text-sm font-bold text-white">{event.totalTickets} cadeiras</p>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Data</span>
+                              <p className="text-sm font-bold text-white">
+                                {event.date ? (typeof event.date === 'object' && 'seconds' in event.date ? new Date(event.date.seconds * 1000).toLocaleDateString('pt-BR') : new Date(event.date).toLocaleDateString('pt-BR')) : 'A definir'}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Local</span>
+                              <p className="text-sm font-bold text-white">
+                                {event.locationType === 'POLO_RI' ? 'Polo INSANUS CONCURSOS (Rio Branco/AC)' : 
+                                 event.locationType === 'POLO_PV' ? 'Polo GABARITO CONCURSOS (Porto Velho/RO)' : 
+                                 event.customLocation || 'Não definido'}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Início</span>
+                              <p className="text-sm font-bold text-white">{event.startTime}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
               </div>
             </div>
           </section>
@@ -388,8 +450,11 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           <input
                             type="number"
                             step="0.01"
-                            value={offer.price}
-                            onChange={(e) => updateOffer(offer.id, { price: parseFloat(e.target.value) || 0 })}
+                            value={offer.price || ''}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              updateOffer(offer.id, { price: isNaN(val) ? 0 : val });
+                            }}
                             className="w-full bg-zinc-900 border border-zinc-800 text-white rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-mono font-bold"
                           />
                         </div>
@@ -401,8 +466,11 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           <input
                             type="number"
                             step="0.01"
-                            value={offer.originalPrice || 0}
-                            onChange={(e) => updateOffer(offer.id, { originalPrice: parseFloat(e.target.value) || 0 })}
+                            value={offer.originalPrice || ''}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              updateOffer(offer.id, { originalPrice: isNaN(val) ? 0 : val });
+                            }}
                             className="w-full bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-mono font-bold"
                           />
                         </div>
@@ -466,6 +534,105 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           </div>
                         </div>
                       </div>
+
+                      {type === 'EVENTO_PRESENCIAL' && (
+                        <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Desconto por Pessoa</label>
+                            <div 
+                              onClick={() => updateOffer(offer.id, { personDiscountEnabled: !offer.personDiscountEnabled })}
+                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${offer.personDiscountEnabled ? 'bg-red-500' : 'bg-zinc-800'}`}
+                            >
+                              <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all ${offer.personDiscountEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-zinc-600 font-bold uppercase mb-1">Porcentagem (%)</p>
+                            <input 
+                              type="number"
+                              disabled={!offer.personDiscountEnabled}
+                              value={offer.personDiscountPercentage || 0}
+                              onChange={(e) => updateOffer(offer.id, { personDiscountPercentage: Number(e.target.value) })}
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono font-bold text-red-500 disabled:opacity-20"
+                              placeholder="50"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] block mb-3">Meios de Pagamento</label>
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          {[
+                            { id: 'creditCard', label: 'Cartão', icon: CreditCard },
+                            { id: 'pix', label: 'PIX', icon: QrCode },
+                            { id: 'boleto', label: 'Boleto', icon: Receipt }
+                          ].map(method => (
+                            <button
+                              key={method.id}
+                              type="button"
+                              onClick={() => {
+                                const methods = offer.paymentMethods || { creditCard: true, pix: true, boleto: true };
+                                updateOffer(offer.id, { 
+                                  paymentMethods: { ...methods, [method.id]: !methods[method.id as keyof typeof methods] } 
+                                });
+                              }}
+                              className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${
+                                (offer.paymentMethods?.[method.id as keyof typeof offer.paymentMethods] ?? true)
+                                  ? 'border-red-500/40 bg-red-500/5 text-red-500'
+                                  : 'border-zinc-800 bg-zinc-950 text-zinc-600'
+                              }`}
+                            >
+                              <method.icon size={12} />
+                              <span className="text-[7px] font-black uppercase tracking-tighter">{method.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <div>
+                          <p className="text-[8px] text-zinc-600 font-bold uppercase mb-1">Parcelamento Máx.</p>
+                          <select
+                            value={offer.maxInstallments || 12}
+                            onChange={(e) => updateOffer(offer.id, { maxInstallments: Number(e.target.value) })}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-red-500"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                              <option key={n} value={n}>{n}x</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {type === 'EVENTO_PRESENCIAL' && linkedPresentialEvents.length > 0 && (
+                        <div className="xl:col-span-4 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                          <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] block mb-3">Preços por Lote</label>
+                          <div className="space-y-3">
+                            {linkedPresentialEvents.flatMap(eventId => {
+                              const event = availablePresentialEvents.find(e => e.id === eventId);
+                              return event?.lots || [];
+                            }).map(lot => (
+                              <div key={lot.id} className="flex items-center justify-between gap-4 p-2 bg-zinc-950 rounded-lg border border-zinc-800">
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{lot.name}</span>
+                                <div className="relative w-32">
+                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-600 font-bold text-[10px]">R$</span>
+                                  <input 
+                                    type="number"
+                                    step="0.01"
+                                    value={offer.lotPrices?.[lot.id] || ''}
+                                    onChange={(e) => {
+                                      const newLotPrices = { ...(offer.lotPrices || {}) };
+                                      newLotPrices[lot.id] = parseFloat(e.target.value) || 0;
+                                      updateOffer(offer.id, { lotPrices: newLotPrices });
+                                    }}
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-2 py-1.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-red-500"
+                                    placeholder="0,00"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="xl:col-span-4 flex items-center justify-end gap-2 xl:gap-3 pt-6 xl:pt-0 border-t xl:border-t-0 border-zinc-900">
@@ -791,6 +958,78 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                               <div key={id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-900 group">
                                 <span className="text-xs text-zinc-400 font-bold">{availableSimulated.find(p => p.id === id)?.title || 'Simulado'}</span>
                                 <button type="button" onClick={() => setLinkedSimulated(linkedSimulated.filter(p => p !== id))} className="text-zinc-600 hover:text-red-500 transition-colors">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Live Events */}
+                    <div className="border border-zinc-800 rounded-2xl bg-zinc-950/50 overflow-hidden h-fit">
+                      <button type="button" onClick={() => setExpanded(prev => ({ ...prev, liveEvents: !prev.liveEvents }))} className="w-full flex items-center justify-between px-5 py-4 bg-zinc-900/50 hover:bg-zinc-800 transition text-[11px] font-black text-zinc-400 uppercase tracking-widest">
+                        <span>Eventos ao Vivo ({linkedLiveEvents.length})</span>
+                        {expanded.liveEvents ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      {expanded.liveEvents && (
+                        <div className="p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                          <select
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white focus:border-red-500 outline-none transition-all font-bold"
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              if (id && !linkedLiveEvents.includes(id)) setLinkedLiveEvents([...linkedLiveEvents, id]);
+                              e.target.value = "";
+                            }}
+                            value=""
+                          >
+                            <option value="">Adicionar evento ao vivo...</option>
+                            {availableLiveEvents.filter(p => !linkedLiveEvents.includes(p.id)).map(c => (
+                              <option key={c.id} value={c.id}>{c.title || c.name}</option>
+                            ))}
+                          </select>
+                          <div className="space-y-2">
+                            {linkedLiveEvents.map((id) => (
+                              <div key={id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-900 group">
+                                <span className="text-xs text-zinc-400 font-bold">{availableLiveEvents.find(p => p.id === id)?.title || 'Evento ao Vivo'}</span>
+                                <button type="button" onClick={() => setLinkedLiveEvents(linkedLiveEvents.filter(p => p !== id))} className="text-zinc-600 hover:text-red-500 transition-colors">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Presential Events */}
+                    <div className="border border-zinc-800 rounded-2xl bg-zinc-950/50 overflow-hidden h-fit">
+                      <button type="button" onClick={() => setExpanded(prev => ({ ...prev, presentialEvents: !prev.presentialEvents }))} className="w-full flex items-center justify-between px-5 py-4 bg-zinc-900/50 hover:bg-zinc-800 transition text-[11px] font-black text-zinc-400 uppercase tracking-widest">
+                        <span>Eventos Presenciais ({linkedPresentialEvents.length})</span>
+                        {expanded.presentialEvents ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      {expanded.presentialEvents && (
+                        <div className="p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                          <select
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-white focus:border-red-500 outline-none transition-all font-bold"
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              if (id && !linkedPresentialEvents.includes(id)) setLinkedPresentialEvents([...linkedPresentialEvents, id]);
+                              e.target.value = "";
+                            }}
+                            value=""
+                          >
+                            <option value="">Adicionar evento presencial...</option>
+                            {availablePresentialEvents.filter(p => !linkedPresentialEvents.includes(p.id!)).map(c => (
+                              <option key={c.id} value={c.id}>{c.title}</option>
+                            ))}
+                          </select>
+                          <div className="space-y-2">
+                            {linkedPresentialEvents.map((id) => (
+                              <div key={id} className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-900 group">
+                                <span className="text-xs text-zinc-400 font-bold">{availablePresentialEvents.find(p => p.id === id)?.title || 'Evento Presencial'}</span>
+                                <button type="button" onClick={() => setLinkedPresentialEvents(linkedPresentialEvents.filter(p => p !== id))} className="text-zinc-600 hover:text-red-500 transition-colors">
                                   <X size={14} />
                                 </button>
                               </div>

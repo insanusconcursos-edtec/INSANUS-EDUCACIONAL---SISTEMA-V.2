@@ -341,12 +341,36 @@ export const handlePagarmeWebhook = async (payload: any) => {
                      orderData.items?.[0]?.code;
 
     if (email && productId && productId !== 'item_1') {
+      // 1. Provisionamento para o comprador principal
       await provisionPurchase({
         email,
         name: orderData.customer?.name || 'Cliente',
         cpf: orderData.customer?.document || '',
         phone: orderData.metadata?.userPhone || ''
       }, String(productId), 'pagarme');
+
+      // 2. Provisionamento para os amigos (se houver)
+      const friendsJson = orderData.metadata?.friends;
+      if (friendsJson) {
+        try {
+          const friends = JSON.parse(friendsJson);
+          if (Array.isArray(friends)) {
+            for (const friend of friends) {
+              if (friend.email) {
+                console.log(`[PAGARME WEBHOOK] Provisionando amigo: ${friend.email}`);
+                await provisionPurchase({
+                  email: friend.email,
+                  name: friend.name || 'Convidado',
+                  cpf: friend.cpf || '',
+                  phone: friend.phone || ''
+                }, String(productId), 'pagarme');
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[PAGARME WEBHOOK] Erro ao processar lista de amigos:', err);
+        }
+      }
 
       // Registrar relatórios financeiros
       console.log(`[PAGARME WEBHOOK] Iniciando registros financeiros para Ordem: ${orderData.id}`);

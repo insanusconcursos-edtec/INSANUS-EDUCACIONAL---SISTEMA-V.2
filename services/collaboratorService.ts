@@ -31,6 +31,7 @@ export interface CollaboratorPermissions {
   cursos_online: boolean;
   turmas_presenciais: boolean;
   eventos_ao_vivo: boolean;
+  eventos_presenciais: boolean;
   suporte: boolean;
   vendas: boolean;
 }

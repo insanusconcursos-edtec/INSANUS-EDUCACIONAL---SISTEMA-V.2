@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { getProductByOfferId } from '../../services/productService';
 import { TictoProduct, ProductOffer } from '../../types/product';
+import { presentialEventService } from '../../services/presentialEventService';
+import { PresentialEvent } from '../../types/presentialEvent';
 import { SystemLogo } from '../../components/common/SystemLogo';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { createPagarmePayment } from '../../services/paymentService';
-import { Loader2, ShieldCheck, CreditCard, QrCode, Lock, Copy, Check, CheckCircle2, ArrowRight, ChevronDown } from 'lucide-react';
+import { Loader2, ShieldCheck, CreditCard, QrCode, Lock, Copy, Check, CheckCircle2, ArrowRight, ChevronDown, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const INSTALLMENT_MULTIPLIERS: Record<number, number> = {
@@ -24,6 +26,7 @@ export default function StandaloneCheckout() {
   const [loading, setLoading] = useState(true);
   const [product, setProduct] = useState<TictoProduct | null>(null);
   const [offer, setOffer] = useState<ProductOffer | null>(null);
+  const [event, setEvent] = useState<PresentialEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'pix' | 'ticket'>('credit_card');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -34,6 +37,7 @@ export default function StandaloneCheckout() {
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
   const [installments, setInstallments] = useState(1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [friends, setFriends] = useState<{name: string, email: string, cpf: string, phone: string}[]>([]);
   const [billingAddress, setBillingAddress] = useState({
     zipCode: '',
     street: '',
@@ -46,11 +50,19 @@ export default function StandaloneCheckout() {
   const [fetchingCep, setFetchingCep] = useState(false);
   const navigate = useNavigate();
 
-  // Cálculo Dinâmico de Preço com base no Método de Pagamento
+  // Cálculo Dinâmico de Preço com base no Método de Pagamento e Quantidade de Pessoas
   const totalToPay = useMemo(() => {
     if (!offer) return 0;
     
-    let finalPrice = offer.price;
+    let basePrice = offer.price;
+    const numPeople = 1 + friends.length;
+
+    // Se houver desconto por pessoa, aplica o desconto no preço base se houver pelo menos um amigo
+    if (offer.personDiscountEnabled && offer.personDiscountPercentage && friends.length > 0) {
+      basePrice = basePrice * (1 - (offer.personDiscountPercentage / 100));
+    }
+
+    let finalPrice = basePrice * numPeople;
 
     if (paymentMethod === 'pix' && offer.pixDiscount && offer.pixDiscount > 0) {
       finalPrice = finalPrice - (finalPrice * (offer.pixDiscount / 100));
@@ -59,7 +71,13 @@ export default function StandaloneCheckout() {
     }
 
     return finalPrice;
-  }, [offer, paymentMethod]);
+  }, [offer, paymentMethod, friends]);
+
+  const installmentsOptions = useMemo(() => {
+    if (!offer) return [];
+    const max = offer.maxInstallments || 12;
+    return Array.from({ length: max }, (_, i) => i + 1);
+  }, [offer]);
   
   // Credit Card States
   const [cardNumber, setCardNumber] = useState('');
@@ -102,6 +120,13 @@ export default function StandaloneCheckout() {
     
     const cleanPhone = buyerData.phone.replace(/\D/g, '');
     if (cleanPhone.length < 10) errors.phone = 'WhatsApp inválido';
+    
+    // Validar amigos
+    friends.forEach((f, i) => {
+      if (!f.name.trim()) errors[`friend_name_${i}`] = 'Nome é obrigatório';
+      if (!f.email.trim()) errors[`friend_email_${i}`] = 'E-mail é obrigatório';
+      if (f.cpf.replace(/\D/g, '').length !== 11) errors[`friend_cpf_${i}`] = 'CPF inválido';
+    });
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -222,6 +247,25 @@ export default function StandaloneCheckout() {
         if (result && result.offer.isActive) {
           setProduct(result.product);
           setOffer(result.offer);
+
+          // Ajusta método de pagamento padrão se o atual não for permitido
+          const allowed = result.offer.paymentMethods || { creditCard: true, pix: true, boleto: true };
+          if (paymentMethod === 'credit_card' && !allowed.creditCard) {
+            if (allowed.pix) setPaymentMethod('pix');
+            else if (allowed.boleto) setPaymentMethod('ticket');
+          } else if (paymentMethod === 'pix' && !allowed.pix) {
+            if (allowed.creditCard) setPaymentMethod('credit_card');
+            else if (allowed.boleto) setPaymentMethod('ticket');
+          } else if (paymentMethod === 'ticket' && !allowed.boleto) {
+            if (allowed.creditCard) setPaymentMethod('credit_card');
+            else if (allowed.pix) setPaymentMethod('pix');
+          }
+
+          // If it's a presential event, load event details
+          if (result.product.type === 'EVENTO_PRESENCIAL' && result.product.linkedResources?.presentialEvents?.[0]) {
+            const eventData = await presentialEventService.getEventById(result.product.linkedResources.presentialEvents[0]);
+            setEvent(eventData);
+          }
         } else {
           setError('Esta oferta não está mais disponível ou é inválida.');
         }
@@ -259,7 +303,7 @@ export default function StandaloneCheckout() {
     try {
       const paymentData = {
         transaction_amount: Number(totalToPay),
-        description: `Compra de ${product.name} - ${offer.name}`,
+        description: `Compra de ${product.name} - ${offer.name} (${1 + friends.length} pessoas)`,
         payment_method: paymentMethod,
         affiliateId: refId || null,
         // Card data if credit_card
@@ -285,7 +329,8 @@ export default function StandaloneCheckout() {
           userPhone: buyerData.phone,
           userCpf: (buyerData.cpf || "").replace(/\D/g, ''),
           isStandalone: "true",
-          refId: refId || ''
+          refId: refId || '',
+          friends: JSON.stringify(friends)
         },
       };
 
@@ -529,6 +574,88 @@ export default function StandaloneCheckout() {
                       </div>
                     </div>
 
+                    {/* Amigos (Pessoas Extras) - Apenas para Eventos Presenciais com Desconto por Pessoa Ativo */}
+                    {product?.type === 'EVENTO_PRESENCIAL' && offer?.personDiscountEnabled && (
+                      <div className="space-y-4 pt-6 mt-6 border-t border-zinc-800/50">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Pessoas Adicionais / Amigos</h4>
+                          <button 
+                            type="button"
+                            onClick={() => setFriends([...friends, { name: '', email: '', cpf: '', phone: '' }])}
+                            className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline active:scale-95 transition-all"
+                          >
+                            + Adicionar Amigo
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          {friends.map((friend, index) => (
+                            <motion.div 
+                              key={index}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="p-6 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 relative group"
+                            >
+                              <button 
+                                onClick={() => setFriends(friends.filter((_, i) => i !== index))}
+                                className="absolute top-4 right-4 text-zinc-600 hover:text-red-500 transition-colors"
+                              >
+                                <X size={16} />
+                              </button>
+                              
+                              <p className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Amigo #{index + 1}</p>
+                              
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Nome Completo</label>
+                                <input 
+                                  type="text"
+                                  className={`w-full bg-zinc-900 border ${formErrors[`friend_name_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
+                                  placeholder="Nome do amigo"
+                                  value={friend.name}
+                                  onChange={(e) => {
+                                    const newFriends = [...friends];
+                                    newFriends[index].name = e.target.value;
+                                    setFriends(newFriends);
+                                  }}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">E-mail</label>
+                                  <input 
+                                    type="email"
+                                    className={`w-full bg-zinc-900 border ${formErrors[`friend_email_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
+                                    placeholder="E-mail do amigo"
+                                    value={friend.email}
+                                    onChange={(e) => {
+                                      const newFriends = [...friends];
+                                      newFriends[index].email = e.target.value;
+                                      setFriends(newFriends);
+                                    }}
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">CPF</label>
+                                  <input 
+                                    type="text"
+                                    className={`w-full bg-zinc-900 border ${formErrors[`friend_cpf_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
+                                    placeholder="000.000.000-00"
+                                    value={friend.cpf}
+                                    onChange={(e) => {
+                                      const newFriends = [...friends];
+                                      newFriends[index].cpf = maskCpf(e.target.value);
+                                      setFriends(newFriends);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <button 
                       onClick={handleNextStep}
                       className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl transition-all flex items-center justify-center gap-2 group uppercase tracking-widest text-sm shadow-lg shadow-red-600/10 active:scale-[0.98]"
@@ -545,39 +672,82 @@ export default function StandaloneCheckout() {
                       ← Alterar dados pessoais
                     </button>
 
+                    {/* Info de Evento Presencial */}
+                    {product.type === 'EVENTO_PRESENCIAL' && event && (
+                      <div className="bg-red-600/5 border border-red-600/20 rounded-2xl p-6 mb-4">
+                        <h4 className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] mb-4">Detalhes do Evento</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Data e Hora</span>
+                            <p className="text-sm font-bold text-white">
+                              {event.date instanceof Date ? event.date.toLocaleDateString('pt-BR') : (event.date as any).toDate().toLocaleDateString('pt-BR')} às {event.startTime}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Localização</span>
+                            <p className="text-sm font-bold text-white">
+                              {event.locationType === 'POLO_RI' ? 'Polo INSANUS CONCURSOS (Rio Branco/AC)' : 
+                               event.locationType === 'POLO_PV' ? 'Polo GABARITO CONCURSOS (Porto Velho/RO)' : 
+                               event.customLocation || 'Não definido'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-6 border-t border-red-600/10">
+                           <div className="flex gap-3">
+                              <div className="mt-0.5 text-red-500 shrink-0">
+                                <ShieldCheck size={16} />
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Garantia e Reembolso</p>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed font-medium italic">
+                                  O reembolso e cancelamento ao evento somente é válido se realizado em até 48 horas antes da data da realização do evento. Após isso, o cliente perde o direito ao reembolso. O não comparecimento ao evento também não assegura o direito de reembolso ou crédito.
+                                </p>
+                              </div>
+                           </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Method Selector */}
                     <div className="grid grid-cols-3 gap-3">
-                      <button
-                        onClick={() => setPaymentMethod('credit_card')}
-                        className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${paymentMethod === 'credit_card' ? 'bg-red-600/10 border-red-600 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                      >
-                        <CreditCard size={20} />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Cartão</span>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('pix')}
-                        className={`relative flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${paymentMethod === 'pix' ? 'bg-red-600/10 border-red-600 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                      >
-                        {offer.pixDiscount && offer.pixDiscount > 0 && (
-                          <div className="absolute -top-3 -right-2 bg-green-500 text-[#0a0a0a] text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-green-400 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse z-10">
-                            +{offer.pixDiscount}% OFF
-                          </div>
-                        )}
-                        <QrCode size={20} />
-                        <span className="text-[9px] font-black uppercase tracking-widest">PIX</span>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('ticket')}
-                        className={`relative flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${paymentMethod === 'ticket' ? 'bg-red-600/10 border-red-600 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                      >
-                        {offer.boletoDiscount && offer.boletoDiscount > 0 && (
-                          <div className="absolute -top-3 -right-2 bg-green-500 text-[#0a0a0a] text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-green-400 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse z-10">
-                            +{offer.boletoDiscount}% OFF
-                          </div>
-                        )}
-                        <ShieldCheck size={20} />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Boleto</span>
-                      </button>
+                      {(!offer?.paymentMethods || offer.paymentMethods.creditCard) && (
+                        <button
+                          onClick={() => setPaymentMethod('credit_card')}
+                          className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${paymentMethod === 'credit_card' ? 'bg-red-600/10 border-red-600 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                        >
+                          <CreditCard size={20} />
+                          <span className="text-[9px] font-black uppercase tracking-widest">Cartão</span>
+                        </button>
+                      )}
+                      {(!offer?.paymentMethods || offer.paymentMethods.pix) && (
+                        <button
+                          onClick={() => setPaymentMethod('pix')}
+                          className={`relative flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${paymentMethod === 'pix' ? 'bg-red-600/10 border-red-600 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                        >
+                          {offer.pixDiscount && offer.pixDiscount > 0 && (
+                            <div className="absolute -top-3 -right-2 bg-green-500 text-[#0a0a0a] text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-green-400 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse z-10">
+                              +{offer.pixDiscount}% OFF
+                            </div>
+                          )}
+                          <QrCode size={20} />
+                          <span className="text-[9px] font-black uppercase tracking-widest">PIX</span>
+                        </button>
+                      )}
+                      {(!offer?.paymentMethods || offer.paymentMethods.boleto) && (
+                        <button
+                          onClick={() => setPaymentMethod('ticket')}
+                          className={`relative flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${paymentMethod === 'ticket' ? 'bg-red-600/10 border-red-600 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                        >
+                          {offer.boletoDiscount && offer.boletoDiscount > 0 && (
+                            <div className="absolute -top-3 -right-2 bg-green-500 text-[#0a0a0a] text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-green-400 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse z-10">
+                              +{offer.boletoDiscount}% OFF
+                            </div>
+                          )}
+                          <ShieldCheck size={20} />
+                          <span className="text-[9px] font-black uppercase tracking-widest">Boleto</span>
+                        </button>
+                      )}
                     </div>
 
                     {errorMessage && (
@@ -673,7 +843,7 @@ export default function StandaloneCheckout() {
                               className={`w-full bg-[#1A1A1A] text-white border ${isDropdownOpen ? 'border-red-500 ring-1 ring-red-500' : 'border-neutral-700'} rounded-md p-3.5 flex items-center justify-between transition-all cursor-pointer`}
                             >
                               <span className="font-semibold">
-                                {installments}x de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((offer.price * INSTALLMENT_MULTIPLIERS[installments]) / installments)}
+                                {installments}x de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((totalToPay * INSTALLMENT_MULTIPLIERS[installments]) / installments)}
                               </span>
                               <ChevronDown size={18} className={`text-zinc-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
@@ -691,9 +861,8 @@ export default function StandaloneCheckout() {
                                     exit={{ opacity: 0, y: -10 }}
                                     className="absolute z-50 w-full mt-2 bg-[#1A1A1A] border border-zinc-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto scrollbar-hide py-2"
                                   >
-                                    {[...Array(12)].map((_, i) => {
-                                      const count = i + 1;
-                                      const totalWithInterest = offer.price * INSTALLMENT_MULTIPLIERS[count];
+                                    {installmentsOptions.map((count) => {
+                                      const totalWithInterest = totalToPay * INSTALLMENT_MULTIPLIERS[count];
                                       const installmentValue = totalWithInterest / count;
                                       return (
                                         <li

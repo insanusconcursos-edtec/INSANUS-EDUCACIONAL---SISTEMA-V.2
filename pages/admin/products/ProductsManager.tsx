@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Image, Copy, Check } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Image, Copy, Check, Users } from 'lucide-react';
 import { Product } from '../../../types/product';
 import { getProducts, deleteProduct } from '../../../services/productService';
 import ProductFormModal from './ProductFormModal';
+import { presentialEventService } from '../../../services/presentialEventService';
+import { PresentialEvent } from '../../../types/presentialEvent';
 
 import { useAuth } from '../../../contexts/AuthContext';
 
 export default function ProductsManager() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [events, setEvents] = useState<Record<string, PresentialEvent>>({});
+  const [registrationsCounts, setRegistrationsCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormView, setIsFormView] = useState(false);
@@ -33,7 +37,26 @@ export default function ProductsManager() {
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const data = await getProducts();
+      const [data, allEvents] = await Promise.all([
+        getProducts(),
+        presentialEventService.getEvents()
+      ]);
+
+      const eventsMap: Record<string, PresentialEvent> = {};
+      allEvents.forEach(e => {
+        if (e.id) eventsMap[e.id] = e;
+      });
+      setEvents(eventsMap);
+
+      // Fetch registrations count for each event
+      const counts: Record<string, number> = {};
+      await Promise.all(allEvents.map(async (e) => {
+        if (e.id) {
+          const regs = await presentialEventService.getRegistrationsByEvent(e.id);
+          counts[e.id] = regs.length;
+        }
+      }));
+      setRegistrationsCounts(counts);
       
       // Filtro de Role: Coprodutor vê apenas seus produtos. Admin e Vendedor veem tudo.
       let filteredData = data;
@@ -94,6 +117,9 @@ export default function ProductsManager() {
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.gatewayId.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const generalProducts = filteredProducts.filter(p => p.type !== 'EVENTO_PRESENCIAL');
+  const presentialEventProducts = filteredProducts.filter(p => p.type === 'EVENTO_PRESENCIAL');
 
   if (isFormView) {
     return (
@@ -159,17 +185,20 @@ export default function ProductsManager() {
           </div>
         )}
 
-      <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-        <div className="p-4 border-b border-zinc-800">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={20} />
-            <input
-              type="text"
-              placeholder="Buscar produto por nome ou ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-red-500"
-            />
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden mb-8">
+        <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="text-sm font-black text-white uppercase tracking-widest">Produtos Gerais</h2>
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={20} />
+              <input
+                type="text"
+                placeholder="Buscar produto por nome ou ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-red-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -192,14 +221,14 @@ export default function ProductsManager() {
                     Carregando produtos...
                   </td>
                 </tr>
-              ) : filteredProducts.length === 0 ? (
+              ) : generalProducts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-zinc-500 uppercase tracking-widest font-bold">
                     Nenhum produto encontrado.
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => (
+                generalProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-zinc-800/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
@@ -253,6 +282,139 @@ export default function ProductsManager() {
                     )}
                   </tr>
                 ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Eventos Presenciais Section */}
+      <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+        <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-800/30">
+          <h2 className="text-sm font-black text-red-500 uppercase tracking-widest">Produtos de Eventos Presenciais</h2>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-zinc-300">
+            <thead className="bg-zinc-800/50 text-xs uppercase text-zinc-400">
+              <tr>
+                <th className="px-6 py-4 font-medium">Nome do Evento</th>
+                <th className="px-6 py-4 font-medium">Preço</th>
+                <th className="px-6 py-4 font-medium">Link ID</th>
+                <th className="px-6 py-4 font-medium uppercase tracking-widest">Ingressos</th>
+                {isAdmin && <th className="px-6 py-4 font-medium text-right uppercase tracking-widest">Ações</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-zinc-500 uppercase tracking-widest font-bold">
+                    Carregando eventos...
+                  </td>
+                </tr>
+              ) : presentialEventProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-zinc-500 uppercase tracking-widest font-bold">
+                    Nenhum produto de evento presencial encontrado.
+                  </td>
+                </tr>
+              ) : (
+                presentialEventProducts.map((product) => {
+                  const eventId = product.linkedResources?.presentialEvents?.[0];
+                  const event = eventId ? events[eventId] : null;
+                  const sold = eventId ? registrationsCounts[eventId] || 0 : 0;
+                  const total = event?.totalTickets || 0;
+                  const available = Math.max(0, total - sold);
+
+                  const defaultOffer = product.offers?.find(o => o.isDefault) || product.offers?.[0];
+                  let activePrice = defaultOffer?.price || product.price || 0;
+
+                  if (event && event.useLots && defaultOffer?.lotPrices) {
+                    const activeLotId = presentialEventService.getActiveLot(event, sold);
+                    if (activeLotId && defaultOffer.lotPrices[activeLotId]) {
+                      activePrice = defaultOffer.lotPrices[activeLotId];
+                    }
+                  }
+
+                  return (
+                    <tr key={product.id} className="hover:bg-zinc-800/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-4">
+                          {product.coverUrl ? (
+                            <img 
+                              src={product.coverUrl} 
+                              alt={product.name} 
+                              className="w-14 h-24 min-w-[56px] object-cover rounded-md border border-zinc-700 shadow-md" 
+                            />
+                          ) : (
+                            <div className="w-14 h-24 min-w-[56px] bg-zinc-800 rounded-md border border-zinc-700 flex items-center justify-center shadow-md">
+                              <Image className="text-zinc-500" size={24} />
+                            </div>
+                          )}
+                          <span className="text-sm font-bold text-white whitespace-normal line-clamp-2 uppercase tracking-tight">
+                            {product.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-white font-mono">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activePrice)}
+                          </span>
+                          {event && event.useLots && (
+                            <span className="text-[9px] text-red-500 font-black uppercase tracking-widest mt-0.5">
+                              Preço do Lote Atual
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-sm">{product.gatewayId}</td>
+                      <td className="px-6 py-4">
+                        {event ? (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <Users size={14} className="text-zinc-500" />
+                              <span className="text-xs font-bold text-white">
+                                {sold} vendidos
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-zinc-500 uppercase font-black">
+                              {available} disponíveis
+                            </div>
+                            <div className="w-24 h-1 bg-zinc-800 rounded-full overflow-hidden mt-1">
+                              <div 
+                                className="h-full bg-red-600 rounded-full"
+                                style={{ width: `${Math.min(100, (sold / total) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-zinc-600 uppercase font-bold italic">Sem evento vinculado</span>
+                        )}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(product)}
+                              className="p-2 hover:bg-zinc-700 rounded-lg transition-colors text-zinc-400 hover:text-white"
+                              title="Editar"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button 
+                              onClick={() => setProductToDelete(product)}
+                              className="text-zinc-400 hover:text-red-500 transition p-2 hover:bg-red-500/10 rounded-lg"
+                              title="Excluir Produto"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

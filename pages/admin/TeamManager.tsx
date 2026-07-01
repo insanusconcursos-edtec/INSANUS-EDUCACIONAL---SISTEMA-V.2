@@ -90,6 +90,7 @@ const CreateCollaboratorModal = ({
     cursos_online: false,
     turmas_presenciais: false,
     eventos_ao_vivo: false,
+    eventos_presenciais: false,
     suporte: false,
     vendas: false
   });
@@ -125,6 +126,7 @@ const CreateCollaboratorModal = ({
         cursos_online: false,
         turmas_presenciais: false,
         eventos_ao_vivo: false,
+        eventos_presenciais: false,
         suporte: false,
         vendas: false
       });
@@ -313,6 +315,13 @@ const CreateCollaboratorModal = ({
                 checked={permissions.eventos_ao_vivo} 
                 onChange={() => togglePerm('eventos_ao_vivo')} 
                 colorClass="red-500" 
+              />
+              <PermissionToggle 
+                label="Eventos Presenciais" 
+                icon={MapPin} 
+                checked={permissions.eventos_presenciais} 
+                onChange={() => togglePerm('eventos_presenciais')} 
+                colorClass="brand-red" 
               />
               <PermissionToggle 
                 label="Suporte" 
@@ -518,7 +527,8 @@ const TeamManager: React.FC = () => {
                      <PermissionBadge label="PRODUTOS" active={collab.permissions.produtos} color="text-pink-500" />
                      <PermissionBadge label="CURSOS" active={collab.permissions.cursos_online} color="text-cyan-500" />
                      <PermissionBadge label="PRESENCIAL" active={collab.permissions.turmas_presenciais} color="text-yellow-500" />
-                     <PermissionBadge label="EVENTOS" active={collab.permissions.eventos_ao_vivo} color="text-red-500" />
+                     <PermissionBadge label="EVENTOS AO VIVO" active={collab.permissions.eventos_ao_vivo} color="text-red-500" />
+                     <PermissionBadge label="EVENTOS PRESENCIAIS" active={collab.permissions.eventos_presenciais} color="text-brand-red" />
                      <PermissionBadge label="SUPORTE" active={collab.permissions.suporte} color="text-sky-500" />
                      <PermissionBadge label="VENDAS" active={collab.permissions.vendas} color="text-red-500" />
                   </div>

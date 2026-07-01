@@ -1,4 +1,4 @@
-export type ProductType = 'COMBO' | 'PLANO' | 'TURMA_ONLINE' | 'CURSO_ISOLADO' | 'SIMULADO' | 'EVENTO';
+export type ProductType = 'COMBO' | 'PLANO' | 'TURMA_ONLINE' | 'CURSO_ISOLADO' | 'SIMULADO' | 'EVENTO' | 'EVENTO_PRESENCIAL';
 
 export interface LinkedResources {
   plans: string[];
@@ -6,6 +6,7 @@ export interface LinkedResources {
   presentialClasses: string[];
   simulated: string[];
   liveEvents: string[];
+  presentialEvents: string[];
 }
 
 export interface ProductOffer {
@@ -19,6 +20,15 @@ export interface ProductOffer {
   originalPrice?: number; // Novo: Preço de ancoragem
   pixDiscount?: number; // Desconto para PIX (%)
   boletoDiscount?: number; // Desconto para Boleto (%)
+  lotPrices?: Record<string, number>; // Mapping lotId to price
+  personDiscountEnabled?: boolean; // Habilita desconto por pessoa extra
+  personDiscountPercentage?: number; // Porcentagem de desconto por pessoa (%)
+  paymentMethods?: {
+    creditCard: boolean;
+    pix: boolean;
+    boleto: boolean;
+  };
+  maxInstallments?: number; // Máximo de parcelas (1-12)
 }
 
 export interface ProductSplit {

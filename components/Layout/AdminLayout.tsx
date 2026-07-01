@@ -75,6 +75,9 @@ const AdminLayout: React.FC = () => {
     if (isAdmin || perms.eventos_ao_vivo) {
       groups[0].items.push({ label: 'EVENTOS AO VIVO', path: '/admin/eventos-ao-vivo' });
     }
+    if (isAdmin || perms.eventos_presenciais) {
+      groups[0].items.push({ label: 'EVENTOS PRESENCIAIS', path: '/admin/eventos-presenciais' });
+    }
     if (isAdmin || perms.suporte) {
       groups[0].items.push({ label: 'SUPORTE', path: '/admin/suporte' });
     }
