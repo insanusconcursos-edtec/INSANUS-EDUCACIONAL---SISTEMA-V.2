@@ -52,6 +52,11 @@ export interface OnlineCourse {
     endDate?: string;
     whitelistedUsers?: string[];
   };
+
+  // --- VINCULAÇÃO TURMA PRESENCIAL ---
+  linkedPresentialId?: string;
+  linkedPresentialTabName?: string;
+  linkedPresentialModules?: string[] | 'all';
 }
 
 // --- NOVO: Interface do Módulo ---
@@ -146,6 +151,11 @@ export interface CourseFormData {
   examDate?: string;
   type?: 'REGULAR' | 'ISOLADO';
   teacherIds?: string[];
+
+  // Vincular Turma Presencial
+  linkedPresentialId?: string;
+  linkedPresentialTabName?: string;
+  linkedPresentialModules?: string[] | 'all';
 }
 
 // --- NOVO: Tipos de Conteúdo ---

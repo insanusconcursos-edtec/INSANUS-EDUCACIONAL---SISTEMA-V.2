@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { OnlineCourse, CourseModule, CONTEST_STATUS_LABELS, CourseStructureModule } from '../../../types/course';
+import { OnlineCourse, CourseModule, CONTEST_STATUS_LABELS, CourseStructureModule, CourseLesson, CourseContent, CourseStructureFolder } from '../../../types/course';
 import { courseService } from '../../../services/courseService';
 import { getStudentConfig } from '../../../services/studentService';
 import { liveEventService } from '../../../services/liveEventService';
@@ -9,10 +9,12 @@ import { LiveEvent } from '../../../types/liveEvent';
 import { StudentModuleCard } from './StudentModuleCard';
 import { CoursePlayer } from './player/CoursePlayer';
 import { useAuth } from '../../../contexts/AuthContext';
-import { CheckCircle2, LayoutList, ListTree, PlayCircle, ArrowLeft, Radio, Video, Clock, Play, Calendar, PlaySquare, Lock } from 'lucide-react';
+import { CheckCircle2, LayoutList, ListTree, PlayCircle, ArrowLeft, Radio, Video, Clock, Play, Calendar, PlaySquare, Lock, MapPin, ChevronDown, ChevronRight, FileText, Loader2, Layers, Folder, X } from 'lucide-react';
 import { StudentCourseEdital } from './edital/StudentCourseEdital';
 import { CourseReviewDashboard } from './reviews/CourseReviewDashboard';
 import { WelcomeVideoModal } from './WelcomeVideoModal';
+import { motion, AnimatePresence } from 'motion/react';
+import toast from 'react-hot-toast';
 
 interface CourseDetailsProps {
   course: OnlineCourse;
@@ -24,15 +26,151 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   
-  // ESTADO DAS ABAS (NOVO) - MÓDULOS, EDITAL ou LIVE
-  const [activeTab, setActiveTab] = useState<'MODULES' | 'EDITAL' | 'LIVE'>('MODULES');
+  // ESTADO DAS ABAS (NOVO) - MÓDULOS, EDITAL, LIVE ou PRESENTIAL
+  const [activeTab, setActiveTab] = useState<'MODULES' | 'EDITAL' | 'LIVE' | 'PRESENTIAL'>('MODULES');
   const [focusTopicId, setFocusTopicId] = useState<string | null>(null);
 
   const [modules, setModules] = useState<CourseModule[]>([]);
   const [courseLiveEvents, setCourseLiveEvents] = useState<LiveEvent[]>([]);
+  const [presentialStructure, setPresentialStructure] = useState<CourseStructureModule[]>([]);
+  const [selectedPresentialModule, setSelectedPresentialModule] = useState<CourseModule | null>(null);
+  const [linkedClass, setLinkedClass] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingPresential, setLoadingPresential] = useState(false);
   const [selectedModule, setSelectedModule] = useState<CourseModule | null>(null);
-  
+
+  // ESTADO DE CONTEÚDOS DAS AULAS DO PRESENCIAL
+  const [lessonContents, setLessonContents] = useState<Record<string, CourseContent[]>>({});
+  const [loadingContents, setLoadingContents] = useState<Record<string, boolean>>({});
+
+  const fetchLessonContents = async (lessonId: string) => {
+    if (lessonContents[lessonId] || loadingContents[lessonId]) return;
+    
+    setLoadingContents(prev => ({ ...prev, [lessonId]: true }));
+    try {
+      const contents = await courseService.getContents(lessonId);
+      setLessonContents(prev => ({ ...prev, [lessonId]: contents }));
+    } catch (error) {
+      console.error("Erro ao carregar conteúdos da aula:", error);
+    } finally {
+      setLoadingContents(prev => ({ ...prev, [lessonId]: false }));
+    }
+  };
+
+  const renderLesson = (lesson: CourseLesson) => {
+    const isExpanded = expandedFolders.includes(lesson.id);
+    const contents = lessonContents[lesson.id] || [];
+    const isLoading = loadingContents[lesson.id];
+
+    return (
+      <div key={lesson.id} className="space-y-2">
+        <button 
+          onClick={() => {
+            setExpandedFolders(prev => 
+              prev.includes(lesson.id) ? prev.filter(id => id !== lesson.id) : [...prev, lesson.id]
+            );
+            fetchLessonContents(lesson.id);
+          }}
+          className="w-full flex items-center justify-between p-3 pl-10 hover:bg-zinc-800/50 rounded-xl transition-colors group/lesson"
+        >
+          <div className="flex items-center gap-3">
+            <PlayCircle size={14} className="text-zinc-600 group-hover/lesson:text-brand-red" />
+            <span className="text-zinc-400 text-xs font-bold group-hover/lesson:text-zinc-200 transition-colors">
+              {lesson.title}
+            </span>
+          </div>
+          <div className="text-zinc-600 group-hover/lesson:text-white transition-colors">
+            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </div>
+        </button>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden pl-14 space-y-1"
+            >
+              {isLoading ? (
+                <div className="py-2 flex justify-center">
+                  <Loader2 size={12} className="animate-spin text-zinc-600" />
+                </div>
+              ) : contents.length === 0 ? (
+                <div className="py-2 text-[10px] text-zinc-700 font-bold uppercase tracking-widest italic">Nenhum material disponível.</div>
+              ) : (
+                contents.map(content => (
+                  <div key={content.id} className="flex items-center justify-between p-2 hover:bg-zinc-800/30 rounded-lg group/content">
+                    <div className="flex items-center gap-3">
+                      <FileText size={12} className="text-zinc-700 group-hover/content:text-brand-red" />
+                      <span className="text-[11px] text-zinc-500 group-hover/content:text-zinc-300 font-medium">{content.title}</span>
+                    </div>
+                    {(content.fileUrl || content.videoUrl || content.linkUrl) && (
+                      <a 
+                        href={content.fileUrl || content.videoUrl || content.linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[9px] font-black text-brand-red bg-brand-red/5 px-2 py-1 rounded border border-brand-red/10 hover:bg-brand-red hover:text-white transition-all uppercase tracking-widest"
+                      >
+                        Acessar
+                      </a>
+                    )}
+                  </div>
+                ))
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  const renderFolder = (folder: CourseStructureFolder) => {
+    const isExpanded = expandedFolders.includes(folder.id);
+
+    return (
+      <div key={folder.id} className="space-y-1">
+        <button 
+          onClick={() => {
+            setExpandedFolders(prev => 
+              prev.includes(folder.id) ? prev.filter(id => id !== folder.id) : [...prev, folder.id]
+            );
+          }}
+          className="w-full flex items-center justify-between p-3 pl-6 hover:bg-zinc-800/50 rounded-xl transition-colors group/folder"
+        >
+          <div className="flex items-center gap-3">
+            <Folder size={16} className="text-zinc-600 group-hover/folder:text-brand-red" />
+            <span className="text-zinc-400 text-xs font-black uppercase tracking-tight group-hover/folder:text-zinc-200 transition-colors">
+              {folder.title}
+            </span>
+          </div>
+          <div className="text-zinc-600 group-hover/folder:text-white transition-colors">
+            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </div>
+        </button>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-1">
+                {folder.subfolders?.map(sub => renderFolder(sub))}
+                {folder.lessons.map(lesson => renderLesson(lesson))}
+                {folder.subfolders?.length === 0 && folder.lessons.length === 0 && (
+                  <div className="pl-12 py-2 text-[10px] text-zinc-700 font-bold uppercase tracking-widest italic">Pasta vazia.</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
   // ESTADO DE MANUTENÇÃO
   const isUserWhitelisted = course.maintenanceMode?.whitelistedUsers?.includes(currentUser?.email || '');
   const isMaintenance = course.maintenanceMode?.enabled && !isUserWhitelisted;
@@ -58,7 +196,34 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
             setStructure(structureData);
             setCourseLiveEvents(liveEventsData);
 
-            // 2. Calcula Progresso Geral
+            // 2. Carrega Turma Presencial Vinculada (se houver)
+            if (course.linkedPresentialId) {
+              setLoadingPresential(true);
+              try {
+                // Buscamos os dados da turma para o player
+                const { classService } = await import('../../../services/classService');
+                const classData = await classService.getClassById(course.linkedPresentialId);
+                setLinkedClass(classData);
+
+                // Buscamos a estrutura COMPLETA do ambiente de ensino da turma (Modules -> Folders -> Lessons)
+                const fullStructure = await courseService.getCourseStructure(course.linkedPresentialId);
+
+                // Filtragem de Módulos
+                let filteredStructure = fullStructure;
+                if (course.linkedPresentialModules && course.linkedPresentialModules !== 'all') {
+                  const allowedIds = course.linkedPresentialModules;
+                  filteredStructure = fullStructure.filter(m => allowedIds.includes(m.id));
+                }
+
+                setPresentialStructure(filteredStructure);
+              } catch (error) {
+                console.error("Erro ao carregar dados do presencial:", error);
+              } finally {
+                setLoadingPresential(false);
+              }
+            }
+
+            // 3. Calcula Progresso Geral
             if (currentUser) {
                 const [completedLessons, detailed, stats, config] = await Promise.all([
                     courseService.getCompletedLessons(currentUser.uid, course.id),
@@ -161,13 +326,28 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
     }
   };
 
-  if (selectedModule) {
+  if (selectedModule || selectedPresentialModule) {
+      const activeModule = selectedModule || selectedPresentialModule;
+      const activeCourse = selectedModule ? course : {
+          id: linkedClass?.id || course.linkedPresentialId,
+          title: linkedClass?.name || 'Turma Presencial',
+          coverUrl: linkedClass?.coverImage || '',
+          bannerUrlDesktop: linkedClass?.bannerUrlDesktop || '',
+          bannerUrlTablet: linkedClass?.bannerUrlTablet || '',
+          bannerUrlMobile: linkedClass?.bannerUrlMobile || '',
+          categoryId: linkedClass?.category || '',
+          active: true,
+          createdAt: linkedClass?.createdAt || new Date().toISOString(),
+          updatedAt: linkedClass?.updatedAt || new Date().toISOString(),
+      } as OnlineCourse;
+
       return (
         <CoursePlayer 
-            course={course} 
-            module={selectedModule} 
+            course={activeCourse} 
+            module={activeModule!} 
             onBack={() => {
                 setSelectedModule(null);
+                setSelectedPresentialModule(null);
                 setSearchParams({});
             }} 
         />
@@ -295,6 +475,18 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                     🔴 Eventos ao Vivo
                 </button>
             )}
+
+            {course.linkedPresentialId && (
+              <button 
+                  onClick={() => setActiveTab('PRESENTIAL')}
+                  className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-bold text-xs uppercase tracking-widest transition-all
+                      ${activeTab === 'PRESENTIAL' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}
+                  `}
+              >
+                  <MapPin size={18} className={activeTab === 'PRESENTIAL' ? 'text-[var(--plan-theme)]' : ''} />
+                  {course.linkedPresentialTabName || 'AULAS PRESENCIAIS'}
+              </button>
+            )}
           </div>
 
           {/* CONTEÚDO CONDICIONAL */}
@@ -334,6 +526,32 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                     isMaintenance={isMaintenance}
                     maintenanceMessage={course.maintenanceMode?.message}
                   />
+              ) : activeTab === 'PRESENTIAL' ? (
+                  // VISÃO DA TURMA PRESENCIAL VINCULADA (AMBIENTE DE ENSINO - VISUAL MIRROR)
+                  loadingPresential ? (
+                      <div className="flex gap-4 overflow-hidden">
+                          {[1,2].map(i => <div key={i} className="w-60 h-[300px] bg-zinc-900 rounded-lg animate-pulse" />)}
+                      </div>
+                  ) : presentialStructure.length === 0 ? (
+                      <div className="text-zinc-500 italic px-1 text-sm border-l-2 border-zinc-800 pl-4 py-2">Nenhum módulo disponível no momento.</div>
+                  ) : (
+                      <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent px-1">
+                          {presentialStructure.map(mod => (
+                              <StudentModuleCard 
+                                  key={mod.id} 
+                                  module={mod} 
+                                  onClick={(m) => {
+                                      if (isMaintenance) {
+                                          toast.error(course.maintenanceMode?.message || 'O conteúdo do curso foi trancado para atualização.');
+                                          return;
+                                      }
+                                      setSelectedPresentialModule(m);
+                                  }}
+                                  isLocked={isMaintenance}
+                              />
+                          ))}
+                      </div>
+                  )
               ) : (
                   // VISÃO DOS EVENTOS AO VIVO
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

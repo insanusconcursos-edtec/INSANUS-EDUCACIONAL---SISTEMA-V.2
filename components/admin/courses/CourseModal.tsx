@@ -1,11 +1,15 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Loader2, Upload, Image as ImageIcon, Check, User } from 'lucide-react';
+import { X, Loader2, Upload, Image as ImageIcon, Check, User, MapPin, Layers } from 'lucide-react';
 import { courseService } from '../../../services/courseService';
 import { teacherService } from '../../../services/teacherService';
 import { getCategories, Category } from '../../../services/planService';
+import { classService } from '../../../services/classService';
+import { curriculumService } from '../../../services/curriculumService';
 import { OnlineCourse, CourseFormData, ContestStatus, CONTEST_STATUS_LABELS } from '../../../types/course';
 import { Teacher } from '../../../types/teacher';
+import { Class } from '../../../types/class';
+import { Subject } from '../../../types/curriculum';
 
 interface CourseModalProps {
   isOpen: boolean;
@@ -28,12 +32,18 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
     type: 'REGULAR',
     welcomeButtonTitle: '',
     welcomeVideoUrl: '',
-    teacherIds: []
+    teacherIds: [],
+    linkedPresentialId: '',
+    linkedPresentialTabName: '',
+    linkedPresentialModules: 'all'
   });
   
   const [categories, setCategories] = useState<Category[]>([]);
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
+  const [availablePresentialClasses, setAvailablePresentialClasses] = useState<Class[]>([]);
+  const [availableSubjects, setAvailableSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
 
   // Estados para Upload
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,18 +60,47 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const [cats, teachers] = await Promise.all([
+        const [cats, teachers, classes] = await Promise.all([
           getCategories(),
-          teacherService.getTeachers()
+          teacherService.getTeachers(),
+          classService.getClasses()
         ]);
         setCategories(cats);
         setAllTeachers(teachers.sort((a, b) => a.name.localeCompare(b.name)));
+        setAvailablePresentialClasses(classes.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (error) {
         console.error("Erro ao carregar dados iniciais", error);
       }
     };
     if (isOpen) loadInitialData();
   }, [isOpen]);
+
+  // Carregar módulos do "Ambiente de Ensino" da turma presencial selecionada
+  useEffect(() => {
+    const loadPresentialModules = async () => {
+      if (!formData.linkedPresentialId) {
+        setAvailableSubjects([]);
+        return;
+      }
+      setLoadingSubjects(true);
+      try {
+        // Agora buscamos módulos reais (Ambiente de Ensino) e não disciplinas do currículo pedagógico
+        const modules = await courseService.getModules(formData.linkedPresentialId);
+        // Mapeamos para o formato esperado pelo estado (que era de Subjects)
+        // Mas vamos manter o nome availableSubjects por enquanto para minimizar mudanças, 
+        // apenas garantindo que os campos batam.
+        setAvailableSubjects(modules.map(m => ({
+            id: m.id,
+            name: m.title // Module usa 'title', Subject usa 'name' (mas eu já tinha corrigido para name antes)
+        })) as any);
+      } catch (error) {
+        console.error("Erro ao carregar módulos do presencial:", error);
+      } finally {
+        setLoadingSubjects(false);
+      }
+    };
+    loadPresentialModules();
+  }, [formData.linkedPresentialId]);
 
   // Preencher dados na edição
   useEffect(() => {
@@ -81,7 +120,10 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
         bannerUrlMobile: initialData.bannerUrlMobile,
         welcomeButtonTitle: initialData.welcomeButtonTitle || '',
         welcomeVideoUrl: initialData.welcomeVideoUrl || '',
-        teacherIds: initialData.teacherIds || []
+        teacherIds: initialData.teacherIds || [],
+        linkedPresentialId: initialData.linkedPresentialId || '',
+        linkedPresentialTabName: initialData.linkedPresentialTabName || '',
+        linkedPresentialModules: initialData.linkedPresentialModules || 'all'
       });
       setPreviewUrl(initialData.coverUrl); // Mostra a capa atual
       setBannerDesktopPreview(initialData.bannerUrlDesktop || '');
@@ -101,7 +143,10 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
           type: 'REGULAR',
           welcomeButtonTitle: '',
           welcomeVideoUrl: '',
-          teacherIds: []
+          teacherIds: [],
+          linkedPresentialId: '',
+          linkedPresentialTabName: '',
+          linkedPresentialModules: 'all'
       });
       setPreviewUrl('');
       setSelectedFile(null);
@@ -150,6 +195,37 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
         return { ...prev, teacherIds: [...currentIds, teacherId] };
       }
     });
+  };
+
+  const toggleModule = (moduleId: string) => {
+    setFormData(prev => {
+      let currentModules = prev.linkedPresentialModules;
+      
+      // Se estiver em 'all', e clicar em um, ele vira um array com todos menos o clicado? 
+      // Não, se o user quer escolher quais módulos, ele começa selecionando.
+      
+      if (currentModules === 'all') {
+        // Se estava 'all' e o user clica em um, ele quer agora selecionar manualmente.
+        // Vamos assumir que se ele clica em um, ele quer desmarcar aquele, então ele seleciona todos os outros.
+        const allIds = availableSubjects.map(s => s.id);
+        currentModules = allIds.filter(id => id !== moduleId);
+      } else {
+        const modules = Array.isArray(currentModules) ? currentModules : [];
+        if (modules.includes(moduleId)) {
+          currentModules = modules.filter(id => id !== moduleId);
+          // Se esvaziar, talvez deva voltar para 'all'? Ou deixar vazio.
+          // O user pediu: "escolher se será toda a turma presencial que será adicionada no curso online, ou, quais módulos (disciplinas) farão parte"
+        } else {
+          currentModules = [...modules, moduleId];
+        }
+      }
+      
+      return { ...prev, linkedPresentialModules: currentModules };
+    });
+  };
+
+  const setAllModules = () => {
+    setFormData(prev => ({ ...prev, linkedPresentialModules: 'all' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -440,6 +516,102 @@ export function CourseModal({ isOpen, onClose, onSave, initialData }: CourseModa
                 </div>
               )}
             </div>
+          </div>
+
+          {/* VINCULAÇÃO DE TURMA PRESENCIAL */}
+          <div className="bg-[#1a1d24] p-4 rounded-lg border border-gray-800 space-y-4">
+            <div className="flex items-center gap-2">
+                <MapPin size={16} className="text-zinc-500" />
+                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Vincular Turma Presencial</h3>
+            </div>
+            
+            <p className="text-[10px] text-zinc-500 italic">
+                * Vincule uma turma presencial para que seus módulos apareçam em uma aba dedicada para o aluno neste curso online.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Selecionar Turma</label>
+                    <select 
+                        value={formData.linkedPresentialId}
+                        onChange={e => setFormData({...formData, linkedPresentialId: e.target.value})}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-white focus:border-brand-red outline-none appearance-none cursor-pointer uppercase font-bold"
+                    >
+                        <option value="">Nenhuma turma vinculada</option>
+                        {availablePresentialClasses.map(cls => (
+                            <option key={cls.id} value={cls.id}>{cls.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Nome da Aba no Aluno</label>
+                    <input 
+                        type="text" 
+                        value={formData.linkedPresentialTabName}
+                        onChange={e => setFormData({...formData, linkedPresentialTabName: e.target.value})}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-white focus:border-brand-red outline-none font-bold uppercase"
+                        placeholder="Ex: AULAS PRESENCIAIS"
+                        disabled={!formData.linkedPresentialId}
+                    />
+                </div>
+            </div>
+
+            {formData.linkedPresentialId && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center justify-between">
+                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Quais módulos (disciplinas) farão parte?</label>
+                        <button 
+                            type="button"
+                            onClick={setAllModules}
+                            className={`text-[9px] font-bold uppercase px-2 py-1 rounded transition-colors ${formData.linkedPresentialModules === 'all' ? 'bg-brand-red text-white' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                        >
+                            Toda a Turma
+                        </button>
+                    </div>
+
+                    {loadingSubjects ? (
+                        <div className="flex justify-center py-4">
+                            <Loader2 size={16} className="animate-spin text-zinc-500" />
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto no-scrollbar pr-1">
+                            {availableSubjects.map(subject => {
+                                const isSelected = formData.linkedPresentialModules === 'all' || 
+                                                 (Array.isArray(formData.linkedPresentialModules) && formData.linkedPresentialModules.includes(subject.id));
+                                
+                                return (
+                                    <button
+                                        key={subject.id}
+                                        type="button"
+                                        onClick={() => toggleModule(subject.id)}
+                                        className={`
+                                            flex items-center justify-between p-2 rounded-lg border text-left transition-all group
+                                            ${isSelected 
+                                                ? 'bg-brand-red/10 border-brand-red/30 text-white' 
+                                                : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:bg-zinc-900'}
+                                        `}
+                                    >
+                                        <div className="flex items-center gap-2 truncate">
+                                            <Layers size={12} className={isSelected ? 'text-brand-red' : 'text-zinc-700'} />
+                                            <span className={`text-[9px] font-bold uppercase truncate ${isSelected ? 'text-white' : 'text-zinc-400'}`}>
+                                                {subject.name}
+                                            </span>
+                                        </div>
+                                        {isSelected && <Check size={10} className="text-brand-red shrink-0" />}
+                                    </button>
+                                );
+                            })}
+
+                            {availableSubjects.length === 0 && (
+                                <div className="col-span-full py-4 text-center border border-dashed border-zinc-800 rounded-lg">
+                                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Nenhuma disciplina encontrada nesta turma</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
 
           {/* --- UPLOAD DE CAPA --- */}
