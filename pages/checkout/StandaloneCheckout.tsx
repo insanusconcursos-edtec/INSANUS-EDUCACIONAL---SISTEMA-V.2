@@ -37,7 +37,7 @@ export default function StandaloneCheckout() {
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
   const [installments, setInstallments] = useState(1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [friends, setFriends] = useState<{name: string, email: string, cpf: string, phone: string}[]>([]);
+  const [friends, setFriends] = useState<{name: string, email: string, confirmEmail: string, cpf: string, phone: string}[]>([]);
   const [billingAddress, setBillingAddress] = useState({
     zipCode: '',
     street: '',
@@ -125,6 +125,7 @@ export default function StandaloneCheckout() {
     friends.forEach((f, i) => {
       if (!f.name.trim()) errors[`friend_name_${i}`] = 'Nome é obrigatório';
       if (!f.email.trim()) errors[`friend_email_${i}`] = 'E-mail é obrigatório';
+      if (f.email !== f.confirmEmail) errors[`friend_confirm_email_${i}`] = 'E-mails não conferem';
       if (f.cpf.replace(/\D/g, '').length !== 11) errors[`friend_cpf_${i}`] = 'CPF inválido';
       const cleanPhone = f.phone.replace(/\D/g, '');
       if (cleanPhone.length < 10) errors[`friend_phone_${i}`] = 'WhatsApp inválido';
@@ -583,7 +584,7 @@ export default function StandaloneCheckout() {
                           <h4 className="text-[10px] font-black text-white uppercase tracking-[0.2em]">Pessoas Adicionais / Amigos</h4>
                           <button 
                             type="button"
-                            onClick={() => setFriends([...friends, { name: '', email: '', cpf: '', phone: '' }])}
+                            onClick={() => setFriends([...friends, { name: '', email: '', confirmEmail: '', cpf: '', phone: '' }])}
                             className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline active:scale-95 transition-all"
                           >
                             + Adicionar Amigo
@@ -638,6 +639,24 @@ export default function StandaloneCheckout() {
                                   />
                                 </div>
                                 <div className="space-y-1.5">
+                                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Confirmar E-mail</label>
+                                  <input 
+                                    type="email"
+                                    className={`w-full bg-zinc-900 border ${formErrors[`friend_confirm_email_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
+                                    placeholder="Confirme o e-mail"
+                                    value={friend.confirmEmail}
+                                    onChange={(e) => {
+                                      const newFriends = [...friends];
+                                      newFriends[index].confirmEmail = e.target.value;
+                                      setFriends(newFriends);
+                                    }}
+                                  />
+                                  {formErrors[`friend_confirm_email_${index}`] && <p className="text-[9px] text-red-500 font-bold ml-1">{formErrors[`friend_confirm_email_${index}`]}</p>}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
                                   <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">CPF</label>
                                   <input 
                                     type="text"
@@ -651,22 +670,21 @@ export default function StandaloneCheckout() {
                                     }}
                                   />
                                 </div>
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">WhatsApp / Celular</label>
-                                <input 
-                                  type="text"
-                                  className={`w-full bg-zinc-900 border ${formErrors[`friend_phone_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
-                                  placeholder="(00) 00000-0000"
-                                  value={friend.phone}
-                                  onChange={(e) => {
-                                    const newFriends = [...friends];
-                                    newFriends[index].phone = maskPhone(e.target.value);
-                                    setFriends(newFriends);
-                                  }}
-                                />
-                                {formErrors[`friend_phone_${index}`] && <p className="text-[9px] text-red-500 font-bold ml-1">{formErrors[`friend_phone_${index}`]}</p>}
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">WhatsApp / Celular</label>
+                                  <input 
+                                    type="text"
+                                    className={`w-full bg-zinc-900 border ${formErrors[`friend_phone_${index}`] ? 'border-red-500' : 'border-zinc-800'} rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-red-500 transition-all`}
+                                    placeholder="(00) 00000-0000"
+                                    value={friend.phone}
+                                    onChange={(e) => {
+                                      const newFriends = [...friends];
+                                      newFriends[index].phone = maskPhone(e.target.value);
+                                      setFriends(newFriends);
+                                    }}
+                                  />
+                                  {formErrors[`friend_phone_${index}`] && <p className="text-[9px] text-red-500 font-bold ml-1">{formErrors[`friend_phone_${index}`]}</p>}
+                                </div>
                               </div>
                             </motion.div>
                           ))}
@@ -1070,6 +1088,13 @@ export default function StandaloneCheckout() {
 
           {/* LADO DIREITO: Resumo do Pedido */}
           <aside className="space-y-6 order-1 lg:order-2">
+             <div className="bg-red-600/10 border border-red-600/20 p-4 rounded-2xl flex gap-3">
+               <ShieldCheck size={18} className="text-red-500 shrink-0" />
+               <p className="text-[10px] text-zinc-300 font-medium leading-relaxed">
+                 <span className="font-black text-red-500 uppercase block mb-1 tracking-widest">Garantia e Reembolso</span>
+                 O reembolso ao evento somente é válido se realizado em até 48 horas antes da data da realização. O não comparecimento não assegura reembolso.
+               </p>
+             </div>
              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-xl sticky top-8">
                 <div className="aspect-video relative group overflow-hidden border-b border-zinc-800">
                    <img 
