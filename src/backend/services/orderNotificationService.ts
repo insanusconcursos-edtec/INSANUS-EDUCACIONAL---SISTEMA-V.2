@@ -94,7 +94,8 @@ async function findUserIdByRecipientId(recipientId: string): Promise<string | nu
     }
 
     // Special case for Master if not found by recipientId (maybe master has a fixed UID)
-    if (recipientId === 're_cmouicmz204gz0l9tyr4jkmut') {
+    const { MASTER_RECIPIENT_ID } = await import('./pagarmeService.js');
+    if (recipientId === MASTER_RECIPIENT_ID) {
         const masterSnap = await dbAdmin.collection('users')
             .where('email', '==', 'insanusconcursos@gmail.com')
             .limit(1)

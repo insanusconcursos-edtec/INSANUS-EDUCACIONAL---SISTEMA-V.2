@@ -1166,10 +1166,13 @@ async function setupVite(app: any) {
   // Rota de consulta de saldo MASTER Pagar.me
   app.get('/api/payments/pagarme/balance/master', async (req, res) => {
     try {
-      const balance = await getPagarmeRecipientBalance(MASTER_RECIPIENT_ID);
+      const currentMasterId = (process.env.PAGARME_MASTER_RECIPIENT_ID || MASTER_RECIPIENT_ID).trim();
+      console.log(`[MASTER_BALANCE] Consultando saldo da Empresa Master. ID: ${currentMasterId}`);
+      
+      const balance = await getPagarmeRecipientBalance(currentMasterId);
       return res.status(200).json({ success: true, balance });
     } catch (error: any) {
-      console.error("Erro ao consultar saldo MASTER Pagar.me:", error.message);
+      console.error("[MASTER_BALANCE] Erro ao consultar saldo MASTER Pagar.me:", error.message);
       return res.status(500).json({ success: false, error: error.message || 'Erro interno no servidor' });
     }
   });

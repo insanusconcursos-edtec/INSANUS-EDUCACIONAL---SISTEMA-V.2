@@ -14,7 +14,10 @@ export const MASTER_RECIPIENT_ID = (process.env.PAGARME_MASTER_RECIPIENT_ID || D
  */
 export const getHeaders = () => {
   const secretKey = (process.env.PAGARME_SECRET_KEY || '').trim();
-  if (!secretKey) throw new Error('PAGARME_SECRET_KEY não encontrada no ambiente.');
+  if (!secretKey) {
+    console.error("[PAGARME] ERRO: PAGARME_SECRET_KEY não configurada no servidor.");
+    throw new Error('PAGARME_SECRET_KEY não encontrada no ambiente.');
+  }
   
   const auth = Buffer.from(`${secretKey}:`).toString('base64');
   return {
@@ -796,14 +799,24 @@ export const getPagarmeOrderStatus = async (orderId: string) => {
 
 export const getPagarmeRecipientBalance = async (recipientId: string) => {
   try {
-    const url = `${PAGARME_BASE_URL}/recipients/${recipientId}/balance`;
+    const cleanId = (recipientId || '').trim();
+    if (!cleanId) throw new Error('ID do recebedor não fornecido para consulta de saldo.');
+
+    const url = `${PAGARME_BASE_URL}/recipients/${cleanId}/balance`;
+    console.log(`[PAGARME] Buscando saldo para o recebedor: ${cleanId}`);
+    
     const response = await axios.get(url, { headers: getHeaders() });
     const data = response.data;
     
+    // Suporte robusto para v5 (objetos aninhados) e fallback para v4
+    const available = data.available?.amount ?? data.available_amount ?? 0;
+    const waiting_funds = data.waiting_funds?.amount ?? data.waiting_funds_amount ?? 0;
+    const transferred = data.transferred?.amount ?? data.transferred_amount ?? 0;
+
     return {
-      available: data.available_amount || 0,
-      waiting_funds: data.waiting_funds_amount || 0,
-      transferred: data.transferred_amount || 0,
+      available,
+      waiting_funds,
+      transferred,
       recipient_name: data.recipient?.name || ''
     };
   } catch (error: any) {
