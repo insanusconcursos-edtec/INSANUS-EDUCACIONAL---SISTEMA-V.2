@@ -3,7 +3,7 @@ import { Edit2, Trash2, Users, MapPin, Calendar, Clock, Ticket } from 'lucide-re
 import { PresentialEvent } from '../../../types/presentialEvent';
 import { presentialEventService } from '../../../services/presentialEventService';
 import { toast } from 'react-hot-toast';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
 
 interface PresentialEventsListProps {
@@ -83,9 +83,7 @@ export const PresentialEventsList: React.FC<PresentialEventsListProps> = ({
                 <div className="flex items-center gap-2 text-zinc-400 text-xs">
                   <Calendar size={14} className="text-brand-red" />
                   <span className="font-bold uppercase tracking-wider">
-                    {event.date instanceof Date 
-                      ? format(event.date, "dd 'de' MMMM", { locale: ptBR })
-                      : format((event.date as any).toDate(), "dd 'de' MMMM", { locale: ptBR })}
+                    {formatInTimeZone(event.date instanceof Date ? event.date : (event.date as any).toDate(), 'UTC', "dd 'de' MMMM", { locale: ptBR })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-zinc-400 text-xs">

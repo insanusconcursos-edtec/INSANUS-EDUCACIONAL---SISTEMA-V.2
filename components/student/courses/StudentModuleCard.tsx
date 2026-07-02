@@ -36,7 +36,7 @@ export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, on
   return (
     <div 
       onClick={handleClick}
-      className={`relative flex-none w-48 md:w-60 aspect-[474/1000] rounded-lg overflow-hidden transition-all duration-300 group border border-gray-800
+      className={`relative w-full aspect-[474/1000] rounded-lg overflow-hidden transition-all duration-300 group border border-gray-800
         ${isLocked 
             ? 'cursor-not-allowed opacity-70 grayscale' 
             : 'cursor-pointer hover:scale-105 hover:z-10 hover:border-red-600/50 hover:shadow-xl hover:shadow-red-900/20'
@@ -48,6 +48,7 @@ export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, on
         alt={module.title} 
         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         loading="lazy"
+        referrerPolicy="no-referrer"
       />
 
       {/* Overlay de Bloqueio */}
@@ -62,14 +63,6 @@ export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, on
                     Disponível em: <br/><span className="text-white font-mono">{formattedDate}</span>
                 </div>
             )}
-        </div>
-      )}
-
-      {/* Overlay de Título (Apenas Hover se não bloqueado) */}
-      {!isLocked && (
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-            <h4 className="text-white font-bold text-sm leading-tight drop-shadow-md" title={module.title}>{module.title}</h4>
-            <div className="h-1 w-10 bg-red-600 mt-2 rounded-full"></div>
         </div>
       )}
     </div>

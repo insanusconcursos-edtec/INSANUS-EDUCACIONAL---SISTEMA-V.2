@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatInTimeZone } from 'date-fns-tz';
 import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft, QrCode, MapPin, CreditCard, Receipt } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -380,7 +381,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                             <div className="space-y-1">
                               <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Data</span>
                               <p className="text-sm font-bold text-white">
-                                {event.date ? (typeof event.date === 'object' && 'seconds' in event.date ? new Date(event.date.seconds * 1000).toLocaleDateString('pt-BR') : new Date(event.date).toLocaleDateString('pt-BR')) : 'A definir'}
+                                {event.date ? formatInTimeZone(typeof event.date === 'object' && 'seconds' in event.date ? new Date(event.date.seconds * 1000) : new Date(event.date), 'UTC', 'dd/MM/yyyy') : 'A definir'}
                               </p>
                             </div>
                             <div className="space-y-1">

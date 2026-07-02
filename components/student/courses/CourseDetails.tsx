@@ -376,6 +376,7 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                 src={course.bannerUrlMobile || course.coverUrl} 
                 alt={`Banner do curso ${course.title}`} 
                 className={`w-full h-48 md:h-[400px] object-cover border-b border-[var(--plan-theme)]/30 shadow-lg transition-all duration-700 ${isMaintenance ? 'grayscale opacity-50 contrast-125' : ''}`} 
+                referrerPolicy="no-referrer"
              />
          </picture>
 

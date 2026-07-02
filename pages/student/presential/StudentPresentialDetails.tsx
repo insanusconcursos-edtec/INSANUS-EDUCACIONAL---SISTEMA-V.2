@@ -214,6 +214,7 @@ export const StudentPresentialDetails: React.FC = () => {
             src={currentClass.bannerUrlMobile || currentClass.coverImage} 
             alt={`Banner da turma ${currentClass.name}`} 
             className="w-full h-48 md:h-[400px] object-cover border-b border-red-600/30 shadow-lg"
+            referrerPolicy="no-referrer"
           />
         </picture>
         
@@ -298,7 +299,7 @@ export const StudentPresentialDetails: React.FC = () => {
                     Nenhum módulo disponível para esta turma.
                   </div>
                 ) : (
-                  <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-thin scrollbar-thumb-red-900 scrollbar-track-transparent px-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {modules.map(module => (
                       <StudentModuleCard 
                         key={module.id} 
