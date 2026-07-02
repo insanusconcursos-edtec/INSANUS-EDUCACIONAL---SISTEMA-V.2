@@ -8,6 +8,7 @@ import { SystemLogo } from '../../components/common/SystemLogo';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { createPagarmePayment } from '../../services/paymentService';
+import { formatInTimeZone } from 'date-fns-tz';
 import { Loader2, ShieldCheck, CreditCard, QrCode, Lock, Copy, Check, CheckCircle2, ArrowRight, ChevronDown, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -716,7 +717,7 @@ export default function StandaloneCheckout() {
                           <div className="space-y-1">
                             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Data e Hora</span>
                             <p className="text-sm font-bold text-white">
-                              {event.date instanceof Date ? event.date.toLocaleDateString('pt-BR') : (event.date as any).toDate().toLocaleDateString('pt-BR')} às {event.startTime}
+                              {event.date ? formatInTimeZone(event.date instanceof Date ? event.date : (event.date as any).toDate(), 'UTC', 'dd/MM/yyyy') : 'A definir'} às {event.startTime}
                             </p>
                           </div>
                           <div className="space-y-1">
