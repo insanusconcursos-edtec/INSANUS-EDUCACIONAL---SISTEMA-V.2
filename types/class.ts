@@ -59,4 +59,6 @@ export interface Class {
     substitutionCommission: number;
     weekendCommission: number;
   };
+  masterClassId?: string;
+  isMasterClass?: boolean;
 }

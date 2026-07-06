@@ -57,18 +57,26 @@ const PresentialClassManager: React.FC = () => {
       if (!silent) {
         setLoading(true);
       }
-      const [classData, topicsData, subjectsData, teachersData, eventsData] = await Promise.all([
-        classService.getClassById(classId),
-        curriculumService.getTopicsByClass(classId),
-        curriculumService.getSubjectsByClass(classId),
-        teacherService.getTeachers(),
-        classScheduleService.getScheduleEventsByClass(classId)
-      ]);
+      
+      const classData = await classService.getClassById(classId);
       setCurrentClass(classData);
-      setTopics(topicsData);
-      setSubjects(subjectsData);
-      setTeachers(teachersData);
-      setScheduleEvents(eventsData);
+
+      if (classData) {
+        // Determine which ID to use for content (Modules, Planning, etc.)
+        const contentId = classData.masterClassId || classId;
+
+        const [topicsData, subjectsData, teachersData, eventsData] = await Promise.all([
+          curriculumService.getTopicsByClass(contentId),
+          curriculumService.getSubjectsByClass(contentId),
+          teacherService.getTeachers(),
+          classScheduleService.getScheduleEventsByClass(classId) // Schedule stays unique to the class
+        ]);
+        
+        setTopics(topicsData);
+        setSubjects(subjectsData);
+        setTeachers(teachersData);
+        setScheduleEvents(eventsData);
+      }
     } catch (error) {
       console.error("Error fetching class data:", error);
     } finally {
@@ -216,18 +224,38 @@ const PresentialClassManager: React.FC = () => {
           />
         );
       case 'TEACHING':
+        const contentId = currentClass.masterClassId || currentClass.id;
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
+            {currentClass.masterClassId && (
+              <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl flex items-center gap-3">
+                <LayoutDashboard className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h4 className="text-sm font-bold text-blue-400 uppercase">Turma Filha (Conteúdo Herdado)</h4>
+                  <p className="text-xs text-blue-300/80">Este ambiente de ensino é compartilhado. Alterações feitas aqui afetarão a Turma Mãe e todas as turmas vinculadas a ela.</p>
+                </div>
+              </div>
+            )}
             <div className="mb-4">
               <h2 className="text-xl font-bold text-white">Ambiente de Ensino Virtual</h2>
               <p className="text-sm text-gray-400">Gerencie os recursos online, módulos, vídeos e PDFs que ficarão disponíveis para os alunos desta turma presencial.</p>
             </div>
-            <TeachingEnvironment classId={currentClass.id} />
+            <TeachingEnvironment classId={contentId} />
           </div>
         );
       case 'PLANNING':
+        const planId = currentClass.masterClassId || currentClass.id;
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
+            {currentClass.masterClassId && (
+              <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl flex items-center gap-3">
+                <BookOpen className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h4 className="text-sm font-bold text-blue-400 uppercase">Turma Filha (Conteúdo Herdado)</h4>
+                  <p className="text-xs text-blue-300/80">Este planejamento é compartilhado. Acompanhe a estrutura do edital verticalizado que é comum entre as turmas.</p>
+                </div>
+              </div>
+            )}
             <div className="mb-4">
               <h2 className="text-xl font-bold text-white">Planejamento Pedagógico (Edital Verticalizado)</h2>
               <p className="text-sm text-zinc-400">Acompanhe a estrutura do curso, materiais e o status das aulas agendadas.</p>

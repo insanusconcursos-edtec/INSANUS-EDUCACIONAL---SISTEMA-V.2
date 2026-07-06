@@ -69,19 +69,33 @@ export const StudentPresentialDetails: React.FC = () => {
           if (data) {
             setCurrentClass(data);
             
+            // Determine which ID to use for content (Modules, Planning, etc.)
+            const contentId = data.masterClassId || classId;
+
             // Check content availability in parallel
+            // Note: Schedule (eventsData) always stays with the specific classId
             const [modulesData, eventsData, subjectsData, liveEventsData] = await Promise.all([
-              courseService.getModules(classId),
+              courseService.getModules(contentId),
               classScheduleService.getScheduleEventsByClass(classId),
-              curriculumService.getSubjectsByClass(classId),
-              liveEventService.getLiveEventsByPresentialClass(classId)
+              curriculumService.getSubjectsByClass(contentId),
+              liveEventService.getLiveEventsByPresentialClass(contentId)
             ]);
             
             const hModules = modulesData.length > 0;
             const hSchedule = eventsData.length > 0;
             const hPlanning = subjectsData.length > 0;
             const hLive = liveEventsData.length > 0;
-            const hSimulated = !!data.linkedSimulatedId;
+            
+            // For Simulateds, we check the child first, then the master
+            let hSimulated = !!data.linkedSimulatedId;
+            if (!hSimulated && data.masterClassId) {
+              const masterData = await classService.getClassById(data.masterClassId);
+              if (masterData?.linkedSimulatedId) {
+                hSimulated = true;
+                // Update the current class state with the master's simulated ID if needed for the UI
+                setCurrentClass(prev => prev ? ({ ...prev, linkedSimulatedId: masterData.linkedSimulatedId }) : null);
+              }
+            }
             
             setHasModules(hModules);
             setHasSchedule(hSchedule);
@@ -118,7 +132,8 @@ export const StudentPresentialDetails: React.FC = () => {
       if (activeTab === 'TEACHING' && currentClass) {
         setLoadingModules(true);
         try {
-          const data = await courseService.getModules(currentClass.id);
+          const contentId = currentClass.masterClassId || currentClass.id;
+          const data = await courseService.getModules(contentId);
           setModules(data);
         } catch (error) {
           console.error("Error fetching modules:", error);
@@ -320,7 +335,7 @@ export const StudentPresentialDetails: React.FC = () => {
 
         {activeTab === 'PLANNING' && (
           <StudentPedagogicalPlanning 
-            classId={currentClass.id} 
+            classId={currentClass.masterClassId || currentClass.id} 
             totalMeetings={currentClass.totalMeetings}
           />
         )}

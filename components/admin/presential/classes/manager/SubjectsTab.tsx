@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, AlertTriangle, BookOpen, User, CheckSquare, Save, Loader2, Link } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, AlertTriangle, BookOpen, User, CheckSquare, Save, Loader2, Link, GitBranch } from 'lucide-react';
 import { Class } from '../../../../../types/class';
 import { Subject, Topic, Module, ModuleContent, OnlineStatus, TeachingAreaLink } from '../../../../../types/curriculum';
 import { Teacher } from '../../../../../types/teacher';
@@ -55,6 +55,7 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
 
   // Fetch Data
   const sanitizeModules = (modules: Module[]): Module[] => {
@@ -101,6 +102,23 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImportFromMaster = async () => {
+    if (!cls.masterClassId) return;
+    if (subjects.length > 0 && !confirm("Atenção: Esta ação irá importar as disciplinas e assuntos da Turma Mãe. Deseja continuar?")) return;
+
+    try {
+      setIsCloning(true);
+      await curriculumService.cloneCurriculum(cls.masterClassId, cls.id);
+      await fetchData();
+      if (onUpdate) await onUpdate(true);
+    } catch (error) {
+      console.error("Error importing curriculum:", error);
+      alert("Erro ao importar disciplinas da Turma Mãe.");
+    } finally {
+      setIsCloning(false);
     }
   };
 
@@ -646,17 +664,33 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
       <div className="flex-1 space-y-6">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-bold text-white">Disciplinas e Assuntos</h3>
-          <button
-            onClick={() => {
-              setEditingSubject(null);
-              setNewSubject({ name: '', color: '#EF4444', defaultTeacherId: '' });
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-brand-red hover:bg-red-600 text-white rounded-lg font-bold uppercase text-xs tracking-wider transition-colors shadow-lg shadow-brand-red/20"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Disciplina
-          </button>
+          <div className="flex items-center gap-2">
+            {cls.masterClassId && (
+              <button
+                onClick={handleImportFromMaster}
+                disabled={isCloning}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg font-bold uppercase text-xs tracking-wider transition-colors disabled:opacity-50"
+              >
+                {isCloning ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <GitBranch className="w-4 h-4" />
+                )}
+                Importar da Turma Mãe
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setEditingSubject(null);
+                setNewSubject({ name: '', color: '#EF4444', defaultTeacherId: '' });
+                setIsModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-red hover:bg-red-600 text-white rounded-lg font-bold uppercase text-xs tracking-wider transition-colors shadow-lg shadow-brand-red/20"
+            >
+              <Plus className="w-4 h-4" />
+              Nova Disciplina
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4">

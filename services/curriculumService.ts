@@ -136,5 +136,56 @@ export const curriculumService = {
       console.error("Error updating topic orders: ", error);
       throw error;
     }
+  },
+
+  cloneCurriculum: async (sourceClassId: string, targetClassId: string): Promise<void> => {
+    try {
+      const subjectsQ = query(
+        collection(db, SUBJECTS_COLLECTION), 
+        where("classId", "==", sourceClassId)
+      );
+      const subjectsSnapshot = await getDocs(subjectsQ);
+      
+      const topicsQ = query(
+        collection(db, TOPICS_COLLECTION), 
+        where("classId", "==", sourceClassId)
+      );
+      const topicsSnapshot = await getDocs(topicsQ);
+
+      const sourceSubjects = subjectsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Subject));
+      const sourceTopics = topicsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Topic));
+
+      const batch = writeBatch(db);
+
+      for (const subject of sourceSubjects) {
+        const { id: oldSubjectId, ...subjectData } = subject;
+        const newSubjectRef = doc(collection(db, SUBJECTS_COLLECTION));
+        const newSubjectId = newSubjectRef.id;
+        
+        batch.set(newSubjectRef, {
+          ...subjectData,
+          classId: targetClassId,
+          createdAt: new Date().toISOString()
+        });
+
+        // Find topics for this subject and clone them
+        const subjectTopics = sourceTopics.filter(t => t.subjectId === oldSubjectId);
+        for (const topic of subjectTopics) {
+          const { id: oldTopicId, ...topicData } = topic;
+          const newTopicRef = doc(collection(db, TOPICS_COLLECTION));
+          batch.set(newTopicRef, {
+            ...topicData,
+            classId: targetClassId,
+            subjectId: newSubjectId,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error("Error cloning curriculum: ", error);
+      throw error;
+    }
   }
 };

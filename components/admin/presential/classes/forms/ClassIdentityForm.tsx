@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Upload, Video, FileText, Type, X, Filter, Layers, Building2, Image as ImageIcon, Smartphone, Monitor } from 'lucide-react';
+import { Upload, Video, FileText, Type, X, Filter, Layers, Building2, Image as ImageIcon, Smartphone, Monitor, GitMerge, GitBranch } from 'lucide-react';
 import { Class } from '../../../../../types/class';
 import { classMetadataService, MetadataItem } from '../../../../../services/classMetadataService';
 import { getSimulatedClasses, SimulatedClass } from '../../../../../services/simulatedService';
+import { classService } from '../../../../../services/classService';
 
 interface ClassIdentityFormProps {
   data: Partial<Class>;
@@ -28,26 +29,56 @@ export const ClassIdentityForm: React.FC<ClassIdentityFormProps> = ({
   const [subcategories, setSubcategories] = useState<MetadataItem[]>([]);
   const [organizations, setOrganizations] = useState<MetadataItem[]>([]);
   const [simulatedClasses, setSimulatedClasses] = useState<SimulatedClass[]>([]);
+  const [masterClasses, setMasterClasses] = useState<Class[]>([]);
 
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const [cats, subs, orgs, simClasses] = await Promise.all([
+        const [cats, subs, orgs, simClasses, allClasses] = await Promise.all([
           classMetadataService.getCategories(),
           classMetadataService.getSubcategories(),
           classMetadataService.getOrganizations(),
-          getSimulatedClasses()
+          getSimulatedClasses(),
+          classService.getClasses()
         ]);
         setCategories(cats);
         setSubcategories(subs);
         setOrganizations(orgs);
         setSimulatedClasses(simClasses);
+        setMasterClasses(allClasses.filter(c => c.isMasterClass && c.id !== data.id));
       } catch (error) {
         console.error("Error fetching metadata:", error);
       }
     };
     fetchMetadata();
-  }, []);
+  }, [data.id]);
+
+  // Handle inheritance when masterClassId changes
+  useEffect(() => {
+    if (data.masterClassId && masterClasses.length > 0) {
+      const master = masterClasses.find(c => c.id === data.masterClassId);
+      if (master) {
+        // Inherit identity and metadata fields as requested
+        onChange({
+          coverImage: master.coverImage,
+          bannerUrlDesktop: master.bannerUrlDesktop,
+          bannerUrlMobile: master.bannerUrlMobile,
+          bannerUrlTablet: master.bannerUrlTablet,
+          type: master.type,
+          modality: master.modality,
+          concursoStatus: master.concursoStatus,
+          bancaName: master.bancaName,
+          examDate: master.examDate,
+          examShift: master.examShift,
+          category: master.category,
+          subcategory: master.subcategory,
+          organization: master.organization,
+          linkedSimulatedId: master.linkedSimulatedId,
+          hasRecordings: master.hasRecordings
+        });
+      }
+    }
+  }, [data.masterClassId, masterClasses]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -143,6 +174,63 @@ export const ClassIdentityForm: React.FC<ClassIdentityFormProps> = ({
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-brand-red transition-colors placeholder-zinc-600"
             placeholder="Ex: Turma Elite PC-AC 2026"
           />
+        </div>
+
+        {/* Configuração de Hierarquia */}
+        <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-zinc-800">
+          <div>
+            <label className="block text-xs font-bold text-zinc-400 uppercase mb-2 flex items-center gap-2">
+              <GitMerge className="w-4 h-4 text-brand-red" />
+              Esta é uma Turma Mãe?
+            </label>
+            <div 
+              onClick={() => onChange({ isMasterClass: !data.isMasterClass, masterClassId: undefined })}
+              className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                data.isMasterClass 
+                  ? 'bg-brand-red/10 border-brand-red/30' 
+                  : 'bg-zinc-800 border-zinc-700 hover:border-zinc-600'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-md ${data.isMasterClass ? 'bg-brand-red text-white' : 'bg-zinc-700 text-zinc-400'}`}>
+                  <GitMerge className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className={`block text-xs font-bold uppercase ${data.isMasterClass ? 'text-white' : 'text-zinc-300'}`}>
+                    {data.isMasterClass ? 'Sim, é Turma Mãe' : 'Não, é Turma Normal/Filha'}
+                  </span>
+                </div>
+              </div>
+              <div className={`w-10 h-5 rounded-full p-1 transition-colors ${data.isMasterClass ? 'bg-brand-red' : 'bg-zinc-600'}`}>
+                <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${data.isMasterClass ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1 uppercase">
+              Turmas mãe servem como base de conteúdo para outras turmas.
+            </p>
+          </div>
+
+          {!data.isMasterClass && (
+            <div>
+              <label className="block text-xs font-bold text-zinc-400 uppercase mb-2 flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-blue-500" />
+                Vincular a uma Turma Mãe
+              </label>
+              <select
+                value={data.masterClassId || ''}
+                onChange={(e) => onChange({ masterClassId: e.target.value || undefined })}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-red transition-colors appearance-none"
+              >
+                <option value="">Nenhuma (Turma Independente)</option>
+                {masterClasses.map((master) => (
+                  <option key={master.id} value={master.id}>{master.name}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-zinc-500 mt-1 uppercase">
+                A turma filha compartilhará o ambiente de ensino da turma mãe selecionada.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Capa da Turma */}

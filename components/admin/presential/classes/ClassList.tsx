@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Filter, Calendar, Users, Edit2, Trash2, AlertTriangle, ChevronDown, ChevronUp, Settings, Layers } from 'lucide-react';
+import { Plus, Search, Filter, Calendar, Users, Edit2, Trash2, AlertTriangle, ChevronDown, ChevronUp, Settings, Layers, GitMerge, GitBranch } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Class } from '../../../../types/class';
 import { classService } from '../../../../services/classService';
@@ -30,6 +30,16 @@ const getTypeBadge = (type: string) => {
     : <span className="px-2 py-1 rounded bg-purple-500/10 text-purple-400 text-[10px] font-bold uppercase border border-purple-500/20">Pós-Edital</span>;
 };
 
+const getHierarchyBadge = (cls: Class) => {
+  if (cls.isMasterClass) {
+    return <span className="px-2 py-1 rounded bg-red-500/10 text-red-500 text-[10px] font-bold uppercase border border-red-500/20 flex items-center gap-1"><GitMerge size={10} /> Turma Mãe</span>;
+  }
+  if (cls.masterClassId) {
+    return <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase border border-blue-500/20 flex items-center gap-1"><GitBranch size={10} /> Turma Filha</span>;
+  }
+  return null;
+};
+
 interface ClassCardProps {
   cls: Class;
   onEdit: (cls: Class) => void;
@@ -58,6 +68,7 @@ const ClassCard: React.FC<ClassCardProps> = ({ cls, onEdit, onDelete }) => {
         <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
           {getStatusBadge(cls.status)}
           {getTypeBadge(cls.type)}
+          {getHierarchyBadge(cls)}
         </div>
       </div>
 
