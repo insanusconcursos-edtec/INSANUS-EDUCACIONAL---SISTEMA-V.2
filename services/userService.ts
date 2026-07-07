@@ -419,6 +419,15 @@ export const revokeStudentAccess = async (uid: string, accessId: string) => {
   }
 };
 
+const ensureDate = (dateVal: any): Date => {
+  if (!dateVal) return new Date();
+  if (dateVal instanceof Date) return dateVal;
+  if (typeof dateVal.toDate === 'function') return dateVal.toDate();
+  if (dateVal.seconds) return new Date(dateVal.seconds * 1000);
+  if (typeof dateVal === 'string') return new Date(dateVal);
+  return new Date();
+};
+
 export const extendStudentAccess = async (uid: string, accessId: string, additionalDays: number) => {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
@@ -435,7 +444,7 @@ export const extendStudentAccess = async (uid: string, accessId: string, additio
   const updatedAccess = currentAccess.map(item => {
     if (item.id === accessId || (tictoIdToExtend && item.tictoId === tictoIdToExtend)) {
       // Calculate new end date based on current end date (or now if expired)
-      const currentEnd = item.diaFim.toDate();
+      const currentEnd = ensureDate(item.diaFim);
       const now = new Date();
       const baseDate = currentEnd > now ? currentEnd : now; // If expired, start extension from now
       
@@ -445,7 +454,7 @@ export const extendStudentAccess = async (uid: string, accessId: string, additio
       return { 
         ...item, 
         diaFim: Timestamp.fromDate(newEnd),
-        days: item.days + additionalDays,
+        days: (item.days || 0) + additionalDays,
         isActive: true // Reactivate if it was expired
       };
     }
@@ -454,7 +463,7 @@ export const extendStudentAccess = async (uid: string, accessId: string, additio
 
   const updatedProducts = currentProducts.map(item => {
     if (item.id === accessId || (tictoIdToExtend && item.tictoId === tictoIdToExtend)) {
-      const currentEnd = item.diaFim.toDate();
+      const currentEnd = ensureDate(item.diaFim);
       const now = new Date();
       const baseDate = currentEnd > now ? currentEnd : now;
       
@@ -464,7 +473,7 @@ export const extendStudentAccess = async (uid: string, accessId: string, additio
       return { 
         ...item, 
         diaFim: Timestamp.fromDate(newEnd),
-        days: item.days + additionalDays,
+        days: (item.days || 0) + additionalDays,
         isActive: true
       };
     }
@@ -483,7 +492,7 @@ export const extendStudentAccess = async (uid: string, accessId: string, additio
       const enrollmentRef = doc(db, 'course_enrollments', enrollmentId);
       
       // Calculate new end date again for the enrollment record
-      const currentEnd = itemToExtend.diaFim.toDate();
+      const currentEnd = ensureDate(itemToExtend.diaFim);
       const now = new Date();
       const baseDate = currentEnd > now ? currentEnd : now;
       const newEnd = new Date(baseDate);
@@ -492,6 +501,66 @@ export const extendStudentAccess = async (uid: string, accessId: string, additio
       await updateDoc(enrollmentRef, {
         expiresAt: newEnd.toISOString(),
         active: true
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar registro de matrícula:", error);
+    }
+  }
+};
+
+export const updateStudentAccessDates = async (uid: string, accessId: string, startDate: Date, endDate: Date) => {
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  
+  if (!userSnap.exists()) throw new Error("Usuário não encontrado");
+
+  const student = userSnap.data() as Student;
+  const currentAccess = student.access || [];
+  const currentProducts = student.products || [];
+
+  const itemToUpdate = currentProducts.find(item => item.id === accessId) || currentAccess.find(item => item.id === accessId);
+  if (!itemToUpdate) throw new Error("Acesso não encontrado");
+  
+  const tictoIdToUpdate = itemToUpdate.tictoId;
+
+  // Calculate duration in days
+  const diffTime = endDate.getTime() - startDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  const updateItem = (item: AccessItem): AccessItem => {
+    const isDirectMatch = item.id === accessId;
+    const isTictoMatch = tictoIdToUpdate && item.tictoId === tictoIdToUpdate;
+    const isLinkedMatch = item.sourceProductId === accessId;
+
+    if (isDirectMatch || isTictoMatch || isLinkedMatch) {
+      return {
+        ...item,
+        diaInicio: Timestamp.fromDate(startDate),
+        diaFim: Timestamp.fromDate(endDate),
+        days: diffDays > 0 ? diffDays : 0,
+        isActive: endDate > new Date()
+      };
+    }
+    return item;
+  };
+
+  const updatedAccess = currentAccess.map(updateItem);
+  const updatedProducts = currentProducts.map(updateItem);
+
+  await updateDoc(userRef, { 
+    access: updatedAccess,
+    products: updatedProducts
+  });
+
+  // Update enrollment if it's a course
+  if (itemToUpdate.type === 'course') {
+    try {
+      const enrollmentId = `${itemToUpdate.targetId}_${uid}`;
+      const enrollmentRef = doc(db, 'course_enrollments', enrollmentId);
+      await updateDoc(enrollmentRef, {
+        releasedAt: startDate.toISOString(),
+        expiresAt: endDate.toISOString(),
+        active: endDate > new Date()
       });
     } catch (error) {
       console.error("Erro ao atualizar registro de matrícula:", error);
@@ -722,6 +791,7 @@ export const userService = {
   grantStudentAccess,
   revokeStudentAccess,
   extendStudentAccess,
+  updateStudentAccessDates,
   toggleCourseAccess,
   updateUserActivePlan,
   syncProductResourcesForStudents

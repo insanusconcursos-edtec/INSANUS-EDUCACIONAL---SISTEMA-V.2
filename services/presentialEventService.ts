@@ -75,6 +75,15 @@ export const presentialEventService = {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PresentialEventRegistration));
   },
 
+  async getRegistrationsCount(eventId: string): Promise<number> {
+    const q = query(
+      collection(db, REGISTRATIONS_COLLECTION), 
+      where('eventId', '==', eventId)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+  },
+
   getActiveLot(event: PresentialEvent, registrationsCount: number): string | null {
     if (!event.useLots || !event.lots || event.lots.length === 0) return null;
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
-import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft, QrCode, MapPin, CreditCard, Receipt } from 'lucide-react';
+import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Trash2, Copy, Check, Globe, ArrowLeft, QrCode, MapPin, CreditCard, Receipt, Timer, Users2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Product, ProductType, ProductOffer, ProductSplit } from '../../../types/product';
@@ -603,6 +603,85 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           </select>
                         </div>
                       </div>
+
+                      {type === 'EVENTO_PRESENCIAL' && (
+                        <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Urgência / Virada de Lote</label>
+                            <div 
+                              onClick={() => updateOffer(offer.id, { lotUrgencyEnabled: !offer.lotUrgencyEnabled })}
+                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${offer.lotUrgencyEnabled ? 'bg-amber-500' : 'bg-zinc-800'}`}
+                            >
+                              <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all ${offer.lotUrgencyEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </div>
+                          </div>
+                          
+                          {offer.lotUrgencyEnabled && (
+                            <div className="space-y-4 animate-in fade-in duration-300">
+                              <div>
+                                <label className="block text-[8px] text-zinc-600 font-bold uppercase mb-2">Tipo de Gatilho</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateOffer(offer.id, { lotUrgencyType: 'quantity' })}
+                                    className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-[9px] font-black uppercase transition-all ${
+                                      offer.lotUrgencyType === 'quantity' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-zinc-950 border-zinc-800 text-zinc-500'
+                                    }`}
+                                  >
+                                    <Users2 size={12} />
+                                    Por Vagas
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateOffer(offer.id, { lotUrgencyType: 'date' })}
+                                    className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-[9px] font-black uppercase transition-all ${
+                                      offer.lotUrgencyType === 'date' ? 'bg-amber-500/10 border-amber-500 text-amber-500' : 'bg-zinc-950 border-zinc-800 text-zinc-500'
+                                    }`}
+                                  >
+                                    <Timer size={12} />
+                                    Por Data
+                                  </button>
+                                </div>
+                              </div>
+
+                              {offer.lotUrgencyType === 'quantity' ? (
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-[8px] text-zinc-600 font-bold uppercase mb-1 text-center">Total de Vagas</p>
+                                    <input 
+                                      type="number"
+                                      value={offer.lotQuantityLimit || ''}
+                                      onChange={(e) => updateOffer(offer.id, { lotQuantityLimit: Number(e.target.value) })}
+                                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono font-bold text-white text-center"
+                                      placeholder="Ex: 100"
+                                    />
+                                  </div>
+                                  <div>
+                                    <p className="text-[8px] text-zinc-600 font-bold uppercase mb-1 text-center">Vendas Fictícias</p>
+                                    <input 
+                                      type="number"
+                                      value={offer.lotFictitiousSoldAmount || ''}
+                                      onChange={(e) => updateOffer(offer.id, { lotFictitiousSoldAmount: Number(e.target.value) })}
+                                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono font-bold text-white text-center"
+                                      placeholder="Ex: 85"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="text-[8px] text-zinc-600 font-bold uppercase mb-1">Data/Hora da Virada</p>
+                                  <input 
+                                    type="datetime-local"
+                                    value={offer.lotDateDeadline || ''}
+                                    onChange={(e) => updateOffer(offer.id, { lotDateDeadline: e.target.value })}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {type === 'EVENTO_PRESENCIAL' && linkedPresentialEvents.length > 0 && (
                         <div className="xl:col-span-4 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">

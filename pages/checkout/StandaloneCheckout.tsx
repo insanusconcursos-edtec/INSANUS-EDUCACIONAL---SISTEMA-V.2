@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { createPagarmePayment } from '../../services/paymentService';
 import { formatInTimeZone } from 'date-fns-tz';
-import { Loader2, ShieldCheck, CreditCard, QrCode, Lock, Copy, Check, CheckCircle2, ArrowRight, ChevronDown, X } from 'lucide-react';
+import { Loader2, ShieldCheck, CreditCard, QrCode, Lock, Copy, Check, CheckCircle2, ArrowRight, ChevronDown, X, Timer, Users2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const INSTALLMENT_MULTIPLIERS: Record<number, number> = {
@@ -39,6 +39,8 @@ export default function StandaloneCheckout() {
   const [installments, setInstallments] = useState(1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [friends, setFriends] = useState<{name: string, email: string, confirmEmail: string, cpf: string, phone: string}[]>([]);
+  const [registrationsCount, setRegistrationsCount] = useState(0);
+  const [lotCountdown, setLotCountdown] = useState<{days: number, hours: number, minutes: number, seconds: number} | null>(null);
   const [billingAddress, setBillingAddress] = useState({
     zipCode: '',
     street: '',
@@ -73,6 +75,18 @@ export default function StandaloneCheckout() {
 
     return finalPrice;
   }, [offer, paymentMethod, friends]);
+
+  const remainingSpots = useMemo(() => {
+    if (!offer || !offer.lotUrgencyEnabled || offer.lotUrgencyType !== 'quantity') return null;
+    const totalLimit = offer.lotQuantityLimit || 0;
+    const fictitious = offer.lotFictitiousSoldAmount || 0;
+    const real = registrationsCount || 0;
+    
+    // Se o admin definiu vendas fictícias, usamos o maior entre real e fictício para calcular o que resta
+    const sold = Math.max(real, fictitious);
+    const remaining = totalLimit - sold;
+    return remaining > 0 ? remaining : 0;
+  }, [offer, registrationsCount]);
 
   const installmentsOptions = useMemo(() => {
     if (!offer) return [];
@@ -237,6 +251,30 @@ export default function StandaloneCheckout() {
     };
   }, [pixData, orderId, navigate]);
 
+  useEffect(() => {
+    if (offer?.lotUrgencyEnabled && offer?.lotUrgencyType === 'date' && offer?.lotDateDeadline) {
+      const interval = setInterval(() => {
+        const deadline = new Date(offer.lotDateDeadline).getTime();
+        const now = new Date().getTime();
+        const distance = deadline - now;
+
+        if (distance < 0) {
+          setLotCountdown(null);
+          clearInterval(interval);
+          return;
+        }
+
+        setLotCountdown({
+          days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((distance % (1000 * 60)) / 1000)
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [offer]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -267,8 +305,18 @@ export default function StandaloneCheckout() {
 
           // If it's a presential event, load event details
           if (result.product.type === 'EVENTO_PRESENCIAL' && result.product.linkedResources?.presentialEvents?.[0]) {
-            const eventData = await presentialEventService.getEventById(result.product.linkedResources.presentialEvents[0]);
+            const eventId = result.product.linkedResources.presentialEvents[0];
+            const eventData = await presentialEventService.getEventById(eventId);
             setEvent(eventData);
+
+            if (result.offer.lotUrgencyEnabled && result.offer.lotUrgencyType === 'quantity') {
+              try {
+                const count = await presentialEventService.getRegistrationsCount(eventId);
+                setRegistrationsCount(count);
+              } catch (err) {
+                console.error("Error fetching registrations count:", err);
+              }
+            }
           }
         } else {
           setError('Esta oferta não está mais disponível ou é inválida.');
@@ -411,6 +459,64 @@ export default function StandaloneCheckout() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pb-20 mt-4">
+        {/* Urgency Alert Section */}
+        <AnimatePresence>
+          {offer.lotUrgencyEnabled && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8"
+            >
+              {offer.lotUrgencyType === 'quantity' && remainingSpots !== null && remainingSpots <= (offer.lotQuantityLimit || 100) * 0.3 && (
+                <div className="bg-amber-500 rounded-2xl p-4 flex items-center justify-between shadow-[0_0_20px_rgba(245,158,11,0.3)] border border-amber-400/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white animate-pulse">
+                      <Users2 size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-amber-950 uppercase tracking-tight leading-none mb-1">Garanta sua vaga agora!</h4>
+                      <p className="text-xs font-bold text-amber-900/80">Restam apenas {remainingSpots} {remainingSpots === 1 ? 'vaga' : 'vagas'} para a virada de lote.</p>
+                    </div>
+                  </div>
+                  <div className="hidden md:block">
+                    <div className="px-4 py-2 bg-amber-950/10 rounded-lg border border-amber-950/10">
+                      <span className="text-[10px] font-black text-amber-950 uppercase tracking-widest">Senso de Urgência</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {offer.lotUrgencyType === 'date' && lotCountdown && (
+                <div className="bg-red-600 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between shadow-[0_0_25px_rgba(220,38,38,0.4)] border border-red-500">
+                  <div className="flex items-center gap-4 mb-4 md:mb-0">
+                    <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-white backdrop-blur-sm border border-white/20">
+                      <Timer size={28} className="animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-black text-white uppercase tracking-tighter leading-none mb-1">O lote vira em breve!</h4>
+                      <p className="text-xs font-bold text-red-100/70 uppercase tracking-widest">Aproveite o preço atual antes da virada.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {[
+                      { label: 'Dias', value: lotCountdown.days },
+                      { label: 'Hrs', value: lotCountdown.hours },
+                      { label: 'Min', value: lotCountdown.minutes },
+                      { label: 'Seg', value: lotCountdown.seconds }
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex flex-col items-center bg-zinc-950/30 backdrop-blur-md rounded-xl p-3 min-w-[70px] border border-white/10">
+                        <span className="text-2xl font-black text-white leading-none">{item.value.toString().padStart(2, '0')}</span>
+                        <span className="text-[9px] font-black text-red-100/50 uppercase tracking-widest mt-1">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 items-start">
           
           {/* LADO ESQUERDO: Formulário Multi-etapas / Tela PIX */}

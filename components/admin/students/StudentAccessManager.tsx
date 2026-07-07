@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  X, Clock, Trash2, Plus, 
+  X, Clock, Trash2, Plus, Edit, Calendar,
   CheckCircle, Layers, GraduationCap,
   Loader2, PlayCircle, Users, Radio,
   ArrowLeft, Package, Shield, Globe, Monitor, MapPin, Fingerprint
@@ -11,6 +11,7 @@ import {
   grantStudentAccess, 
   revokeStudentAccess, 
   extendStudentAccess,
+  updateStudentAccessDates,
   getStudentById
 } from '../../../services/userService';
 import { getPlans, Plan } from '../../../services/planService';
@@ -35,7 +36,7 @@ interface StudentAccessManagerProps {
   onUpdate: () => void; // Trigger refresh on parent
 }
 
-type ModalType = 'ADD_PLAN' | 'ADD_SIMULADO' | 'ADD_COURSE' | 'ADD_PRESENTIAL' | 'ADD_LIVE_EVENT' | 'ADD_PRESENTIAL_EVENT' | 'ADD_PRODUCT' | 'EXTEND' | null;
+type ModalType = 'ADD_PLAN' | 'ADD_SIMULADO' | 'ADD_COURSE' | 'ADD_PRESENTIAL' | 'ADD_LIVE_EVENT' | 'ADD_PRESENTIAL_EVENT' | 'ADD_PRODUCT' | 'EXTEND' | 'EDIT_DATES' | null;
 
 const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: initialStudent, onClose, onUpdate }) => {
   // State
@@ -54,7 +55,9 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [selectedContentId, setSelectedContentId] = useState('');
   const [daysInput, setDaysInput] = useState<number>(30);
-  const [targetAccessId, setTargetAccessId] = useState<string | null>(null); // For extension
+  const [startDateInput, setStartDateInput] = useState('');
+  const [endDateInput, setEndDateInput] = useState('');
+  const [targetAccessId, setTargetAccessId] = useState<string | null>(null); // For extension/edit
   const [isProcessing, setIsProcessing] = useState(false);
   const [isScholarship, setIsScholarship] = useState(false);
 
@@ -402,6 +405,38 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
     setActiveModal('EXTEND');
   };
 
+  const openEditDatesModal = (access: AccessItem) => {
+    setTargetAccessId(access.id);
+    
+    const start = ensureDate(access.diaInicio);
+    const end = ensureDate(access.diaFim);
+    
+    if (start) setStartDateInput(start.toISOString().split('T')[0]);
+    if (end) setEndDateInput(end.toISOString().split('T')[0]);
+    
+    setActiveModal('EDIT_DATES');
+  };
+
+  const handleUpdateDates = async () => {
+    if (!targetAccessId || !startDateInput || !endDateInput) return;
+    setIsProcessing(true);
+    try {
+        const start = new Date(startDateInput + 'T12:00:00'); // Use mid-day to avoid TZ shifts
+        const end = new Date(endDateInput + 'T23:59:59');
+        
+        await updateStudentAccessDates(localStudent.uid, targetAccessId, start, end);
+        toast.success("Datas de acesso atualizadas!");
+        await fetchStudentData();
+        onUpdate();
+        closeModal();
+    } catch (error) {
+        console.error("Erro ao atualizar datas:", error);
+        toast.error("Erro ao atualizar datas.");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
   const handleExtend = async () => {
     if (!targetAccessId) return;
     setIsProcessing(true);
@@ -423,6 +458,8 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
     setActiveModal(null);
     setSelectedContentId('');
     setDaysInput(30);
+    setStartDateInput('');
+    setEndDateInput('');
     setTargetAccessId(null);
     setIsScholarship(false);
   };
@@ -500,6 +537,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="purple"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -536,6 +574,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="red"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -572,6 +611,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="orange"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -608,6 +648,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="blue"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -644,6 +685,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="emerald"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -680,6 +722,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="yellow"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -716,6 +759,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                                 colorClass="sky"
                                 onRevoke={() => handleRequestRevoke(access)}
                                 onExtend={() => openExtendModal(access.id)}
+                                onEditDates={() => openEditDatesModal(access)}
                                 getDaysRemaining={getDaysRemaining}
                                 calculateProgress={calculateProgress}
                                 getAccessStatus={getAccessStatus}
@@ -762,66 +806,103 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
             <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200" onMouseDown={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-lg font-black text-white uppercase tracking-tighter">
-                        {activeModal === 'EXTEND' ? 'Estender Prazo' : 'Liberar Acesso'}
+                        {activeModal === 'EXTEND' ? 'Estender Prazo' : activeModal === 'EDIT_DATES' ? 'Editar Período' : 'Liberar Acesso'}
                     </h3>
                     <button onClick={closeModal} className="text-zinc-500 hover:text-white"><X size={20}/></button>
                 </div>
 
                 <div className="space-y-4">
-                    {activeModal !== 'EXTEND' && (
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                                Selecione o Conteúdo
-                            </label>
-                            <select 
-                                value={selectedContentId}
-                                onChange={e => setSelectedContentId(e.target.value)}
-                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-red uppercase"
-                            >
-                                <option value="">Selecione...</option>
-                                {activeModal === 'ADD_PLAN' 
-                                    ? plans.map(p => <option key={p.id} value={p.id}>{p.title}</option>)
-                                    : activeModal === 'ADD_PRODUCT'
-                                        ? availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                                        : activeModal === 'ADD_SIMULADO'
-                                        ? simClasses.map(s => <option key={s.id} value={s.id}>{s.title}</option>)
-                                        : activeModal === 'ADD_COURSE'
-                                            ? courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)
-                                            : activeModal === 'ADD_LIVE_EVENT'
-                                                ? liveEvents.map(le => <option key={le.id} value={le.id}>{le.title}</option>)
-                                                : activeModal === 'ADD_PRESENTIAL_EVENT'
-                                                    ? presentialEvents.map(pe => <option key={pe.id} value={pe.id}>{pe.title}</option>)
-                                                    : presentialClasses.map(pc => <option key={pc.id} value={pc.id}>{pc.name}</option>)
-                                }
-                            </select>
+                    {activeModal === 'EDIT_DATES' ? (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                                    Data de Início
+                                </label>
+                                <div className="relative">
+                                    <Calendar size={16} className="absolute left-3 top-3 text-zinc-600" />
+                                    <input 
+                                        type="date"
+                                        value={startDateInput}
+                                        onChange={e => setStartDateInput(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-brand-red"
+                                        style={{ colorScheme: 'dark' }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                                    Data de Expiração
+                                </label>
+                                <div className="relative">
+                                    <Calendar size={16} className="absolute left-3 top-3 text-zinc-600" />
+                                    <input 
+                                        type="date"
+                                        value={endDateInput}
+                                        onChange={e => setEndDateInput(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-brand-red"
+                                        style={{ colorScheme: 'dark' }}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                    )}
+                    ) : (
+                        <>
+                            {activeModal !== 'EXTEND' && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                                        Selecione o Conteúdo
+                                    </label>
+                                    <select 
+                                        value={selectedContentId}
+                                        onChange={e => setSelectedContentId(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-brand-red uppercase"
+                                    >
+                                        <option value="">Selecione...</option>
+                                        {activeModal === 'ADD_PLAN' 
+                                            ? plans.map(p => <option key={p.id} value={p.id}>{p.title}</option>)
+                                            : activeModal === 'ADD_PRODUCT'
+                                                ? availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                                                : activeModal === 'ADD_SIMULADO'
+                                                ? simClasses.map(s => <option key={s.id} value={s.id}>{s.title}</option>)
+                                                : activeModal === 'ADD_COURSE'
+                                                    ? courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)
+                                                    : activeModal === 'ADD_LIVE_EVENT'
+                                                        ? liveEvents.map(le => <option key={le.id} value={le.id}>{le.title}</option>)
+                                                        : activeModal === 'ADD_PRESENTIAL_EVENT'
+                                                            ? presentialEvents.map(pe => <option key={pe.id} value={pe.id}>{pe.title}</option>)
+                                                            : presentialClasses.map(pc => <option key={pc.id} value={pc.id}>{pc.name}</option>)
+                                        }
+                                    </select>
+                                </div>
+                            )}
 
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                            {activeModal === 'EXTEND' ? 'Dias Adicionais' : 'Dias de Acesso'}
-                        </label>
-                        <div className="grid grid-cols-4 gap-2">
-                            {[30, 60, 90, 365].map(d => (
-                                <button 
-                                    key={d}
-                                    onClick={() => setDaysInput(d)}
-                                    className={`py-2 rounded-lg text-xs font-bold border transition-all ${daysInput === d ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}
-                                >
-                                    {d}d
-                                </button>
-                            ))}
-                        </div>
-                        <div className="relative mt-2">
-                            <Clock size={16} className="absolute left-3 top-3 text-zinc-600" />
-                            <input 
-                                type="number"
-                                value={daysInput}
-                                onChange={e => setDaysInput(Number(e.target.value))}
-                                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-brand-red"
-                            />
-                        </div>
-                    </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                                    {activeModal === 'EXTEND' ? 'Dias Adicionais' : 'Dias de Acesso'}
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[30, 60, 90, 365].map(d => (
+                                        <button 
+                                            key={d}
+                                            onClick={() => setDaysInput(d)}
+                                            className={`py-2 rounded-lg text-xs font-bold border transition-all ${daysInput === d ? 'bg-white text-black border-white' : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:border-zinc-600'}`}
+                                        >
+                                            {d}d
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="relative mt-2">
+                                    <Clock size={16} className="absolute left-3 top-3 text-zinc-600" />
+                                    <input 
+                                        type="number"
+                                        value={daysInput}
+                                        onChange={e => setDaysInput(Number(e.target.value))}
+                                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-brand-red"
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     {(activeModal === 'ADD_PRESENTIAL' || activeModal === 'ADD_COURSE' || activeModal === 'ADD_PLAN' || activeModal === 'ADD_PRESENTIAL_EVENT') && (
                       <div className="flex items-center gap-3 mt-4 mb-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
@@ -839,12 +920,12 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
                     )}
 
                     <button 
-                        onClick={activeModal === 'EXTEND' ? handleExtend : handleGrant}
-                        disabled={isProcessing || (activeModal !== 'EXTEND' && !selectedContentId)}
+                        onClick={activeModal === 'EXTEND' ? handleExtend : activeModal === 'EDIT_DATES' ? handleUpdateDates : handleGrant}
+                        disabled={isProcessing || (activeModal !== 'EXTEND' && activeModal !== 'EDIT_DATES' && !selectedContentId) || (activeModal === 'EDIT_DATES' && (!startDateInput || !endDateInput))}
                         className="w-full py-4 mt-2 bg-brand-red hover:bg-red-600 text-white font-black uppercase text-xs tracking-widest rounded-xl shadow-lg shadow-red-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isProcessing ? <Loader2 className="animate-spin" /> : <CheckCircle size={16} />}
-                        {activeModal === 'EXTEND' ? 'Confirmar Extensão' : 'Liberar Acesso'}
+                        {activeModal === 'EXTEND' ? 'Confirmar Extensão' : activeModal === 'EDIT_DATES' ? 'Salvar Alterações' : 'Liberar Acesso'}
                     </button>
                 </div>
             </div>
@@ -887,13 +968,14 @@ interface AccessCardProps {
     colorClass: string;
     onRevoke: () => void;
     onExtend: () => void;
+    onEditDates: () => void;
     getDaysRemaining: (diaFim: any, altEnd?: any) => number;
     calculateProgress: (start: any, end: any, altStart?: any, altEnd?: any) => number;
     getAccessStatus: (start: any, end: any, altStart?: any, altEnd?: any) => string;
     formatDate: (val: any, altVal?: any) => string;
 }
 
-const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, calculateProgress, getAccessStatus, formatDate }: AccessCardProps) => {
+const AccessCard = ({ access, colorClass, onRevoke, onExtend, onEditDates, getDaysRemaining, calculateProgress, getAccessStatus, formatDate }: AccessCardProps) => {
     // Check multiple names for compatibility
     const diaInicio = access.diaInicio || access.startDate || access.grantedAt || access.createdAt || (access as any).starts_at;
     const diaFim = access.diaFim || access.endDate || access.expiresAt || (access as any).expires_at || (access as any).finishedAt;
@@ -975,6 +1057,13 @@ const AccessCard = ({ access, colorClass, onRevoke, onExtend, getDaysRemaining, 
 
             {/* Actions (Hover) */}
             <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80 backdrop-blur-sm rounded-lg border border-zinc-800 p-1">
+                <button 
+                    onClick={onEditDates}
+                    className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                    title="Editar Período"
+                >
+                    <Edit size={14} />
+                </button>
                 <button 
                     onClick={onExtend}
                     className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"

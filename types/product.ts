@@ -29,6 +29,11 @@ export interface ProductOffer {
     boleto: boolean;
   };
   maxInstallments?: number; // Máximo de parcelas (1-12)
+  lotUrgencyEnabled?: boolean; // Habilita senso de urgência por lote
+  lotUrgencyType?: 'quantity' | 'date'; // Tipo de urgência: por vagas ou por data
+  lotQuantityLimit?: number; // Quantidade total de vagas no lote
+  lotFictitiousSoldAmount?: number; // Quantidade fictícia de vagas vendidas
+  lotDateDeadline?: string; // Data limite para virada de lote
 }
 
 export interface ProductSplit {
