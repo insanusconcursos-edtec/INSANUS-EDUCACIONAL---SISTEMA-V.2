@@ -13,6 +13,9 @@ import {
   updateStudentPasswordAdmin,
   deleteStudent,
   sendPasswordReset,
+  blockStudent,
+  unblockStudent,
+  setExceptionStatus,
   Student, 
   CreateStudentData,
   getStudentById 
@@ -23,6 +26,7 @@ import { getProducts } from '../../services/productService';
 import { TictoProduct } from '../../types/product';
 import StudentFormModal from '../../components/admin/students/StudentFormModal';
 import StudentAccessManager from '../../components/admin/students/StudentAccessManager';
+import SecurityContent from '../../components/admin/students/SecurityContent';
 import ConfirmationModal from '../../components/ui/ConfirmationModal';
 import { toast } from 'react-hot-toast';
 
@@ -40,6 +44,8 @@ const StudentManager: React.FC = () => {
   const [selectedPlanFilter, setSelectedPlanFilter] = useState(''); // Filter for Plans
   const [selectedClassFilter, setSelectedClassFilter] = useState(''); // Filter for Simulated Classes
   const [selectedProductFilter, setSelectedProductFilter] = useState(''); // Filter for Products (Combos)
+  
+  const [activeTab, setActiveTab] = useState<'STUDENTS' | 'SECURITY'>('STUDENTS');
   
   // Modal State
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -317,17 +323,39 @@ const StudentManager: React.FC = () => {
           <div className="w-12 h-1 bg-brand-red shadow-[0_0_15px_rgba(255,0,0,0.5)]"></div>
         </div>
         
+        {activeTab === 'STUDENTS' && (
+          <button 
+              onClick={openNewStudent}
+              className="flex items-center gap-2 px-8 py-3 bg-brand-red rounded-lg text-[10px] font-black uppercase text-white shadow-lg shadow-brand-red/30 hover:bg-red-600 hover:scale-[1.02] transition-all tracking-widest"
+          >
+              <Plus size={14} strokeWidth={3} />
+              Novo Aluno
+          </button>
+        )}
+      </div>
+
+      {/* TABS */}
+      <div className="flex gap-4 border-b border-zinc-800">
         <button 
-            onClick={openNewStudent}
-            className="flex items-center gap-2 px-8 py-3 bg-brand-red rounded-lg text-[10px] font-black uppercase text-white shadow-lg shadow-brand-red/30 hover:bg-red-600 hover:scale-[1.02] transition-all tracking-widest"
+          onClick={() => setActiveTab('STUDENTS')}
+          className={`pb-4 px-2 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'STUDENTS' ? 'text-white border-b-2 border-brand-red' : 'text-zinc-600 hover:text-zinc-400'}`}
         >
-            <Plus size={14} strokeWidth={3} />
-            Novo Aluno
+          Lista de Alunos
+        </button>
+        <button 
+          onClick={() => setActiveTab('SECURITY')}
+          className={`pb-4 px-2 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'SECURITY' ? 'text-white border-b-2 border-brand-red' : 'text-zinc-600 hover:text-zinc-400'}`}
+        >
+          Segurança
         </button>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="p-1 bg-zinc-900/30 border border-zinc-800/50 rounded-xl flex flex-wrap items-center gap-2">
+      {activeTab === 'SECURITY' ? (
+        <SecurityContent students={students} onUpdate={fetchData} />
+      ) : (
+        <>
+            {/* FILTER BAR */}
+            <div className="p-1 bg-zinc-900/30 border border-zinc-800/50 rounded-xl flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
             <Filter size={14} />
             <span>Filtros:</span>
@@ -548,6 +576,8 @@ const StudentManager: React.FC = () => {
             </table>
         )}
       </div>
+      </>
+      )}
 
       {/* ACCESS MANAGER OVERLAY */}
       {managingAccessStudent && (

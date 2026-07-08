@@ -12,6 +12,9 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { requestNotificationPermission } from '../services/notificationService';
 
+// Add to the top of AuthProvider:
+// const localSessionId = React.useRef(Math.random().toString(36).substring(2, 15));
+
 interface UserData {
   role?: string;
   name?: string;
@@ -80,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubSnapshot) unsubSnapshot();
+
       setCurrentUser(user);
       
       if (user) {
@@ -190,7 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   if (docSnap.exists()) {
                     const snapData = docSnap.data();
                     
-                    // Update user data context
+                    // Update user data context just in case
                     setUserData(snapData as UserData);
 
                     // Check if blocked by Geofencing or piracy
@@ -202,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     // Check simultaneous access (only for students)
                     const snapRole = (snapData.role || '').toLowerCase();
-                    if (snapRole === 'student' && snapData.currentSessionId && snapData.currentSessionId !== localSessionId.current) {
+                    if (snapRole === 'student' && snapData.activeSessionIds && !snapData.activeSessionIds.includes(localSessionId.current) && !snapData.isException) {
                       alert("Sua conta foi acessada em outro dispositivo. Você foi desconectado.");
                       signOut(auth);
                     }

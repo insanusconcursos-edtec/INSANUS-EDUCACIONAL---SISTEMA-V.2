@@ -671,7 +671,6 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
       const ipRaw = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim();
       const ip = ipRaw.startsWith('::ffff:') ? ipRaw.substring(7) : ipRaw;
-      
       const userAgent = req.headers['user-agent'] || 'unknown';
 
       let geoData: any = {};
@@ -712,10 +711,18 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
         }
       }
 
-      if (isStudent && sessionId) {
+      if (isStudent && sessionId && !udata?.isException) {
         // --- PREVENÇÃO CONTRA ACESSOS SIMULTÂNEOS ---
-        // Atualiza a sessionId atual do aluno, forçando o logout nos outros aparelhos
-        await userRef.update({ currentSessionId: sessionId });
+        let activeSessions = udata?.activeSessionIds || [];
+
+        if (!activeSessions.includes(sessionId)) {
+            if (activeSessions.length >= 2) {
+                // Remove oldest (first) and add new one
+                activeSessions.shift();
+            }
+            activeSessions.push(sessionId);
+            await userRef.update({ activeSessionIds: activeSessions });
+        }
 
         // --- GEOFENCING (BLOQUEIO POR DISTÂNCIA) ---
         if (currentLat && currentLon) {

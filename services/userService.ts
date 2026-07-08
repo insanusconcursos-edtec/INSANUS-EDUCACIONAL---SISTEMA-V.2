@@ -74,6 +74,9 @@ export interface Student {
     minutes: number;
     completedGoals?: number;
   }>;
+  blocked?: boolean;
+  blockReason?: string;
+  isException?: boolean;
 }
 
 export interface CreateStudentData {
@@ -781,6 +784,21 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
   console.log(`[UserService] Sincronização concluída com sucesso.`);
 };
 
+export const blockStudent = async (uid: string, reason: string) => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { blocked: true, blockReason: reason });
+};
+
+export const unblockStudent = async (uid: string) => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { blocked: false, blockReason: '' });
+};
+
+export const setExceptionStatus = async (uid: string, isException: boolean) => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { isException });
+};
+
 export const userService = {
   createStudent,
   updateStudent,
@@ -794,5 +812,8 @@ export const userService = {
   updateStudentAccessDates,
   toggleCourseAccess,
   updateUserActivePlan,
-  syncProductResourcesForStudents
+  syncProductResourcesForStudents,
+  blockStudent,
+  unblockStudent,
+  setExceptionStatus
 };
