@@ -181,7 +181,8 @@ const LoginPage: React.FC = () => {
                   (69) 9 9984 4239<br/>
                   (69) 9 9975 6746<br/>
                   (69) 9 9287 0326<br/>
-                  (81) 9 9437 4962
+                  (81) 9 9437 4962<br/>
+                  (69) 9 9325 2244
                 </p>
                 <p className="text-brand-red font-bold">
                   ATENÇÃO! A prática do referido delito será constatada nos respectivos registros criminais de cada envolvido, gerando exclusão imediata em qualquer fase de INVESTIGAÇÃO SOCIAL de concursos públicos na área de segurança pública pelo país. Dessa forma, todos os envolvidos ficarão impossibilitados de assumir qualquer concurso público policial. A notícia crime será encaminhada à polícia na data 20/07/2026 às 08h00 (horário de Rio Branco/AC), bem como, será feita petição de processo criminal.
