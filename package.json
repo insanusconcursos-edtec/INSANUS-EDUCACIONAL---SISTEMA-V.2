@@ -25,6 +25,7 @@
     "@types/express": "^5.0.6",
     "axios": "^1.16.0",
     "clsx": "^2.1.0",
+    "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.4.2",

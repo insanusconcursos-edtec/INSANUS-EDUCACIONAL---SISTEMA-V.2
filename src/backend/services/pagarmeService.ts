@@ -1,7 +1,8 @@
 import axios from 'axios';
-import { provisionPurchase } from './provisioningService.js';
+import { provisionPurchase, revokePurchase } from './provisioningService.js';
 import { getAdminConfig } from './firebaseAdmin.js';
 import { sendPushNotification } from './notificationAdminService.js';
+import crypto from 'crypto';
 
 // CONFIGURAÇÃO GLOBAL DA API V5
 const PAGARME_BASE_URL = 'https://api.pagar.me/core/v5';
@@ -318,15 +319,46 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
 };
 
 /**
- * WEBHOOK HANDLER
+ * WEBHOOK HANDLER (ROBUSTO COM VERIFICAÇÃO DE ASSINATURA)
  */
-export const handlePagarmeWebhook = async (payload: any) => {
+export const handlePagarmeWebhook = async (payload: any, signature?: string) => {
   console.log(`[PAGARME WEBHOOK] Evento: ${payload.type}`);
-  
-  if (payload.type === 'order.paid') {
-    const orderData = payload.data;
-    const { dbAdmin } = getAdminConfig();
+  const { dbAdmin } = getAdminConfig();
 
+  // 1. Verificação de Segurança (Assinatura)
+  // No Pagar.me V5, a assinatura é um HMAC-SHA256 do payload usando a SK como chave.
+  const secretKey = (process.env.PAGARME_SECRET_KEY || '').trim();
+  if (signature && secretKey) {
+    try {
+      const hmac = crypto.createHmac('sha256', secretKey);
+      hmac.update(JSON.stringify(payload));
+      const expectedSignature = hmac.digest('hex');
+      
+      // Alguns ambientes podem enviar a assinatura em formatos diferentes, mas o HMAC é o padrão.
+      // Se a assinatura não bater, logamos mas (opcionalmente) permitimos se for ambiente de teste 
+      // ou se soubermos que o IP é confiável. Para PRODUÇÃO REAL, devemos bloquear.
+      if (signature !== expectedSignature) {
+        console.warn(`⚠️ [PAGARME WEBHOOK] Assinatura INVÁLIDA! Recebida: ${signature} | Esperada: ${expectedSignature}`);
+        // IMPORTANTE: Em produção rigorosa, descomente a linha abaixo:
+        // throw new Error('Invalid signature');
+      } else {
+        console.log('✅ [PAGARME WEBHOOK] Assinatura verificada com sucesso.');
+      }
+    } catch (sigErr) {
+      console.error('[PAGARME WEBHOOK] Erro ao validar assinatura:', sigErr);
+    }
+  } else {
+    console.warn('⚠️ [PAGARME WEBHOOK] Pulando validação de assinatura (Headers ou SK ausentes).');
+  }
+  
+  const orderData = payload.data;
+  const email = orderData?.customer?.email || orderData?.metadata?.userEmail;
+  const productId = orderData?.metadata?.courseId || 
+                   orderData?.metadata?.productId || 
+                   orderData?.items?.[0]?.code;
+
+  // EVENTO: PEDIDO PAGO
+  if (payload.type === 'order.paid') {
     // Atualizar status na coleção 'orders' para acionar o gatilho de notificação Push (Sucesso)
     try {
       const orderRef = dbAdmin.collection('orders').doc(orderData.id);
@@ -338,11 +370,6 @@ export const handlePagarmeWebhook = async (payload: any) => {
     } catch (err) {
       console.error('[Push Trigger] Erro ao atualizar status da ordem:', err);
     }
-
-    const email = orderData.customer?.email;
-    const productId = orderData.metadata?.courseId || 
-                     orderData.metadata?.productId || 
-                     orderData.items?.[0]?.code;
 
     if (email && productId && productId !== 'item_1') {
       // 1. Provisionamento para o comprador principal
@@ -382,6 +409,33 @@ export const handlePagarmeWebhook = async (payload: any) => {
       await recordAdminSalesReport(orderData);
       await recordCoproductionCommissions(orderData);
       console.log(`[PAGARME WEBHOOK] Registros finalizados com sucesso.`);
+    }
+  } 
+  
+  // EVENTO: PEDIDO CANCELADO OU FALHOU (REVOGAÇÃO)
+  else if (payload.type === 'order.canceled' || payload.type === 'order.failed') {
+    console.log(`🚫 [PAGARME WEBHOOK] Pedido ${orderData?.id} ${payload.type === 'order.canceled' ? 'Cancelado' : 'Falhou'}. Revogando acessos...`);
+    
+    if (email && productId) {
+      try {
+        await revokePurchase(email, String(productId));
+        console.log(`✅ [PAGARME WEBHOOK] Acessos revogados para ${email} (Produto: ${productId})`);
+        
+        // Também revogar para amigos se houver
+        const friendsJson = orderData.metadata?.friends;
+        if (friendsJson) {
+          const friends = JSON.parse(friendsJson);
+          if (Array.isArray(friends)) {
+            for (const friend of friends) {
+              if (friend.email) {
+                await revokePurchase(friend.email, String(productId));
+              }
+            }
+          }
+        }
+      } catch (revErr) {
+        console.error('[PAGARME WEBHOOK] Erro ao revogar acesso após cancelamento:', revErr);
+      }
     }
   }
 

@@ -1088,6 +1088,16 @@ async function setupVite(app: any) {
       // O split será injetado em payments[0].pix.splits e payments[0].split
       const response = await createPagarmeOrder(body, coproducers);
       
+      // VERIFICAÇÃO CRÍTICA: Se o pagamento falhou imediatamente (Cartão Recusado)
+      if (response.status === 'failed' || response.status === 'refused') {
+        return res.status(400).json({ 
+          success: false, 
+          message: "O pagamento foi recusado pela operadora do cartão.",
+          status: response.status,
+          payment: response 
+        });
+      }
+
       // 3. Resposta amigável para o Frontend (QR Code PIX)
       if (body.payment_method === 'pix' && response.status === 'pending') {
         const charge = response.charges?.[0];
@@ -1196,12 +1206,13 @@ async function setupVite(app: any) {
 
   // Rota de Webhook Pagar.me
   app.post('/api/webhooks/pagarme', async (req, res) => {
-    console.log('✅ [Webhook Pagar.me] Recebido:', req.body.type);
+    const signature = req.headers['x-pagarme-signature'] as string;
+    console.log('✅ [Webhook Pagar.me] Recebido:', req.body.type, '| Signature:', signature ? 'Presente' : 'Ausente');
     
     try {
       // No Vercel/Serverless, DEVEMOS esperar o processamento antes de responder,
       // caso contrário o processo é congelado e o fulfillment (e-mail/banco) não termina.
-      await handlePagarmeWebhook(req.body);
+      await handlePagarmeWebhook(req.body, signature);
       
       return res.status(200).json({ 
         success: true, 

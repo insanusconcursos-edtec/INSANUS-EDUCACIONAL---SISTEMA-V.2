@@ -389,15 +389,24 @@ export default function StandaloneCheckout() {
       const result = await createPagarmePayment(paymentData);
       
       if (result.success) {
+        // Pagar.me V5 returns 'paid' for successful credit card, or 'pending' for pix
+        const status = result.payment?.status || result.status;
+        
         if (paymentMethod === 'pix' && result.pix) {
           setPixData(result.pix);
           if (result.payment?.id) {
             setOrderId(result.payment.id);
           }
           toast.success("PIX gerado com sucesso! Pague para liberar seu acesso.");
-        } else {
+        } else if (status === 'paid') {
           toast.success("Pagamento aprovado com sucesso!");
-          // Redireciona para a página de obrigado
+          window.location.href = '/obrigado';
+        } else if (status === 'failed' || status === 'refused') {
+          setErrorMessage("O pagamento foi recusado pela operadora do cartão.");
+          toast.error("Pagamento Recusado");
+        } else {
+          // Status 'pending' ou outros para cartão/boleto
+          toast.success("Pedido processado com sucesso!");
           window.location.href = '/obrigado';
         }
       } else {
