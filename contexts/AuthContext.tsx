@@ -12,9 +12,6 @@ import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { requestNotificationPermission } from '../services/notificationService';
 
-// Add to the top of AuthProvider:
-// const localSessionId = React.useRef(Math.random().toString(36).substring(2, 15));
-
 interface UserData {
   role?: string;
   name?: string;
@@ -83,7 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubSnapshot) unsubSnapshot();
-
       setCurrentUser(user);
       
       if (user) {
@@ -194,7 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   if (docSnap.exists()) {
                     const snapData = docSnap.data();
                     
-                    // Update user data context just in case
+                    // Update user data context
                     setUserData(snapData as UserData);
 
                     // Check if blocked by Geofencing or piracy

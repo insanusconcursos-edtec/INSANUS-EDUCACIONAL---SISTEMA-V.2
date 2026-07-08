@@ -671,6 +671,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
       const ipRaw = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim();
       const ip = ipRaw.startsWith('::ffff:') ? ipRaw.substring(7) : ipRaw;
+      
       const userAgent = req.headers['user-agent'] || 'unknown';
 
       let geoData: any = {};
