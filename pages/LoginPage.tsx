@@ -50,6 +50,11 @@ const LoginPage: React.FC = () => {
     // 1. Primeira Tentativa (Domínio Novo)
     const authIdentifier = isSlug ? `${rawInput}${AUTH_CONFIG.DOMAIN_NEW}` : rawInput;
 
+    if (authIdentifier.toLowerCase() === 'estudantegcm7@gmail.com') {
+      setError('PIRACY_BLOCK');
+      return;
+    }
+
     try {
       console.log(`[AUTH] Tentando login: ${authIdentifier}`);
       let userCredential;
@@ -144,7 +149,57 @@ const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        {error && (
+        {error === 'PIRACY_BLOCK' ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
+            <div className="bg-zinc-950 border border-brand-red rounded-xl p-8 max-w-2xl w-full text-white shadow-[0_0_50px_rgba(255,0,0,0.3)]">
+              <div className="flex items-center gap-3 text-brand-red mb-6">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h2 className="text-2xl font-black uppercase tracking-tighter">Acesso Bloqueado por Fraude</h2>
+              </div>
+              <div className="space-y-4 text-sm text-zinc-300 leading-relaxed font-mono">
+                <p>
+                  Essa conta foi identificada por fraude e prática de crime de pirataria, violando os direitos autorais da empresa Insanus Concursos. O crime de violação dos direitos autorais é punido com pena de reclusão de 2 a 4 anos e multa, quando há o objetivo de obter lucro.
+                </p>
+                <p>
+                  O responsável pela prática criminosa foi identificado com sendo <strong>ANA CAROLINA BARROS ROCHA</strong>, portadora do CPF nº <strong>647.413.203-59</strong>, nascida em 08/01/1981, com último endereço na RUA 9 CE, nº 26, parque TABAPUA (CE).
+                </p>
+                <p>
+                  Nossa equipe jurídica já fez os levantamentos devidos de todos os envolvidos no esquema e estamos protocolando a instauração de investigação criminal por associação criminosa em crime de pirataria, bem como, a posterior instauração de processo criminal.
+                </p>
+                <p>
+                  Serão responsabilizados não apenas a autora do crime, mas também aqueles que adquiriram o produto de forma clandestina por intermédio da autora. Algumas contas já foram identificadas, com endereços de IP localizados em diversas regiões, incluindo Porto Velho, Rio Branco, Mato Grosso e Ceará.
+                </p>
+                <p>
+                  Os respectivos números de telefones que efetuarem a compra clandestina também estarão com as devidas identificações e endereços na ação policial e processual.
+                  <br/><br/>
+                  Números:<br/>
+                  (69) 9 9370 5240<br/>
+                  (69) 9 9225 1086<br/>
+                  (69) 9 9280 6799<br/>
+                  (69) 9 9984 4239<br/>
+                  (69) 9 9975 6746<br/>
+                  (69) 9 9287 0326<br/>
+                  (81) 9 9437 4962
+                </p>
+                <p className="text-brand-red font-bold">
+                  ATENÇÃO! A prática do referido delito será constatada nos respectivos registros criminais de cada envolvido, gerando exclusão imediata em qualquer fase de INVESTIGAÇÃO SOCIAL de concursos públicos na área de segurança pública pelo país. Dessa forma, todos os envolvidos ficarão impossibilitados de assumir qualquer concurso público policial. A notícia crime será encaminhada à polícia na data 20/07/2026 às 08h00 (horário de Rio Branco/AC), bem como, será feita petição de processo criminal.
+                </p>
+                <p>
+                  Aquele que quiser negociar e se retratar, deve entrar em contato até a data mencionada, pelo e-mail <strong>pedagogico.insanus@gmail.com</strong>.<br/>
+                  Ao enviar a mensagem, identifique-se e coloque como assunto do e-mail "NEGOCIAÇÃO DE VIOLAÇÃO DOS DIREITOS AUTORAIS".
+                </p>
+              </div>
+              <button 
+                onClick={() => setError('')}
+                className="mt-8 w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-lg uppercase tracking-widest text-xs transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        ) : error && (
           <div className="mb-4 p-3 bg-red-900/20 border border-brand-red/50 rounded-lg flex items-start gap-2">
             <svg className="w-4 h-4 text-brand-red mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

@@ -650,21 +650,29 @@ async function setupVite(app: any) {
     }
   });
 
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
   // Rota para registrar log de acesso (Anti-Pirataria)
   app.post('/api/auth/log-session', async (req, res) => {
     try {
-      const { userId, userEmail, lat, lon, accuracy, fingerprint } = req.body;
+      const { userId, userEmail, lat, lon, accuracy, fingerprint, sessionId } = req.body;
       if (!userId) {
         return res.status(400).json({ success: false, error: "userId é obrigatório" });
       }
 
       const ipRaw = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '').split(',')[0].trim();
-      // Limpa endereços IPv6 mapeados para IPv4 se necessário (ex: ::ffff:127.0.0.1)
       const ip = ipRaw.startsWith('::ffff:') ? ipRaw.substring(7) : ipRaw;
-      
       const userAgent = req.headers['user-agent'] || 'unknown';
 
-      // Busca geolocalização simples via IP (como fallback ou complemento)
       let geoData: any = {};
       try {
         if (ip && ip !== '::1' && ip !== '127.0.0.1') {
@@ -683,9 +691,72 @@ async function setupVite(app: any) {
       const { dbAdmin } = getAdminConfig();
       const now = new Date();
       
+      const currentLat = lat || geoData.lat;
+      const currentLon = lon || geoData.lon;
+
+      // Pegar os dados do usuário para verificar role
+      const userRef = dbAdmin.collection('users').doc(userId);
+      const userSnap = await userRef.get();
+      let isStudent = false;
+
+      if (userSnap.exists) {
+        const udata = userSnap.data();
+        if ((udata?.role || '').toLowerCase() === 'student') {
+          isStudent = true;
+        }
+
+        // Se estiver bloqueado previamente, já retorna erro
+        if (udata?.blocked) {
+           return res.status(403).json({ success: false, blocked: true, blockReason: udata.blockReason });
+        }
+      }
+
+      if (isStudent && sessionId) {
+        // --- PREVENÇÃO CONTRA ACESSOS SIMULTÂNEOS ---
+        // Atualiza a sessionId atual do aluno, forçando o logout nos outros aparelhos
+        await userRef.update({ currentSessionId: sessionId });
+
+        // --- GEOFENCING (BLOQUEIO POR DISTÂNCIA) ---
+        if (currentLat && currentLon) {
+          // Buscar última sessão para calcular a distância
+          const lastSessions = await dbAdmin.collection('user_sessions')
+            .where('userId', '==', userId)
+            .orderBy('createdAt', 'desc')
+            .limit(1)
+            .get();
+
+          if (!lastSessions.empty) {
+            const lastSession = lastSessions.docs[0].data();
+            const lastLat = lastSession.browserGeo?.lat || lastSession.geo?.lat;
+            const lastLon = lastSession.browserGeo?.lon || lastSession.geo?.lon;
+
+            if (lastLat && lastLon) {
+              const distanceKm = calculateDistance(lastLat, lastLon, currentLat, currentLon);
+              const lastTime = lastSession.createdAt.toDate().getTime();
+              const timeDiffHours = (now.getTime() - lastTime) / (1000 * 60 * 60);
+
+              // Calcula a velocidade (km/h) - Se for absurdamente alta (ex: > 800 km/h) bloqueia
+              if (timeDiffHours > 0) {
+                const speed = distanceKm / timeDiffHours;
+                if (speed > 800 && distanceKm > 100) {
+                  // Bloquear usuário por Geofencing Impossível
+                  await userRef.update({ 
+                    blocked: true, 
+                    blockReason: 'geofencing',
+                    blockDetails: `Distância: ${distanceKm.toFixed(2)}km em ${timeDiffHours.toFixed(2)}h (Velocidade: ${speed.toFixed(2)}km/h)` 
+                  });
+                  return res.status(403).json({ success: false, blocked: true, blockReason: 'geofencing' });
+                }
+              }
+            }
+          }
+        }
+      }
+
       await dbAdmin.collection('user_sessions').add({
         userId,
         userEmail: userEmail || null,
+        sessionId: sessionId || null,
         ip,
         userAgent,
         geo: geoData,

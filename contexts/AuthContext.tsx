@@ -8,9 +8,12 @@ import {
   User,
   UserCredential 
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { requestNotificationPermission } from '../services/notificationService';
+
+// Add to the top of AuthProvider:
+// const localSessionId = React.useRef(Math.random().toString(36).substring(2, 15));
 
 interface UserData {
   role?: string;
@@ -57,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userRole, setUserRole] = useState<'ADMIN' | 'STUDENT' | 'COLLABORATOR' | 'SELLER' | 'COPRODUTOR' | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const localSessionId = React.useRef(Math.random().toString(36).substring(2, 15));
 
   const refreshUserData = async () => {
     if (!currentUser) return;
@@ -75,7 +79,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ADMIN_EMAIL = 'insanusconcursos@gmail.com';
 
   useEffect(() => {
+    let unsubSnapshot: (() => void) | undefined;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (unsubSnapshot) unsubSnapshot();
+
       setCurrentUser(user);
       
       if (user) {
@@ -153,7 +161,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     fingerprint: getFingerprint(),
                     lat: browserGeo?.lat,
                     lon: browserGeo?.lon,
-                    accuracy: browserGeo?.accuracy
+                    accuracy: browserGeo?.accuracy,
+                    sessionId: localSessionId.current
                   })
                 }).catch(e => console.error("Session logging failed", e));
               };
@@ -179,6 +188,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 
                 const roleLower = (data.role || '').toLowerCase();
+
+                // Listen for changes to currentSessionId or blocked status
+                unsubSnapshot = onSnapshot(userDocRef, (docSnap) => {
+                  if (docSnap.exists()) {
+                    const snapData = docSnap.data();
+                    
+                    // Update user data context just in case
+                    setUserData(snapData as UserData);
+
+                    // Check if blocked by Geofencing or piracy
+                    if (snapData.blocked) {
+                      alert(`Acesso bloqueado: ${snapData.blockReason === 'geofencing' ? 'Identificamos acessos distintos em locais diferentes em um curto espaço de tempo. Entre em contato com o suporte: pedagogico.insanus@gmail.com' : 'Sua conta foi bloqueada. Contate o suporte.'}`);
+                      signOut(auth);
+                      return;
+                    }
+
+                    // Check simultaneous access (only for students)
+                    const snapRole = (snapData.role || '').toLowerCase();
+                    if (snapRole === 'student' && snapData.currentSessionId && snapData.currentSessionId !== localSessionId.current) {
+                      alert("Sua conta foi acessada em outro dispositivo. Você foi desconectado.");
+                      signOut(auth);
+                    }
+                  }
+                });
 
                 // Determine Role from Firestore Data
                 if (roleLower === 'collaborator') {
@@ -218,7 +251,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (unsubSnapshot) unsubSnapshot();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<UserCredential> => {
