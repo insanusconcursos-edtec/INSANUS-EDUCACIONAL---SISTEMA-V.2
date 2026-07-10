@@ -715,7 +715,7 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
           type,
           targetId,
           title: titlesMap[targetId] || 'Recurso Vinculado',
-          days: pAccess.days,
+          days: pAccess.days || 365,
           diaInicio: startsAt,
           diaFim: endsAt,
           isActive: true,
@@ -771,6 +771,10 @@ export const syncProductResourcesForStudents = async (productId: string, newReso
 
     if (hasAccessCountChanged || hasStatusChanged) {
       await commitIfNeeded();
+      
+      // DEBUG: Log data before updating
+      console.log(`[UserService] Updating user ${student.uid} with access array length: ${updatedAccess.length}`);
+      
       batch.update(doc(db, 'users', student.uid), { access: updatedAccess });
       batchCount++;
     }

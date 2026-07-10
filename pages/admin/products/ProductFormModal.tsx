@@ -49,12 +49,12 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
   const [qrCodeOffer, setQrCodeOffer] = useState<ProductOffer | null>(null);
 
   // Linked Resources State
-  const [linkedPlans, setLinkedPlans] = useState<string[]>(product?.linkedResources.plans || []);
-  const [linkedCourses, setLinkedCourses] = useState<string[]>(product?.linkedResources.onlineCourses || []);
-  const [linkedClasses, setLinkedClasses] = useState<string[]>(product?.linkedResources.presentialClasses || []);
-  const [linkedSimulated, setLinkedSimulated] = useState<string[]>(product?.linkedResources.simulated || []);
-  const [linkedLiveEvents, setLinkedLiveEvents] = useState<string[]>(product?.linkedResources.liveEvents || product?.liveEventIds || []);
-  const [linkedPresentialEvents, setLinkedPresentialEvents] = useState<string[]>(product?.linkedResources.presentialEvents || []);
+  const [linkedPlans, setLinkedPlans] = useState<string[]>(product?.linkedResources?.plans || []);
+  const [linkedCourses, setLinkedCourses] = useState<string[]>(product?.linkedResources?.onlineCourses || []);
+  const [linkedClasses, setLinkedClasses] = useState<string[]>(product?.linkedResources?.presentialClasses || []);
+  const [linkedSimulated, setLinkedSimulated] = useState<string[]>(product?.linkedResources?.simulated || []);
+  const [linkedLiveEvents, setLinkedLiveEvents] = useState<string[]>(product?.linkedResources?.liveEvents || product?.liveEventIds || []);
+  const [linkedPresentialEvents, setLinkedPresentialEvents] = useState<string[]>(product?.linkedResources?.presentialEvents || []);
 
   // Available Resources State
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
