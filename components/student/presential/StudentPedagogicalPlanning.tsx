@@ -15,10 +15,11 @@ import { teacherService } from '../../../services/teacherService';
 
 interface StudentPedagogicalPlanningProps {
   classId: string;
+  masterClassId?: string;
   totalMeetings?: number;
 }
 
-export function StudentPedagogicalPlanning({ classId, totalMeetings = 0 }: StudentPedagogicalPlanningProps) {
+export function StudentPedagogicalPlanning({ classId, masterClassId, totalMeetings = 0 }: StudentPedagogicalPlanningProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { currentUser, userData } = useAuth();
@@ -60,10 +61,12 @@ export function StudentPedagogicalPlanning({ classId, totalMeetings = 0 }: Stude
   useEffect(() => {
     const loadData = async () => {
       try {
+        const contentId = masterClassId || classId;
+
         const [eventsData, subjectsData, topicsData, teachersData] = await Promise.all([
           classScheduleService.getScheduleEventsByClass(classId),
-          curriculumService.getSubjectsByClass(classId),
-          curriculumService.getTopicsByClass(classId),
+          curriculumService.getSubjectsByClass(contentId),
+          curriculumService.getTopicsByClass(contentId),
           teacherService.getTeachers()
         ]);
 

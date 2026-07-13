@@ -24,9 +24,10 @@ import {
 
 interface StudentClassScheduleProps {
   classId: string;
+  masterClassId?: string;
 }
 
-export const StudentClassSchedule: React.FC<StudentClassScheduleProps> = ({ classId }) => {
+export const StudentClassSchedule: React.FC<StudentClassScheduleProps> = ({ classId, masterClassId }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState<ClassScheduleEvent[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -43,10 +44,12 @@ export const StudentClassSchedule: React.FC<StudentClassScheduleProps> = ({ clas
   useEffect(() => {
     const loadData = async () => {
       try {
+        const contentId = masterClassId || classId;
+
         const [eventsData, subjectsData, topicsData, teachersData, holidaysData] = await Promise.all([
           classScheduleService.getScheduleEventsByClass(classId),
-          curriculumService.getSubjectsByClass(classId),
-          curriculumService.getTopicsByClass(classId),
+          curriculumService.getSubjectsByClass(contentId),
+          curriculumService.getTopicsByClass(contentId),
           teacherService.getTeachers(),
           holidayService.getHolidays()
         ]);

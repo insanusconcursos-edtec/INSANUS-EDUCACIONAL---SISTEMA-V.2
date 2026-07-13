@@ -400,12 +400,16 @@ export const StudentPresentialDetails: React.FC = () => {
         )}
 
         {activeTab === 'SCHEDULE' && (
-          <StudentClassSchedule classId={currentClass.id} />
+          <StudentClassSchedule 
+            classId={currentClass.id} 
+            masterClassId={currentClass.masterClassId} 
+          />
         )}
 
         {activeTab === 'PLANNING' && (
           <StudentPedagogicalPlanning 
-            classId={currentClass.masterClassId || currentClass.id} 
+            classId={currentClass.id}
+            masterClassId={currentClass.masterClassId}
             totalMeetings={currentClass.totalMeetings}
           />
         )}
