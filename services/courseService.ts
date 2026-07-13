@@ -171,6 +171,19 @@ export const courseService = {
     }
   },
 
+  // Buscar curso por ID
+  getCourse: async (id: string): Promise<OnlineCourse | null> => {
+    try {
+      const docRef = doc(db, COLLECTION_NAME, id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) return { id: docSnap.id, ...docSnap.data() } as OnlineCourse;
+      return null;
+    } catch (error) {
+      console.error("Erro ao buscar curso:", error);
+      return null;
+    }
+  },
+
   // Atualizar curso
   updateCourse: async (id: string, data: Partial<CourseFormData>, bannerDesktopFile?: File, bannerMobileFile?: File) => {
     try {

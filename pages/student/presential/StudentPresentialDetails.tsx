@@ -25,9 +25,15 @@ export const StudentPresentialDetails: React.FC = () => {
   const moduleIdParam = searchParams.get('module');
   
   const [currentClass, setCurrentClass] = useState<Class | null>(null);
-  const [activeTab, setActiveTab] = useState<'TEACHING' | 'SCHEDULE' | 'PLANNING' | 'LIVE' | 'SIMULADOS'>('TEACHING');
+  const [activeTab, setActiveTab] = useState<'TEACHING' | 'SCHEDULE' | 'PLANNING' | 'LIVE' | 'SIMULADOS' | 'LINKED_COURSE'>('TEACHING');
   const [loading, setLoading] = useState(true);
   const [classLiveEvents, setClassLiveEvents] = useState<LiveEvent[]>([]);
+  
+  // Linked Course State
+  const [linkedCourse, setLinkedCourse] = useState<OnlineCourse | null>(null);
+  const [linkedCourseModules, setLinkedCourseModules] = useState<CourseModule[]>([]);
+  const [loadingLinkedCourse, setLoadingLinkedCourse] = useState(false);
+  const [selectedLinkedModule, setSelectedLinkedModule] = useState<CourseModule | null>(null);
 
   // Update current product for support
   useEffect(() => {
@@ -59,6 +65,7 @@ export const StudentPresentialDetails: React.FC = () => {
     { id: 'PLANNING', label: 'PLANEJAMENTO PEDAGÓGICO', icon: BookOpen, show: hasPlanning },
     { id: 'LIVE', label: '🔴 EVENTOS AO VIVO', icon: Radio, show: classLiveEvents.length > 0 },
     { id: 'SIMULADOS', label: 'SIMULADOS', icon: FileText, show: !!currentClass?.linkedSimulatedId },
+    { id: 'LINKED_COURSE', label: (currentClass?.linkedCourseTabLabel || 'CURSO ONLINE').toUpperCase(), icon: Video, show: !!currentClass?.linkedCourseId },
   ].filter(tab => tab.show), [hasModules, hasSchedule, hasPlanning, classLiveEvents, currentClass]);
 
   useEffect(() => {
@@ -103,13 +110,31 @@ export const StudentPresentialDetails: React.FC = () => {
             setModules(modulesData);
             setClassLiveEvents(liveEventsData);
 
+            // Fetch Linked Course if exists
+            if (data.linkedCourseId) {
+              setLoadingLinkedCourse(true);
+              try {
+                const [lCourse, lModules] = await Promise.all([
+                  courseService.getCourse(data.linkedCourseId),
+                  courseService.getModules(data.linkedCourseId)
+                ]);
+                setLinkedCourse(lCourse);
+                setLinkedCourseModules(lModules);
+              } catch (err) {
+                console.error("Error fetching linked course:", err);
+              } finally {
+                setLoadingLinkedCourse(false);
+              }
+            }
+
             // Adjust active tab if current one is hidden
             const availableIds = [
               ...(hModules ? ['TEACHING'] : []),
               ...(hSchedule ? ['SCHEDULE'] : []),
               ...(hPlanning ? ['PLANNING'] : []),
               ...(hLive ? ['LIVE'] : []),
-              ...(hSimulated ? ['SIMULADOS'] : [])
+              ...(hSimulated ? ['SIMULADOS'] : []),
+              ...(data.linkedCourseId ? ['LINKED_COURSE'] : [])
             ];
 
             if (availableIds.length > 0 && !availableIds.includes(activeTab)) {
@@ -204,6 +229,10 @@ export const StudentPresentialDetails: React.FC = () => {
     updatedAt: currentClass.updatedAt || new Date().toISOString(),
     active: true
   };
+
+  // Netflix-style horizontal scroll container classes
+  const netflixContainerClasses = "flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory scroll-smooth";
+  const netflixItemClasses = "flex-none w-[200px] sm:w-[240px] md:w-[280px] snap-start";
 
   return (
     <div className="min-h-screen bg-black text-gray-100 pb-20">
@@ -314,13 +343,54 @@ export const StudentPresentialDetails: React.FC = () => {
                     Nenhum módulo disponível para esta turma.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className={netflixContainerClasses}>
                     {modules.map(module => (
-                      <StudentModuleCard 
-                        key={module.id} 
-                        module={module} 
-                        onClick={setSelectedModule} 
-                      />
+                      <div key={module.id} className={netflixItemClasses}>
+                        <StudentModuleCard 
+                          module={module} 
+                          onClick={setSelectedModule} 
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          )
+        )}
+
+        {activeTab === 'LINKED_COURSE' && currentClass?.linkedCourseId && (
+          selectedLinkedModule ? (
+            <CoursePlayer 
+              course={linkedCourse!} 
+              module={selectedLinkedModule} 
+              onBack={() => setSelectedLinkedModule(null)} 
+            />
+          ) : (
+            loadingLinkedCourse ? (
+              <div className="flex gap-4 overflow-hidden">
+                {[1,2,3].map(i => <div key={i} className="w-60 h-[300px] bg-gray-900 rounded-lg animate-pulse" />)}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-200 flex items-center">
+                  <Video className="mr-2 text-red-500" />
+                  {currentClass?.linkedCourseTabLabel || 'Módulos do Curso'}
+                </h3>
+                
+                {linkedCourseModules.length === 0 ? (
+                  <div className="p-8 text-center bg-gray-900/50 rounded-xl border border-gray-800 text-gray-500">
+                    Nenhum módulo disponível para este curso.
+                  </div>
+                ) : (
+                  <div className={netflixContainerClasses}>
+                    {linkedCourseModules.map(module => (
+                      <div key={module.id} className={netflixItemClasses}>
+                        <StudentModuleCard 
+                          module={module} 
+                          onClick={setSelectedLinkedModule} 
+                        />
+                      </div>
                     ))}
                   </div>
                 )}

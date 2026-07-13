@@ -4,6 +4,8 @@ import { Class } from '../../../../../types/class';
 import { classMetadataService, MetadataItem } from '../../../../../services/classMetadataService';
 import { getSimulatedClasses, SimulatedClass } from '../../../../../services/simulatedService';
 import { classService } from '../../../../../services/classService';
+import { courseService } from '../../../../../services/courseService';
+import { OnlineCourse } from '../../../../../types/course';
 
 interface ClassIdentityFormProps {
   data: Partial<Class>;
@@ -30,22 +32,25 @@ export const ClassIdentityForm: React.FC<ClassIdentityFormProps> = ({
   const [organizations, setOrganizations] = useState<MetadataItem[]>([]);
   const [simulatedClasses, setSimulatedClasses] = useState<SimulatedClass[]>([]);
   const [masterClasses, setMasterClasses] = useState<Class[]>([]);
+  const [onlineCourses, setOnlineCourses] = useState<OnlineCourse[]>([]);
 
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const [cats, subs, orgs, simClasses, allClasses] = await Promise.all([
+        const [cats, subs, orgs, simClasses, allClasses, courses] = await Promise.all([
           classMetadataService.getCategories(),
           classMetadataService.getSubcategories(),
           classMetadataService.getOrganizations(),
           getSimulatedClasses(),
-          classService.getClasses()
+          classService.getClasses(),
+          courseService.getCourses()
         ]);
         setCategories(cats);
         setSubcategories(subs);
         setOrganizations(orgs);
         setSimulatedClasses(simClasses);
         setMasterClasses(allClasses.filter(c => c.isMasterClass && c.id !== data.id));
+        setOnlineCourses(courses);
       } catch (error) {
         console.error("Error fetching metadata:", error);
       }
@@ -657,6 +662,42 @@ export const ClassIdentityForm: React.FC<ClassIdentityFormProps> = ({
           </select>
           <p className="text-[10px] text-zinc-500 mt-1 uppercase">
             Ao vincular, uma aba &quot;SIMULADOS&quot; será ativada na área do aluno desta turma.
+          </p>
+        </div>
+
+        {/* Curso Online Vinculado */}
+        <div className="col-span-2 border-t border-zinc-800 pt-6">
+          <label className="block text-xs font-bold text-zinc-400 uppercase mb-1 flex items-center gap-2">
+            <Video className="w-4 h-4 text-brand-red" />
+            Vincular Curso Online
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <select
+                value={data.linkedCourseId || ''}
+                onChange={(e) => onChange({ linkedCourseId: e.target.value || null })}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-red transition-colors appearance-none"
+              >
+                <option value="">Nenhum curso vinculado</option>
+                {onlineCourses.map((course) => (
+                  <option key={course.id} value={course.id}>{course.title}</option>
+                ))}
+              </select>
+            </div>
+            {data.linkedCourseId && (
+              <div>
+                <input 
+                  type="text"
+                  placeholder="Nome da Aba (Ex: CURSO ONLINE)"
+                  value={data.linkedCourseTabLabel || ''}
+                  onChange={(e) => onChange({ linkedCourseTabLabel: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-red transition-colors placeholder-zinc-600 uppercase font-bold"
+                />
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1 uppercase">
+            Ao vincular, uma nova aba personalizada será ativada na área do aluno desta turma com o conteúdo do curso selecionado.
           </p>
         </div>
       </div>

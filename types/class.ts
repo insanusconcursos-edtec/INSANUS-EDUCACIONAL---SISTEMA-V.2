@@ -61,4 +61,6 @@ export interface Class {
   };
   masterClassId?: string;
   isMasterClass?: boolean;
+  linkedCourseId?: string | null;
+  linkedCourseTabLabel?: string;
 }
