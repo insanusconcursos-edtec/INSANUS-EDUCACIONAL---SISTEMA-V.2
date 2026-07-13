@@ -477,9 +477,9 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
   const liveEventAccess = localStudent.access?.filter(a => a.type === 'live_events' && a.isActive) || [];
 
   return (
-    <div className="fixed inset-0 z-40 bg-gray-950 pt-[120px] pb-12 overflow-y-auto custom-scrollbar">
+    <div className="fixed inset-0 z-40 bg-gray-950 pt-[100px] pb-6 flex flex-col overflow-hidden">
       
-      <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col relative min-h-full">
+      <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col flex-1 min-h-0 relative">
         
         {/* Header with Back Button */}
         <div className="flex items-center gap-6 mb-8 border-b border-gray-800 pb-6">
@@ -509,7 +509,7 @@ const StudentAccessManager: React.FC<StudentAccessManagerProps> = ({ student: in
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-x-auto flex gap-6 pb-4 w-full snap-x custom-scrollbar">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden flex gap-6 pb-4 w-full snap-x custom-scrollbar">
             
             {/* COLUMN 0: PRODUCTS (PURPLE) */}
             <div className="flex flex-col min-w-[320px] snap-start border border-zinc-900 bg-zinc-900/10 rounded-xl overflow-hidden">
