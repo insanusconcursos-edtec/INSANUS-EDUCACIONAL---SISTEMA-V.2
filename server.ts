@@ -658,7 +658,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
               const lastLat = lastSession.browserGeo?.lat || lastSession.geo?.lat;
               const lastLon = lastSession.browserGeo?.lon || lastSession.geo?.lon;
 
-              if (lastLat && lastLon) {
+              const sameFingerprint = fingerprint && lastSession.fingerprint === fingerprint;
+              const sameIp = ip && lastSession.ip === ip;
+
+              // Se for o mesmo dispositivo ou mesmo IP, ignorar geofencing agressivo
+              // Isso evita bloqueios quando o gateway da operadora muda ou quando alterna entre Wi-Fi e 4G/5G
+              if (lastLat && lastLon && !sameFingerprint && !sameIp) {
                 const distanceKm = calculateDistance(lastLat, lastLon, currentLat, currentLon);
                 const lastTime = lastSession.createdAt.toDate().getTime();
                 const timeDiffHours = (now.getTime() - lastTime) / (1000 * 60 * 60);
@@ -666,12 +671,17 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
                 // Calcula a velocidade (km/h) - Se for absurdamente alta (ex: > 800 km/h) bloqueia
                 if (timeDiffHours > 0) {
                   const speed = distanceKm / timeDiffHours;
-                  if (speed > 800 && distanceKm > 100) {
+                  
+                  // Só bloqueia se:
+                  // 1. Velocidade > 800km/h
+                  // 2. Distância > 150km (aumentado de 100 para dar mais margem a erros de IP Geo)
+                  // 3. O intervalo for menor que 4 horas (evita falsos positivos em viagens reais de avião)
+                  if (speed > 800 && distanceKm > 150 && timeDiffHours < 4) {
                     // Bloquear usuário por Geofencing Impossível
                     await userRef.update({ 
                       blocked: true, 
                       blockReason: 'geofencing',
-                      blockDetails: `Distância: ${distanceKm.toFixed(2)}km em ${timeDiffHours.toFixed(2)}h (Velocidade: ${speed.toFixed(2)}km/h)` 
+                      blockDetails: `Distância: ${distanceKm.toFixed(2)}km em ${timeDiffHours.toFixed(2)}h (Velocidade: ${speed.toFixed(2)}km/h). IP: ${ip}. Fingerprint: ${fingerprint}` 
                     });
                     return res.status(403).json({ success: false, blocked: true, blockReason: 'geofencing' });
                   }

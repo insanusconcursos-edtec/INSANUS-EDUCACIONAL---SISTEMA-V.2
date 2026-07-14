@@ -60,7 +60,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userRole, setUserRole] = useState<'ADMIN' | 'STUDENT' | 'COLLABORATOR' | 'SELLER' | 'COPRODUTOR' | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-  const localSessionId = React.useRef(Math.random().toString(36).substring(2, 15));
+  
+  // Persistir o sessionId no sessionStorage para evitar que recarregamentos de página
+  // contem como novas sessões simultâneas no mesmo navegador/aba.
+  const localSessionId = React.useRef<string>(null!);
+  if (!localSessionId.current) {
+    const key = 'insanus_session_id';
+    try {
+      let id = typeof window !== 'undefined' ? sessionStorage.getItem(key) : null;
+      if (!id) {
+        id = Math.random().toString(36).substring(2, 15);
+        if (typeof window !== 'undefined') sessionStorage.setItem(key, id);
+      }
+      localSessionId.current = id;
+    } catch (e) {
+      localSessionId.current = Math.random().toString(36).substring(2, 15);
+    }
+  }
 
   const refreshUserData = async () => {
     if (!currentUser) return;
