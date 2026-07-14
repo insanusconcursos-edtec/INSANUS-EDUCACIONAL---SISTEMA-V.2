@@ -85,13 +85,13 @@ export function CoursePlayer({ course, module, onBack }: CoursePlayerProps) {
   };
 
   return (
-    <div className="fixed top-[64px] left-0 right-0 bottom-0 bg-black z-50 flex flex-col lg:flex-row overflow-hidden animate-in fade-in">
+    <div className="fixed top-[64px] left-0 right-0 bottom-0 bg-black z-50 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden animate-in fade-in custom-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
       
       {/* ÁREA DE CONTEÚDO (Esquerda) */}
-      <div className="flex-1 flex flex-col min-h-0 bg-black order-1 lg:order-1 relative border-r border-gray-900">
+      <div className="w-full lg:flex-1 flex flex-col bg-black order-1 lg:order-1 relative lg:border-r border-gray-900 h-auto lg:h-full lg:min-h-0">
         
         {/* Barra de Navegação Interna */}
-        <div className="w-full h-12 border-b border-gray-800 bg-[#0f1114] flex items-center justify-between px-4 shrink-0 z-20">
+        <div className="w-full h-12 border-b border-gray-800 bg-[#0f1114] flex items-center justify-between px-4 shrink-0 sticky top-0 lg:relative z-20">
             <div className="flex items-center gap-4">
                 <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white text-xs font-bold uppercase transition-colors">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -128,14 +128,14 @@ export function CoursePlayer({ course, module, onBack }: CoursePlayerProps) {
             )}
         </div>
 
-        {/* Área de Scroll do Conteúdo */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-black">
+        {/* Área de Conteúdo */}
+        <div className="w-full h-auto lg:flex-1 lg:overflow-y-auto custom-scrollbar bg-black">
             {loading ? (
-                <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-600"></div></div>
+                <div className="flex items-center justify-center py-20 lg:h-full"><div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-600"></div></div>
             ) : activeLesson ? (
                 <CoursePlayerContent lesson={activeLesson} />
             ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <div className="flex flex-col items-center justify-center py-20 lg:h-full text-gray-500">
                     <p>Selecione uma aula para começar.</p>
                 </div>
             )}
@@ -143,7 +143,7 @@ export function CoursePlayer({ course, module, onBack }: CoursePlayerProps) {
       </div>
 
       {/* SIDEBAR (Direita) */}
-      <div className="w-full lg:w-96 bg-[#121418] border-t lg:border-t-0 lg:border-l border-gray-800 shrink-0 h-[40vh] lg:h-full flex flex-col order-2 lg:order-2 z-50">
+      <div className="w-full lg:w-96 bg-[#121418] border-t lg:border-t-0 lg:border-l border-gray-800 shrink-0 h-auto lg:h-full flex flex-col order-2 lg:order-2 z-10">
         <CoursePlayerSidebar 
             structure={structure} 
             activeLessonId={activeLesson?.id || null} 

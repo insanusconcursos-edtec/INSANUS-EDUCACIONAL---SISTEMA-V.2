@@ -64,9 +64,9 @@ export function CoursePlayerSidebar({
     <div className="
         w-full lg:w-96 
         bg-[#121418] 
-        border-t lg:border-t-0 lg:border-l border-gray-800 
+        lg:border-l border-gray-800 
         flex flex-col 
-        h-[500px] lg:h-full 
+        h-auto lg:h-full 
         shrink-0 
         order-2 lg:order-2
     ">
@@ -89,7 +89,7 @@ export function CoursePlayerSidebar({
       </div>
 
       {/* Lista Scrollável */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+      <div className="flex-1 lg:overflow-y-auto custom-scrollbar p-2 space-y-1">
         
         {/* 1. ITENS ÓRFÃOS (Legados) */}
         {navigationGroups.orphans.map(item => {

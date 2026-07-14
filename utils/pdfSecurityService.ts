@@ -48,6 +48,20 @@ export const applyWatermarkToPdf = async (existingPdfBytes: ArrayBuffer, userDat
 };
 
 export const openWatermarkedPdf = async (pdfUrl: string, userData: UserWatermarkData) => {
+  // Em dispositivos móveis/iOS, window.open deve ser chamado o mais próximo possível do clique do usuário.
+  // No entanto, como temos um processamento pesado assíncrono, o Safari costuma bloquear.
+  // Uma estratégia é abrir a aba imediatamente e depois mudar o location.
+  
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  let newWindow: Window | null = null;
+
+  if (isMobile) {
+    newWindow = window.open('', '_blank');
+    if (newWindow) {
+      newWindow.document.write('<p style="font-family: sans-serif; text-align: center; margin-top: 50px; color: #666;">Gerando documento seguro...<br>Aguarde um momento.</p>');
+    }
+  }
+
   try {
     // 1. Fetch do PDF original com modo CORS explícito
     const response = await fetch(pdfUrl, { 
@@ -66,14 +80,19 @@ export const openWatermarkedPdf = async (pdfUrl: string, userData: UserWatermark
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const blobUrl = URL.createObjectURL(blob);
 
-    // 8. Abrir em nova aba
-    window.open(blobUrl, '_blank');
+    // 8. Abrir/Atualizar janela
+    if (newWindow) {
+      newWindow.location.href = blobUrl;
+    } else {
+      window.open(blobUrl, '_blank');
+    }
 
     // Revogar URL após 1 minuto para liberar memória
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 
   } catch (error: any) {
     console.error("Erro crítico no processamento de segurança do PDF:", error);
+    if (newWindow) newWindow.close();
     
     // Repassar erro mais amigável
     if (error.message.includes('Failed to fetch')) {
