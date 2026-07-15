@@ -452,7 +452,6 @@ export const courseService = {
       // Mapeamentos para manter integridade referencial
       const groupMapping: Record<string, string> = {};
       const subModuleMapping: Record<string, string> = {};
-      const lessonMapping: Record<string, string> = {};
 
       // 3. Buscar Grupos, Submódulos e Aulas em paralelo
       const [groups, subModules, lessons] = await Promise.all([
@@ -461,11 +460,19 @@ export const courseService = {
         courseService.getLessons(sourceModuleId)
       ]);
 
+      // 3.1 Pre-mapear IDs de Grupos para garantir que todos existam antes do processamento
+      groups.forEach(group => {
+        groupMapping[group.id] = doc(collection(db, GROUPS_COLLECTION)).id;
+      });
+
+      // 3.2 Pre-mapear IDs de Submódulos (Pastas) para garantir que parentId possa ser resolvido
+      subModules.forEach(sub => {
+        subModuleMapping[sub.id] = doc(collection(db, SUBMODULES_COLLECTION)).id;
+      });
+
       // 4. Processar Grupos
       groups.forEach(group => {
-        const newGroupRef = doc(collection(db, GROUPS_COLLECTION));
-        groupMapping[group.id] = newGroupRef.id;
-        
+        const newGroupRef = doc(db, GROUPS_COLLECTION, groupMapping[group.id]);
         const newGroupData: any = {
           ...group,
           moduleId: newModuleRef.id
@@ -476,13 +483,12 @@ export const courseService = {
 
       // 5. Processar Submódulos (Pastas)
       subModules.forEach(sub => {
-        const newSubRef = doc(collection(db, SUBMODULES_COLLECTION));
-        subModuleMapping[sub.id] = newSubRef.id;
-        
+        const newSubRef = doc(db, SUBMODULES_COLLECTION, subModuleMapping[sub.id]);
         const newSubData: any = {
           ...sub,
           moduleId: newModuleRef.id,
-          groupId: sub.groupId ? groupMapping[sub.groupId] : null
+          groupId: sub.groupId ? (groupMapping[sub.groupId] || null) : null,
+          parentId: sub.parentId ? (subModuleMapping[sub.parentId] || null) : null
         };
         delete newSubData.id;
         operations.push({ ref: newSubRef, data: newSubData });
@@ -491,13 +497,12 @@ export const courseService = {
       // 6. Processar Aulas e seus conteúdos
       await Promise.all(lessons.map(async (lesson) => {
         const newLessonRef = doc(collection(db, LESSONS_COLLECTION));
-        lessonMapping[lesson.id] = newLessonRef.id;
         
         const newLessonData: any = {
           ...lesson,
           moduleId: newModuleRef.id,
-          groupId: lesson.groupId ? groupMapping[lesson.groupId] : null,
-          subModuleId: lesson.subModuleId ? subModuleMapping[lesson.subModuleId] : null
+          groupId: lesson.groupId ? (groupMapping[lesson.groupId] || null) : null,
+          subModuleId: lesson.subModuleId ? (subModuleMapping[lesson.subModuleId] || null) : null
         };
         delete newLessonData.id;
         operations.push({ ref: newLessonRef, data: newLessonData });
