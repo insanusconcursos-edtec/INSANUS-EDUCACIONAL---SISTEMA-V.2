@@ -655,33 +655,46 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
             if (!lastSessions.empty) {
               const lastSession = lastSessions.docs[0].data();
+              
+              // Determinar a melhor fonte de localização para a sessão atual e anterior
+              const currentIsGps = !!(lat && lon);
               const lastLat = lastSession.browserGeo?.lat || lastSession.geo?.lat;
               const lastLon = lastSession.browserGeo?.lon || lastSession.geo?.lon;
+              const lastIsGps = !!(lastSession.browserGeo?.lat);
 
               const sameFingerprint = fingerprint && lastSession.fingerprint === fingerprint;
               const sameIp = ip && lastSession.ip === ip;
 
-              // Se for o mesmo dispositivo ou mesmo IP, ignorar geofencing agressivo
-              // Isso evita bloqueios quando o gateway da operadora muda ou quando alterna entre Wi-Fi e 4G/5G
+              // REGRAS PARA EVITAR FALSOS POSITIVOS EM REDES MÓVEIS (Manaus vs Porto Velho):
+              // 1. Se for o mesmo dispositivo ou mesmo IP, ignorar geofencing.
+              // 2. Se as fontes forem diferentes (ex: GPS atual vs IP anterior), ser extremamente tolerante.
+              
               if (lastLat && lastLon && !sameFingerprint && !sameIp) {
                 const distanceKm = calculateDistance(lastLat, lastLon, currentLat, currentLon);
                 const lastTime = lastSession.createdAt.toDate().getTime();
                 const timeDiffHours = (now.getTime() - lastTime) / (1000 * 60 * 60);
 
-                // Calcula a velocidade (km/h) - Se for absurdamente alta (ex: > 800 km/h) bloqueia
-                if (timeDiffHours > 0) {
+                // Só processa se houver uma diferença de tempo mínima
+                if (timeDiffHours > 0.05) { 
                   const speed = distanceKm / timeDiffHours;
                   
-                  // Só bloqueia se:
-                  // 1. Velocidade > 800km/h
-                  // 2. Distância > 150km (aumentado de 100 para dar mais margem a erros de IP Geo)
-                  // 3. O intervalo for menor que 4 horas (evita falsos positivos em viagens reais de avião)
-                  if (speed > 800 && distanceKm > 150 && timeDiffHours < 4) {
+                  // Limites dinâmicos:
+                  let speedLimit = 800; // km/h (velocidade de avião comercial)
+                  let minDistance = 150; // km
+                  
+                  // Caso 1: Fontes mistas (GPS vs IP)
+                  // Redes móveis (Claro/Vivo) roteiam Porto Velho -> Manaus (aprox 800km de distância de IP)
+                  if (currentIsGps !== lastIsGps) {
+                    speedLimit = 1200; // Tolerância para saltos de gateway
+                    minDistance = 900;  // Manaus-PVH é ~760km em linha reta, usamos 900km para segurança
+                  }
+
+                  if (speed > speedLimit && distanceKm > minDistance && timeDiffHours < 4) {
                     // Bloquear usuário por Geofencing Impossível
                     await userRef.update({ 
                       blocked: true, 
                       blockReason: 'geofencing',
-                      blockDetails: `Distância: ${distanceKm.toFixed(2)}km em ${timeDiffHours.toFixed(2)}h (Velocidade: ${speed.toFixed(2)}km/h). IP: ${ip}. Fingerprint: ${fingerprint}` 
+                      blockDetails: `Fontes: ${currentIsGps ? 'GPS' : 'IP'} vs ${lastIsGps ? 'GPS' : 'IP'}. Distância: ${distanceKm.toFixed(2)}km em ${timeDiffHours.toFixed(2)}h (${speed.toFixed(2)}km/h). IP: ${ip}.` 
                     });
                     return res.status(403).json({ success: false, blocked: true, blockReason: 'geofencing' });
                   }

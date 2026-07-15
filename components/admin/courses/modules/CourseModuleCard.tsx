@@ -9,12 +9,14 @@ const ArrowRight = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24
 const LockIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>;
 const ContentIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
 const MigrateIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>;
+const CopyIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>;
 
 interface CourseModuleCardProps {
   module: CourseModule;
   onEdit: (module: CourseModule) => void;
   onDelete: (module: CourseModule) => void;
   onMigrate: (module: CourseModule) => void;
+  onCopy: (module: CourseModule) => void;
   onMoveLeft: (module: CourseModule) => void;
   onMoveRight: (module: CourseModule) => void;
   onManageContent: (module: CourseModule) => void;
@@ -23,7 +25,7 @@ interface CourseModuleCardProps {
 }
 
 export const CourseModuleCard: React.FC<CourseModuleCardProps> = ({ 
-  module, onEdit, onDelete, onMigrate, onMoveLeft, onMoveRight, onManageContent, isFirst, isLast 
+  module, onEdit, onDelete, onMigrate, onCopy, onMoveLeft, onMoveRight, onManageContent, isFirst, isLast 
 }) => {
   
   // Formata data se existir
@@ -70,7 +72,7 @@ export const CourseModuleCard: React.FC<CourseModuleCardProps> = ({
       </div>
 
       {/* Barra de Ações Inferior */}
-      <div className="mt-2 grid grid-cols-5 gap-1 bg-[#121418] p-1 rounded-lg border border-gray-800">
+      <div className="mt-2 grid grid-cols-6 gap-1 bg-[#121418] p-1 rounded-lg border border-gray-800">
         <button onClick={() => onMoveLeft(module)} disabled={isFirst} className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-700 rounded disabled:opacity-30 flex justify-center" title="Mover para esquerda">
           <ArrowLeft />
         </button>
@@ -85,6 +87,14 @@ export const CourseModuleCard: React.FC<CourseModuleCardProps> = ({
           title="Migrar para dentro de outra disciplina"
         >
           <MigrateIcon />
+        </button>
+
+        <button 
+          onClick={() => onCopy(module)} 
+          className="p-1.5 text-gray-500 hover:text-green-400 hover:bg-gray-700 rounded flex justify-center"
+          title="Copiar para outro curso"
+        >
+          <CopyIcon />
         </button>
 
         <button onClick={() => onDelete(module)} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-gray-700 rounded flex justify-center" title="Excluir módulo">

@@ -419,6 +419,134 @@ export const courseService = {
     }
   },
 
+  // Copiar Módulo (Deep Copy de uma única disciplina)
+  copyModule: async (sourceModuleId: string, targetCourseId: string) => {
+    try {
+      console.log(`[COPY_MODULE] Iniciando cópia do módulo ${sourceModuleId} para o curso ${targetCourseId}`);
+      
+      const sourceModule = await courseService.getModule(sourceModuleId);
+      if (!sourceModule) throw new Error("Módulo de origem não encontrado");
+
+      // 1. Determinar a ordem (será o último)
+      const q = query(
+        collection(db, MODULES_COLLECTION), 
+        where('courseId', '==', targetCourseId),
+        orderBy('order', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const lastOrder = snapshot.docs.length > 0 ? snapshot.docs[0].data().order : 0;
+
+      const operations: { ref: any, data: object }[] = [];
+
+      // 2. Criar novo módulo (Metadata)
+      const newModuleRef = doc(collection(db, MODULES_COLLECTION));
+      const newModuleData: any = {
+        ...sourceModule,
+        title: `${sourceModule.title} (Cópia)`,
+        courseId: targetCourseId,
+        order: lastOrder + 1
+      };
+      delete newModuleData.id;
+      operations.push({ ref: newModuleRef, data: newModuleData });
+
+      // Mapeamentos para manter integridade referencial
+      const groupMapping: Record<string, string> = {};
+      const subModuleMapping: Record<string, string> = {};
+      const lessonMapping: Record<string, string> = {};
+
+      // 3. Buscar Grupos, Submódulos e Aulas em paralelo
+      const [groups, subModules, lessons] = await Promise.all([
+        courseService.getGroups(sourceModuleId),
+        courseService.getSubModules(sourceModuleId),
+        courseService.getLessons(sourceModuleId)
+      ]);
+
+      // 4. Processar Grupos
+      groups.forEach(group => {
+        const newGroupRef = doc(collection(db, GROUPS_COLLECTION));
+        groupMapping[group.id] = newGroupRef.id;
+        
+        const newGroupData: any = {
+          ...group,
+          moduleId: newModuleRef.id
+        };
+        delete newGroupData.id;
+        operations.push({ ref: newGroupRef, data: newGroupData });
+      });
+
+      // 5. Processar Submódulos (Pastas)
+      subModules.forEach(sub => {
+        const newSubRef = doc(collection(db, SUBMODULES_COLLECTION));
+        subModuleMapping[sub.id] = newSubRef.id;
+        
+        const newSubData: any = {
+          ...sub,
+          moduleId: newModuleRef.id,
+          groupId: sub.groupId ? groupMapping[sub.groupId] : null
+        };
+        delete newSubData.id;
+        operations.push({ ref: newSubRef, data: newSubData });
+      });
+
+      // 6. Processar Aulas e seus conteúdos
+      await Promise.all(lessons.map(async (lesson) => {
+        const newLessonRef = doc(collection(db, LESSONS_COLLECTION));
+        lessonMapping[lesson.id] = newLessonRef.id;
+        
+        const newLessonData: any = {
+          ...lesson,
+          moduleId: newModuleRef.id,
+          groupId: lesson.groupId ? groupMapping[lesson.groupId] : null,
+          subModuleId: lesson.subModuleId ? subModuleMapping[lesson.subModuleId] : null
+        };
+        delete newLessonData.id;
+        operations.push({ ref: newLessonRef, data: newLessonData });
+
+        // 7. Conteúdos da Aula
+        const contents = await courseService.getContents(lesson.id);
+        contents.forEach(content => {
+          const newContentRef = doc(collection(db, CONTENTS_COLLECTION));
+          const newContentData: any = {
+            ...content,
+            lessonId: newLessonRef.id
+          };
+          delete newContentData.id;
+          operations.push({ ref: newContentRef, data: newContentData });
+        });
+      }));
+
+      console.log(`[COPY_MODULE] Total de operações preparadas: ${operations.length}. Iniciando gravação em lotes.`);
+
+      // 8. Execução em Lotes
+      const MAX_BATCH_SIZE = 400;
+      let batch = writeBatch(db);
+      let operationCounter = 0;
+      const commitPromises: Promise<void>[] = [];
+
+      for (const op of operations) {
+        batch.set(op.ref, sanitizeData(op.data));
+        operationCounter++;
+        if (operationCounter === MAX_BATCH_SIZE) {
+          commitPromises.push(batch.commit());
+          batch = writeBatch(db);
+          operationCounter = 0;
+        }
+      }
+
+      if (operationCounter > 0) {
+        commitPromises.push(batch.commit());
+      }
+
+      await Promise.all(commitPromises);
+      console.log(`[COPY_MODULE] Cópia concluída com sucesso! Novo ID: ${newModuleRef.id}`);
+
+      return newModuleRef.id;
+    } catch (error) {
+      console.error("Erro ao copiar módulo:", error);
+      throw error;
+    }
+  },
+
   // Upload de Capa
   uploadCover: async (file: File): Promise<string> => {
     try {

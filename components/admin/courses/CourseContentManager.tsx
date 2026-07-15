@@ -11,6 +11,7 @@ import { Layout, FileText, Users, Settings, Code } from 'lucide-react';
 import { AdminCourseMaintenanceTab } from './AdminCourseMaintenanceTab'; // Nova Aba de Manutenção
 import { ExportCourseStructureModal } from './modals/ExportCourseStructureModal';
 import { MigrateModuleModal } from './modals/MigrateModuleModal';
+import { CopyModuleModal } from './modals/CopyModuleModal';
 
 interface CourseContentManagerProps {
   course: OnlineCourse;
@@ -28,6 +29,7 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
   const [editingModule, setEditingModule] = useState<CourseModule | null>(null);
   const [moduleToDelete, setModuleToDelete] = useState<CourseModule | null>(null);
   const [moduleToMigrate, setModuleToMigrate] = useState<CourseModule | null>(null);
+  const [moduleToCopy, setModuleToCopy] = useState<CourseModule | null>(null);
   const [managingModule, setManagingModule] = useState<CourseModule | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -94,6 +96,18 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
     } catch (error) {
       console.error("Erro ao migrar módulo:", error);
       alert("Erro ao realizar a migração. Verifique o console.");
+    }
+  };
+
+  const handleCopyModule = async (targetCourseId: string) => {
+    if (!moduleToCopy) return;
+    try {
+      await courseService.copyModule(moduleToCopy.id, targetCourseId);
+      // Opcional: Notificar sucesso ou redirecionar
+      setModuleToCopy(null);
+    } catch (error) {
+      console.error("Erro ao copiar módulo:", error);
+      throw error; // Deixa o modal lidar com o erro
     }
   };
 
@@ -194,6 +208,7 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
                         onEdit={(m) => { setEditingModule(m); setIsModuleModalOpen(true); }}
                         onDelete={setModuleToDelete}
                         onMigrate={setModuleToMigrate}
+                        onCopy={setModuleToCopy}
                         onMoveLeft={() => { handleReorder(index, 'left'); }}
                         onMoveRight={() => { handleReorder(index, 'right'); }}
                         onManageContent={handleManageInternal}
@@ -236,6 +251,13 @@ export function CourseContentManager({ course, onBack }: CourseContentManagerPro
         sourceModule={moduleToMigrate}
         availableModules={modules}
         onConfirm={handleMigrateModule}
+      />
+
+      <CopyModuleModal 
+        isOpen={!!moduleToCopy}
+        onClose={() => setModuleToCopy(null)}
+        sourceModule={moduleToCopy}
+        onConfirm={handleCopyModule}
       />
     </div>
   );
