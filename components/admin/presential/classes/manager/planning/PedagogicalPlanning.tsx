@@ -57,6 +57,7 @@ export function PedagogicalPlanning({ subjects, topics, modules, events, teacher
   const handleOpenPdf = async (url: string, _title: string) => {
     try {
       await openWatermarkedPdf(url, {
+        uid: currentUser?.uid,
         email: currentUser?.email || 'admin@insanus.com',
         cpf: userData?.cpf || '000.000.000-00'
       });

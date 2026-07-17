@@ -49,7 +49,7 @@ export const toPlainObject = (obj: any, seen = new WeakSet()): any => {
   }
 
   // Se for um DocumentReference ou algo com path (Firebase)
-  if (obj.path && typeof obj.path === 'string' && (obj.id || obj.parent)) {
+  if (obj.path && typeof obj.path === 'string' && (obj.id || obj.parent) && (obj.type === 'document' || obj.firestore)) {
     return obj.path;
   }
 
@@ -60,7 +60,7 @@ export const toPlainObject = (obj: any, seen = new WeakSet()): any => {
   }
 
   // Se chegar aqui e não for um "Plain Object" (ex: Snapshot, Query), mas tiver dados
-  if (typeof obj.data === 'function' && typeof obj.get === 'function') {
+  if (obj && typeof obj.data === 'function' && typeof obj.get === 'function' && obj.ref) {
     try {
       const data = obj.data();
       return toPlainObject({ id: obj.id, ...data }, seen);

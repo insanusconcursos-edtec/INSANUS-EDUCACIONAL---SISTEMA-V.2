@@ -39,6 +39,9 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
   const [groupToMigrate, setGroupToMigrate] = useState<CourseGroup | null>(null);
   const [lessonToMove, setLessonToMove] = useState<CourseLesson | null>(null);
   const [folderToMove, setFolderToMove] = useState<CourseSubModule | null>(null);
+  const [folderToCopy, setFolderToCopy] = useState<CourseSubModule | null>(null);
+  const [allCourseModules, setAllCourseModules] = useState<CourseModule[]>([]);
+  const [isCopying, setIsCopying] = useState(false);
 
   // Estado para Drill-down de Aula (Gerenciar Conteúdos)
   const [managingLesson, setManagingLesson] = useState<CourseLesson | null>(null);
@@ -544,6 +547,21 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
     }
   };
 
+  const handleCopyFolder = async (targetModuleId: string) => {
+    if (!folderToCopy) return;
+    setIsCopying(true);
+    try {
+      await courseService.copySubModule(folderToCopy.id, targetModuleId);
+      alert("Pasta copiada com sucesso para a disciplina selecionada!");
+      setFolderToCopy(null);
+    } catch (error) {
+      console.error("Erro ao copiar pasta:", error);
+      alert("Erro ao copiar pasta.");
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
   const handleMigrateGroupToDiscipline = async () => {
     if (!groupToMigrate) return;
     try {
@@ -658,6 +676,16 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
         onAddLesson={() => { setEditingLesson(null); setTargetFolderIdForNewLesson(folder.id); setIsLessonModalOpen(true); }}
         onAddSubFolder={() => { setParentIdForNewFolder(folder.id); setEditingFolder(null); setIsFolderModalOpen(true); }}
         onMove={() => setFolderToMove(folder)}
+        onCopy={async () => {
+          setFolderToCopy(folder);
+          // Carregar outros módulos do curso
+          try {
+            const mods = await courseService.getModules(module.courseId);
+            setAllCourseModules(mods.filter(m => m.id !== module.id));
+          } catch (error) {
+            console.error("Erro ao carregar disciplinas do curso", error);
+          }
+        }}
         onEditLesson={(l) => { setEditingLesson(l); setIsLessonModalOpen(true); }}
         onDeleteLesson={(l) => setItemToDelete({ type: 'lesson', id: l.id, title: l.title })}
         onMoveLesson={setLessonToMove}
@@ -1140,6 +1168,74 @@ export function ModuleContentManager({ module, onBack }: ModuleContentManagerPro
                 </div>
                 <div className="p-4 border-t border-gray-800 flex justify-end">
                     <button onClick={() => setFolderToMove(null)} className="text-gray-400 hover:text-white text-xs font-bold uppercase">Cancelar</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Modal para Copiar Pasta para outra Disciplina */}
+      {folderToCopy && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-[#121418] border border-gray-800 rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
+                <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+                  <h3 className="text-white font-bold uppercase text-sm tracking-widest">Copiar Pasta para outra Disciplina</h3>
+                  <button onClick={() => setFolderToCopy(null)} className="text-gray-500 hover:text-white transition-colors">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                
+                <div className="p-6">
+                  <div className="mb-6 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg flex items-center gap-3">
+                    <Folder size={24} className="text-emerald-500" fill="currentColor" />
+                    <div>
+                      <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Pasta selecionada</p>
+                      <h4 className="text-white font-black uppercase text-lg leading-tight">{folderToCopy.title}</h4>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-400 mb-4 font-bold uppercase tracking-widest">Selecione a disciplina de destino:</p>
+                  
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {allCourseModules.length > 0 ? (
+                      allCourseModules.map(m => (
+                        <button 
+                          key={m.id}
+                          disabled={isCopying}
+                          onClick={() => handleCopyFolder(m.id)}
+                          className="w-full text-left p-4 rounded-xl border border-gray-800 hover:border-emerald-500/50 hover:bg-emerald-500/5 group transition-all duration-300 flex items-center justify-between disabled:opacity-50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center text-gray-500 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                              <Layers size={16} />
+                            </div>
+                            <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors uppercase">{m.title}</span>
+                          </div>
+                          <ChevronRight size={16} className="text-gray-600 group-hover:text-emerald-500 transition-colors" />
+                        </button>
+                      ))
+                    ) : (
+                      <div className="text-center py-10 border border-dashed border-gray-800 rounded-xl">
+                        <p className="text-gray-500 text-xs uppercase font-bold">Nenhuma outra disciplina encontrada.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {isCopying && (
+                    <div className="mt-6 p-4 bg-black/40 rounded-lg flex items-center gap-4 border border-emerald-500/30">
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-emerald-500"></div>
+                      <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-tighter">Realizando cópia profunda da estrutura... aguarde</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 bg-black/40 border-t border-gray-800 flex justify-end">
+                    <button 
+                      onClick={() => setFolderToCopy(null)} 
+                      disabled={isCopying}
+                      className="text-gray-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-30"
+                    >
+                      Cancelar Operação
+                    </button>
                 </div>
             </div>
         </div>

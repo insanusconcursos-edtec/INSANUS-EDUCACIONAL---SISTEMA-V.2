@@ -1,6 +1,6 @@
 
 import { db, storage } from './firebase';
-import { sanitizeData, deepCloneSafe } from './firestoreUtils';
+import { sanitizeData, deepCloneSafe, toPlainObject } from './firestoreUtils';
 import { 
   collection, 
   addDoc, 
@@ -12,6 +12,7 @@ import {
   query, 
   orderBy, 
   where,
+  limit,
   writeBatch,
   increment,
   setDoc,
@@ -39,8 +40,10 @@ export const courseService = {
   safeDeleteStorageFile: async (url?: string) => {
     if (!url || !url.includes('firebasestorage.googleapis.com')) return;
     try {
-      const fileRef = ref(storage, url);
-      await deleteObject(fileRef);
+      // Desativado temporariamente para evitar deleção acidental de arquivos compartilhados entre módulos copiados
+      // const fileRef = ref(storage, url);
+      // await deleteObject(fileRef);
+      console.log("[STORAGE_SAFE] Deleção de arquivo ignorada para segurança:", url);
     } catch (error: any) {
       if (error.code === 'storage/object-not-found') return;
       console.warn("Erro ao deletar arquivo do storage:", error);
@@ -419,135 +422,249 @@ export const courseService = {
     }
   },
 
-  // Copiar Módulo (Deep Copy de uma única disciplina)
+  // Copiar Módulo (Disciplina) com Integridade Total de Imagens e Estrutura
   copyModule: async (sourceModuleId: string, targetCourseId: string) => {
     try {
-      console.log(`[COPY_MODULE] Iniciando cópia do módulo ${sourceModuleId} para o curso ${targetCourseId}`);
+      console.log(`[COPY_MODULE] Iniciando cópia fidedigna do módulo: ${sourceModuleId}`);
       
-      const sourceModule = await courseService.getModule(sourceModuleId);
-      if (!sourceModule) throw new Error("Módulo de origem não encontrado");
+      const sourceModuleDoc = await getDoc(doc(db, MODULES_COLLECTION, sourceModuleId));
+      if (!sourceModuleDoc.exists()) throw new Error("Módulo de origem não encontrado");
+      const sourceData = toPlainObject(sourceModuleDoc.data());
 
-      // 1. Determinar a ordem (será o último)
-      const q = query(
+      // 1. Determinar próxima ordem
+      const qModules = query(
         collection(db, MODULES_COLLECTION), 
         where('courseId', '==', targetCourseId),
-        orderBy('order', 'desc')
+        orderBy('order', 'desc'),
+        limit(1)
       );
-      const snapshot = await getDocs(q);
-      const lastOrder = snapshot.docs.length > 0 ? snapshot.docs[0].data().order : 0;
+      const snapshotModules = await getDocs(qModules);
+      const lastOrder = snapshotModules.docs.length > 0 ? snapshotModules.docs[0].data().order : 0;
 
-      const operations: { ref: any, data: object }[] = [];
-
-      // 2. Criar novo módulo (Metadata)
+      // 2. Criar novo módulo (Cópia profunda e isolada)
       const newModuleRef = doc(collection(db, MODULES_COLLECTION));
       const newModuleData: any = {
-        ...sourceModule,
-        title: `${sourceModule.title} (Cópia)`,
+        ...sourceData,
         courseId: targetCourseId,
-        order: lastOrder + 1
+        order: lastOrder + 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
+      
+      // Garantia absoluta de preservação de imagens (Capa e Banner)
+      if (sourceData.coverUrl) newModuleData.coverUrl = sourceData.coverUrl;
+      if (sourceData.bannerUrl) newModuleData.bannerUrl = sourceData.bannerUrl;
+      
+      // Removemos o ID para não salvar o ID antigo dentro dos campos do novo documento
       delete newModuleData.id;
-      operations.push({ ref: newModuleRef, data: newModuleData });
+      
+      const groupMap: Record<string, string> = {};
+      const subMap: Record<string, string> = {};
+      const operations: { ref: any, data: any }[] = [{ ref: newModuleRef, data: newModuleData }];
 
-      // Mapeamentos para manter integridade referencial
-      const groupMapping: Record<string, string> = {};
-      const subModuleMapping: Record<string, string> = {};
-
-      // 3. Buscar Grupos, Submódulos e Aulas em paralelo
-      const [groups, subModules, lessons] = await Promise.all([
-        courseService.getGroups(sourceModuleId),
-        courseService.getSubModules(sourceModuleId),
-        courseService.getLessons(sourceModuleId)
+      // 3. Coleta de Estrutura vinculada
+      const [groupsSnap, subsSnap, lessonsSnap] = await Promise.all([
+        getDocs(query(collection(db, GROUPS_COLLECTION), where('moduleId', '==', sourceModuleId))),
+        getDocs(query(collection(db, SUBMODULES_COLLECTION), where('moduleId', '==', sourceModuleId))),
+        getDocs(query(collection(db, LESSONS_COLLECTION), where('moduleId', '==', sourceModuleId)))
       ]);
 
-      // 3.1 Pre-mapear IDs de Grupos para garantir que todos existam antes do processamento
-      groups.forEach(group => {
-        groupMapping[group.id] = doc(collection(db, GROUPS_COLLECTION)).id;
+      // 4. Mapear Grupos
+      groupsSnap.docs.forEach(d => {
+        const newRef = doc(collection(db, GROUPS_COLLECTION));
+        groupMap[d.id] = newRef.id;
+        const data = toPlainObject(d.data());
+        const newData = { ...data, moduleId: newModuleRef.id };
+        delete (newData as any).id;
+        operations.push({ ref: newRef, data: newData });
       });
 
-      // 3.2 Pre-mapear IDs de Submódulos (Pastas) para garantir que parentId possa ser resolvido
-      subModules.forEach(sub => {
-        subModuleMapping[sub.id] = doc(collection(db, SUBMODULES_COLLECTION)).id;
-      });
+      // 5. Mapear Submódulos (Pastas) com Hierarquia
+      // Ordenamos para garantir que os pais sejam criados/mapeados antes dos filhos
+      const sortedSubs = subsSnap.docs
+        .map(d => ({ id: d.id, data: toPlainObject(d.data()) }))
+        .sort((a, b) => {
+            if (!a.data.parentId && b.data.parentId) return -1;
+            if (a.data.parentId && !b.data.parentId) return 1;
+            return 0;
+        });
 
-      // 4. Processar Grupos
-      groups.forEach(group => {
-        const newGroupRef = doc(db, GROUPS_COLLECTION, groupMapping[group.id]);
-        const newGroupData: any = {
-          ...group,
-          moduleId: newModuleRef.id
-        };
-        delete newGroupData.id;
-        operations.push({ ref: newGroupRef, data: newGroupData });
-      });
-
-      // 5. Processar Submódulos (Pastas)
-      subModules.forEach(sub => {
-        const newSubRef = doc(db, SUBMODULES_COLLECTION, subModuleMapping[sub.id]);
-        const newSubData: any = {
-          ...sub,
-          moduleId: newModuleRef.id,
-          groupId: sub.groupId ? (groupMapping[sub.groupId] || null) : null,
-          parentId: sub.parentId ? (subModuleMapping[sub.parentId] || null) : null
-        };
-        delete newSubData.id;
-        operations.push({ ref: newSubRef, data: newSubData });
-      });
-
-      // 6. Processar Aulas e seus conteúdos
-      await Promise.all(lessons.map(async (lesson) => {
-        const newLessonRef = doc(collection(db, LESSONS_COLLECTION));
+      sortedSubs.forEach(item => {
+        const newRef = doc(collection(db, SUBMODULES_COLLECTION));
+        subMap[item.id] = newRef.id;
         
-        const newLessonData: any = {
-          ...lesson,
+        const newData = {
+          ...item.data,
           moduleId: newModuleRef.id,
-          groupId: lesson.groupId ? (groupMapping[lesson.groupId] || null) : null,
-          subModuleId: lesson.subModuleId ? (subModuleMapping[lesson.subModuleId] || null) : null
+          groupId: item.data.groupId ? (groupMap[item.data.groupId] || null) : null,
+          parentId: item.data.parentId ? (subMap[item.data.parentId] || null) : null
         };
+        delete (newData as any).id;
+        operations.push({ ref: newRef, data: newData });
+      });
+
+      // 6. Mapear Aulas (Com filtro rigoroso contra aulas fantasmas)
+      for (const lessonDoc of lessonsSnap.docs) {
+        const lessonData = toPlainObject(lessonDoc.data());
+        const oldGroupId = lessonData.groupId;
+        const oldSubId = lessonData.subModuleId;
+
+        // FILTRO ANTI-FANTASMA: Se a aula original tinha um pai (grupo ou pasta), 
+        // mas esse pai não pertence a este módulo ou não foi encontrado, nós NÃO copiamos a aula.
+        if (oldGroupId && !groupMap[oldGroupId]) continue;
+        if (oldSubId && !subMap[oldSubId]) continue;
+
+        const newLessonRef = doc(collection(db, LESSONS_COLLECTION));
+        const newLessonData: any = {
+          ...lessonData,
+          moduleId: newModuleRef.id,
+          groupId: oldGroupId ? groupMap[oldGroupId] : null,
+          subModuleId: oldSubId ? subMap[oldSubId] : null
+        };
+
+        // Preservação explícita da capa da aula
+        if (lessonData.coverUrl) newLessonData.coverUrl = lessonData.coverUrl;
         delete newLessonData.id;
+
         operations.push({ ref: newLessonRef, data: newLessonData });
 
-        // 7. Conteúdos da Aula
-        const contents = await courseService.getContents(lesson.id);
+        // Conteúdos vinculados
+        const contents = await courseService.getContents(lessonDoc.id);
         contents.forEach(content => {
-          const newContentRef = doc(collection(db, CONTENTS_COLLECTION));
-          const newContentData: any = {
-            ...content,
-            lessonId: newLessonRef.id
-          };
-          delete newContentData.id;
-          operations.push({ ref: newContentRef, data: newContentData });
+          const contentRef = doc(collection(db, CONTENTS_COLLECTION));
+          const newContentData = { ...toPlainObject(content), lessonId: newLessonRef.id };
+          delete (newContentData as any).id;
+          operations.push({ ref: contentRef, data: newContentData });
         });
-      }));
-
-      console.log(`[COPY_MODULE] Total de operações preparadas: ${operations.length}. Iniciando gravação em lotes.`);
-
-      // 8. Execução em Lotes
-      const MAX_BATCH_SIZE = 400;
-      let batch = writeBatch(db);
-      let operationCounter = 0;
-      const commitPromises: Promise<void>[] = [];
-
-      for (const op of operations) {
-        batch.set(op.ref, sanitizeData(op.data));
-        operationCounter++;
-        if (operationCounter === MAX_BATCH_SIZE) {
-          commitPromises.push(batch.commit());
-          batch = writeBatch(db);
-          operationCounter = 0;
-        }
       }
 
-      if (operationCounter > 0) {
-        commitPromises.push(batch.commit());
+      // 7. Persistência Atômica por Lotes
+      const BATCH_LIMIT = 450;
+      for (let i = 0; i < operations.length; i += BATCH_LIMIT) {
+        const batch = writeBatch(db);
+        const chunk = operations.slice(i, i + BATCH_LIMIT);
+        chunk.forEach(op => batch.set(op.ref, op.data));
+        await batch.commit();
       }
-
-      await Promise.all(commitPromises);
-      console.log(`[COPY_MODULE] Cópia concluída com sucesso! Novo ID: ${newModuleRef.id}`);
 
       return newModuleRef.id;
     } catch (error) {
-      console.error("Erro ao copiar módulo:", error);
+      console.error("[COPY_MODULE_ERROR]", error);
+      throw error;
+    }
+  },
+
+  // Copiar Pasta (Submódulo) para outra disciplina
+  copySubModule: async (sourceSubModuleId: string, targetModuleId: string) => {
+    try {
+      console.log(`[COPY_SUBMODULE] Iniciando cópia da pasta: ${sourceSubModuleId} para módulo: ${targetModuleId}`);
+      
+      // 1. Obter dados da pasta de origem
+      const sourceSubDoc = await getDoc(doc(db, SUBMODULES_COLLECTION, sourceSubModuleId));
+      if (!sourceSubDoc.exists()) throw new Error("Pasta de origem não encontrada");
+      const sourceData = toPlainObject(sourceSubDoc.data());
+      const sourceModuleId = sourceData.moduleId;
+
+      // 2. Determinar próxima ordem na disciplina de destino (na raiz, fora de grupos)
+      const qSubs = query(
+        collection(db, SUBMODULES_COLLECTION), 
+        where('moduleId', '==', targetModuleId),
+        where('groupId', '==', null),
+        where('parentId', '==', null),
+        orderBy('order', 'desc'),
+        limit(1)
+      );
+      const snapshotSubs = await getDocs(qSubs);
+      const lastOrder = snapshotSubs.docs.length > 0 ? snapshotSubs.docs[0].data().order : 0;
+
+      // 3. Mapeamentos de IDs
+      const subMap: Record<string, string> = {};
+      const operations: { ref: any, data: any }[] = [];
+
+      // 4. Coleta recursiva de toda a estrutura (Sub-pastas e Aulas)
+      const allSubsSnap = await getDocs(query(collection(db, SUBMODULES_COLLECTION), where('moduleId', '==', sourceModuleId)));
+      const allLessonsSnap = await getDocs(query(collection(db, LESSONS_COLLECTION), where('moduleId', '==', sourceModuleId)));
+
+      const getDescendantSubs = (parentId: string, allSubs: any[]): any[] => {
+        const direct = allSubs.filter(s => s.parentId === parentId);
+        let children: any[] = [...direct];
+        direct.forEach(d => {
+          children = [...children, ...getDescendantSubs(d.id, allSubs)];
+        });
+        return children;
+      };
+
+      const sourceSubsList = allSubsSnap.docs.map(d => ({ id: d.id, ...toPlainObject(d.data()) }));
+      const descendantSubs = getDescendantSubs(sourceSubModuleId, sourceSubsList);
+      const targetSubsToCopy = [{ id: sourceSubModuleId, ...sourceData }, ...descendantSubs];
+
+      // 5. Pre-gerar IDs para Submódulos e Criar Operações
+      // Ordenamos para garantir pais antes de filhos
+      const sortedSubs = [...targetSubsToCopy].sort((a, b) => {
+          if (a.id === sourceSubModuleId) return -1;
+          if (b.id === sourceSubModuleId) return 1;
+          return 0;
+      });
+
+      sortedSubs.forEach(sub => {
+        const newRef = doc(collection(db, SUBMODULES_COLLECTION));
+        subMap[sub.id] = newRef.id;
+        
+        const isRoot = sub.id === sourceSubModuleId;
+        const newData = {
+          ...sub,
+          moduleId: targetModuleId,
+          order: isRoot ? lastOrder + 1 : sub.order,
+          groupId: null, // Força raiz se for a pasta principal copiada
+          parentId: sub.parentId ? (subMap[sub.parentId] || null) : null
+        };
+        delete (newData as any).id;
+        operations.push({ ref: newRef, data: newData });
+      });
+
+      // 6. Filtrar e Mapear Aulas vinculadas a estas pastas
+      const subIdsSet = new Set(targetSubsToCopy.map(s => s.id));
+      const lessonsToCopy = allLessonsSnap.docs
+        .map(d => ({ id: d.id, ...toPlainObject(d.data()) }))
+        .filter(l => l.subModuleId && subIdsSet.has(l.subModuleId));
+
+      for (const lesson of lessonsToCopy) {
+        const newLessonRef = doc(collection(db, LESSONS_COLLECTION));
+        const newLessonData: any = {
+          ...lesson,
+          moduleId: targetModuleId,
+          groupId: null, 
+          subModuleId: subMap[lesson.subModuleId]
+        };
+        
+        // Preservação explícita da capa
+        if (lesson.coverUrl) newLessonData.coverUrl = lesson.coverUrl;
+        delete newLessonData.id;
+        
+        operations.push({ ref: newLessonRef, data: newLessonData });
+
+        // Conteúdos vinculados
+        const contents = await courseService.getContents(lesson.id);
+        contents.forEach(content => {
+          const contentRef = doc(collection(db, CONTENTS_COLLECTION));
+          const newContentData = { ...toPlainObject(content), lessonId: newLessonRef.id };
+          delete (newContentData as any).id;
+          operations.push({ ref: contentRef, data: newContentData });
+        });
+      }
+
+      // 7. Persistência em Lote
+      const BATCH_LIMIT = 450;
+      for (let i = 0; i < operations.length; i += BATCH_LIMIT) {
+        const batch = writeBatch(db);
+        const chunk = operations.slice(i, i + BATCH_LIMIT);
+        chunk.forEach(op => batch.set(op.ref, op.data));
+        await batch.commit();
+      }
+
+      return subMap[sourceSubModuleId];
+    } catch (error) {
+      console.error("[COPY_SUBMODULE_ERROR]", error);
       throw error;
     }
   },
@@ -1043,9 +1160,8 @@ export const courseService = {
         if (content.type === 'video') await updateDoc(lessonRef, { videoCount: increment(-1) });
         else if (content.type === 'pdf') await updateDoc(lessonRef, { pdfCount: increment(-1) });
 
-        // DELEÇÃO DE ARQUIVO FÍSICO (Storage)
-        // Regra Geral: Se tem uma URL do Firebase Storage, deleta para evitar conteúdo "morto".
-        // Isso cobre PDFs, Vídeos hospedados no Firebase, Imagens de conteúdo, etc.
+        // DELEÇÃO DE ARQUIVO FÍSICO (Storage) - DESATIVADO PARA SEGURANÇA (Arquivos compartilhados entre módulos)
+        /*
         if (content.fileUrl) {
             await courseService.safeDeleteStorageFile(content.fileUrl);
         }
@@ -1054,10 +1170,10 @@ export const courseService = {
             await courseService.safeDeleteStorageFile(content.commentedAnswerKeyUrl);
         }
         
-        // Também verifica videoUrl caso o vídeo tenha sido enviado para o Storage
         if (content.videoUrl && content.videoPlatform !== 'panda' && content.videoPlatform !== 'youtube') {
             await courseService.safeDeleteStorageFile(content.videoUrl);
         }
+        */
 
         await deleteDoc(contentRef);
       }

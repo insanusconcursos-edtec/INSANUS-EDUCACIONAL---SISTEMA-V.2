@@ -43,6 +43,7 @@ export function CoursePlayerContent({ lesson }: CoursePlayerContentProps) {
 
     try {
         await openWatermarkedPdf(url, {
+            uid: currentUser.uid,
             email: currentUser.email || 'usuario@insanus.com',
             cpf: userData?.cpf || '000.000.000-00'
         });

@@ -37,13 +37,45 @@ export const PresentialEventFormModal: React.FC<PresentialEventFormModalProps> =
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
 
+  const formatDateForInput = (date: any): string => {
+    if (!date) return '';
+    try {
+      let d: Date;
+      if (date instanceof Date) {
+        d = date;
+      } else if (date && typeof date.toDate === 'function') {
+        d = date.toDate();
+      } else if (typeof date === 'string' || typeof date === 'number') {
+        d = new Date(date);
+      } else {
+        return '';
+      }
+
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().split('T')[0];
+    } catch (e) {
+      return '';
+    }
+  };
+
   useEffect(() => {
     if (initialData) {
+      let eventDate: Date = new Date();
+      if (initialData.date) {
+        if (initialData.date instanceof Date) {
+          eventDate = initialData.date;
+        } else if ((initialData.date as any).toDate) {
+          eventDate = (initialData.date as any).toDate();
+        } else {
+          eventDate = new Date(initialData.date as any);
+        }
+      }
+
       setFormData({
         title: initialData.title,
         subtitle: initialData.subtitle || '',
         coverImage: initialData.coverImage || '',
-        date: initialData.date instanceof Date ? initialData.date : (initialData.date as any).toDate(),
+        date: isNaN(eventDate.getTime()) ? new Date() : eventDate,
         startTime: initialData.startTime,
         locationType: initialData.locationType,
         customLocation: initialData.customLocation || '',
@@ -208,8 +240,11 @@ export const PresentialEventFormModal: React.FC<PresentialEventFormModalProps> =
                     <input
                       required
                       type="date"
-                      value={formData.date instanceof Date ? formData.date.toISOString().split('T')[0] : (formData.date as any).toDate().toISOString().split('T')[0]}
-                      onChange={e => setFormData(prev => ({ ...prev, date: new Date(e.target.value) }))}
+                      value={formatDateForInput(formData.date)}
+                      onChange={e => {
+                        const newDate = new Date(e.target.value + 'T12:00:00');
+                        setFormData(prev => ({ ...prev, date: isNaN(newDate.getTime()) ? prev.date : newDate }));
+                      }}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-brand-red transition-all"
                     />
                   </div>
@@ -338,8 +373,11 @@ export const PresentialEventFormModal: React.FC<PresentialEventFormModalProps> =
                           {lot.type === 'DATE' ? (
                             <input
                               type="date"
-                              value={lot.value instanceof Timestamp ? lot.value.toDate().toISOString().split('T')[0] : (lot.value instanceof Date ? lot.value.toISOString().split('T')[0] : (typeof lot.value === 'string' ? lot.value : ''))}
-                              onChange={e => handleLotChange(lot.id, 'value', new Date(e.target.value))}
+                              value={formatDateForInput(lot.value)}
+                              onChange={e => {
+                                const newDate = new Date(e.target.value + 'T12:00:00');
+                                handleLotChange(lot.id, 'value', isNaN(newDate.getTime()) ? lot.value : newDate);
+                              }}
                               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-purple-500 outline-none transition-all"
                             />
                           ) : (

@@ -87,6 +87,7 @@ export function StudentPedagogicalPlanning({ classId, masterClassId, totalMeetin
   const handleOpenPdf = async (url: string, title: string) => {
     try {
       await openWatermarkedPdf(url, {
+        uid: currentUser?.uid,
         email: currentUser?.email || 'aluno@insanus.com',
         cpf: userData?.cpf || '000.000.000-00'
       });

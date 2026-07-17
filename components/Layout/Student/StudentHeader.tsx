@@ -139,17 +139,19 @@ const StudentHeader: React.FC = () => {
       <div className="flex lg:hidden flex-1 mx-3 max-w-[240px] relative">
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="w-full flex items-center justify-between bg-zinc-900 border border-zinc-800 text-white text-[10px] font-bold uppercase rounded-lg py-2.5 px-4 focus:border-[var(--plan-theme)] outline-none transition-all"
+          className="w-full flex items-center justify-between bg-zinc-900 border border-zinc-800 text-white text-[11px] font-black uppercase tracking-widest rounded-xl py-3 px-5 focus:border-[var(--plan-theme)] outline-none transition-all active:scale-[0.98]"
         >
-          <div className="flex items-center gap-2 truncate">
-            {isHomeContext && <Home className="w-3.5 h-3.5 text-[var(--plan-theme)]" />}
-            {isPlanContext && <Map className="w-3.5 h-3.5 text-[var(--plan-theme)]" />}
-            {isSimulatedContext && <ClipboardList className="w-3.5 h-3.5 text-[var(--plan-theme)]" />}
-            {isCoursesContext && <MonitorPlay className="w-3.5 h-3.5 text-[var(--plan-theme)]" />}
-            {isPresentialContext && <Users className="w-3.5 h-3.5 text-[var(--plan-theme)]" />}
-            {isLiveEventsContext && <Radio className="w-3.5 h-3.5 text-[var(--plan-theme)]" />}
+          <div className="flex items-center gap-3 truncate">
+            <div className="w-5 flex justify-center shrink-0">
+              {isHomeContext && <Home className="w-4 h-4 text-[var(--plan-theme)]" />}
+              {isPlanContext && <Map className="w-4 h-4 text-[var(--plan-theme)]" />}
+              {isSimulatedContext && <ClipboardList className="w-4 h-4 text-[var(--plan-theme)]" />}
+              {isCoursesContext && <MonitorPlay className="w-4 h-4 text-[var(--plan-theme)]" />}
+              {isPresentialContext && <Users className="w-4 h-4 text-[var(--plan-theme)]" />}
+              {isLiveEventsContext && <Radio className="w-4 h-4 text-[var(--plan-theme)]" />}
+            </div>
             
-            <span>
+            <span className="truncate">
               {isHomeContext ? 'Home' : 
                isPlanContext ? 'Planos' : 
                isSimulatedContext ? 'Simulados' : 
@@ -158,7 +160,7 @@ const StudentHeader: React.FC = () => {
                isLiveEventsContext ? 'Ao Vivo' : 'Menu'}
             </span>
           </div>
-          <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-300 ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {/* Menu Flutuante */}
@@ -168,8 +170,8 @@ const StudentHeader: React.FC = () => {
               className="fixed inset-0 z-40" 
               onClick={() => setIsMobileMenuOpen(false)}
             />
-            <div className="absolute top-full left-0 w-full mt-2 bg-[#1A1A1A] border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="p-1.5 flex flex-col gap-1">
+            <div className="absolute top-full left-0 w-full mt-2 bg-[#141414] border border-zinc-800/50 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="p-2 flex flex-col gap-1">
                 {[
                   { path: '/app/home', label: 'Home', icon: Home, active: isHomeContext },
                   { path: '/app/dashboard', label: 'Planos', icon: Map, active: isPlanContext },
@@ -185,13 +187,15 @@ const StudentHeader: React.FC = () => {
                       setIsMobileMenuOpen(false);
                     }}
                     className={`
-                      flex items-center gap-3 px-4 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all
+                      flex items-center gap-4 px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all
                       ${item.active 
-                        ? 'bg-[var(--plan-theme)]/10 text-[var(--plan-theme)]' 
-                        : 'text-zinc-500 hover:bg-[var(--plan-theme)]/5 hover:text-[var(--plan-theme)]'}
+                        ? 'bg-[var(--plan-theme)] text-white shadow-lg shadow-[var(--plan-theme)]/20' 
+                        : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-white'}
                     `}
                   >
-                    <item.icon className={`w-4 h-4 ${item.active ? 'text-[var(--plan-theme)]' : ''}`} />
+                    <div className="w-6 flex justify-center shrink-0">
+                      <item.icon className={`w-5 h-5 ${item.active ? 'text-white' : 'text-zinc-500'}`} />
+                    </div>
                     <span>{item.label}</span>
                   </button>
                 ))}

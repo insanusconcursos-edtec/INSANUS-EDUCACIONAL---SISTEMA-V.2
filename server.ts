@@ -206,9 +206,12 @@ async function setupVite(app: any) {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="material_${Date.now()}.pdf"`);
       return res.status(200).send(watermarkedPdfBuffer);
-    } catch (error) {
+    } catch (error: any) {
       console.error("[PDF DOWNLOAD] Error:", error);
-      return res.status(500).json({ success: false, error: "Falha ao gerar o PDF com marca d'água." });
+      return res.status(500).json({ 
+        success: false, 
+        error: error.message || "Falha ao gerar o PDF com marca d'água." 
+      });
     }
   });
 

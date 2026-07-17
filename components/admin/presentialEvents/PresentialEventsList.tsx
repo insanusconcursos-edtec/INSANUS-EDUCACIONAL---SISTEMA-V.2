@@ -83,7 +83,17 @@ export const PresentialEventsList: React.FC<PresentialEventsListProps> = ({
                 <div className="flex items-center gap-2 text-zinc-400 text-xs">
                   <Calendar size={14} className="text-brand-red" />
                   <span className="font-bold uppercase tracking-wider">
-                    {formatInTimeZone(event.date instanceof Date ? event.date : (event.date as any).toDate(), 'UTC', "dd 'de' MMMM", { locale: ptBR })}
+                    {(() => {
+                      try {
+                        const dateObj = event.date instanceof Date ? event.date : (event.date as any)?.toDate?.();
+                        if (dateObj && !isNaN(dateObj.getTime())) {
+                          return formatInTimeZone(dateObj, 'UTC', "dd 'de' MMMM", { locale: ptBR });
+                        }
+                        return 'Data Indisponível';
+                      } catch (e) {
+                        return 'Data Indisponível';
+                      }
+                    })()}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-zinc-400 text-xs">

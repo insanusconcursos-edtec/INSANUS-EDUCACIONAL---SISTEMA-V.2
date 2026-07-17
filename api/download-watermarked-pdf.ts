@@ -19,8 +19,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="material_${Date.now()}.pdf"`);
     return res.status(200).send(watermarkedPdfBuffer);
-  } catch (error) {
+  } catch (error: any) {
     console.error("[PDF DOWNLOAD SERVERLESS] Error:", error);
-    return res.status(500).json({ success: false, error: "Falha ao gerar o PDF com marca d'água." });
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message || "Falha ao gerar o PDF com marca d'água." 
+    });
   }
 }

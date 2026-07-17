@@ -88,6 +88,7 @@ const LinkedGoalItem: React.FC<LinkedGoalItemProps> = ({
     setLoadingPdf(true);
     try {
       await openWatermarkedPdf(url, {
+        uid: currentUser?.uid,
         email: currentUser.email || '',
         cpf: userData?.cpf || '000.000.000-00'
       });

@@ -36,7 +36,7 @@ export const StudentModuleCard: React.FC<StudentModuleCardProps> = ({ module, on
   return (
     <div 
       onClick={handleClick}
-      className={`relative w-full aspect-[474/1000] rounded-lg overflow-hidden transition-all duration-300 group border border-gray-800
+      className={`relative w-40 sm:w-48 md:w-56 lg:w-64 shrink-0 aspect-[474/1000] rounded-lg overflow-hidden transition-all duration-300 group border border-gray-800
         ${isLocked 
             ? 'cursor-not-allowed opacity-70 grayscale' 
             : 'cursor-pointer hover:scale-105 hover:z-10 hover:border-red-600/50 hover:shadow-xl hover:shadow-red-900/20'

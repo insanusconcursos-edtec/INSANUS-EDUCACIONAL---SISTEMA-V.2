@@ -173,6 +173,7 @@ function StudentTopicAccordion({ topic, courseId, planId, disciplineId, discipli
     setOpeningPdfId(id);
     try {
         await openWatermarkedPdf(url, {
+            uid: user.uid,
             email: user.email || 'Email não identificado',
             cpf: userData?.cpf || user.uid 
         });

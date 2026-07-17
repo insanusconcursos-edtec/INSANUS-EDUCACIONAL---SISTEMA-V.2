@@ -62,15 +62,27 @@ export const PresentialEventDetails: React.FC<PresentialEventDetailsProps> = ({ 
 
   const handleExportCSV = () => {
     const headers = ['Nome', 'Email', 'CPF', 'WhatsApp', 'Tipo', 'Lote', 'Data de Inscrição'];
-    const rows = filteredRegistrations.map(r => [
-      r.userName,
-      r.userEmail,
-      r.userCpf || 'N/A',
-      r.userPhone || 'N/A',
-      r.type === 'PAYING' ? 'Pagante' : 'Bolsista',
-      r.lotId || 'N/A',
-      format(r.registeredAt instanceof Date ? r.registeredAt : (r.registeredAt as any).toDate(), 'dd/MM/yyyy HH:mm')
-    ]);
+    const rows = filteredRegistrations.map(r => {
+      let formattedDate = 'N/A';
+      try {
+        const dateObj = r.registeredAt instanceof Date ? r.registeredAt : (r.registeredAt as any)?.toDate?.();
+        if (dateObj && !isNaN(dateObj.getTime())) {
+          formattedDate = format(dateObj, 'dd/MM/yyyy HH:mm');
+        }
+      } catch (e) {
+        console.error("Error formatting date for CSV:", e);
+      }
+
+      return [
+        r.userName,
+        r.userEmail,
+        r.userCpf || 'N/A',
+        r.userPhone || 'N/A',
+        r.type === 'PAYING' ? 'Pagante' : 'Bolsista',
+        r.lotId || 'N/A',
+        formattedDate
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
@@ -310,7 +322,17 @@ export const PresentialEventDetails: React.FC<PresentialEventDetailsProps> = ({ 
                     </td>
                     <td className="px-8 py-5">
                       <p className="text-xs font-bold text-zinc-500 uppercase tracking-tighter">
-                        {format(reg.registeredAt instanceof Date ? reg.registeredAt : (reg.registeredAt as any).toDate(), 'dd/MM/yyyy HH:mm')}
+                        {(() => {
+                          try {
+                            const dateObj = reg.registeredAt instanceof Date ? reg.registeredAt : (reg.registeredAt as any)?.toDate?.();
+                            if (dateObj && !isNaN(dateObj.getTime())) {
+                              return format(dateObj, 'dd/MM/yyyy HH:mm');
+                            }
+                            return 'N/A';
+                          } catch (e) {
+                            return 'N/A';
+                          }
+                        })()}
                       </p>
                     </td>
                     <td className="px-8 py-5 text-right">

@@ -9,7 +9,7 @@ import { LiveEvent } from '../../../types/liveEvent';
 import { StudentModuleCard } from './StudentModuleCard';
 import { CoursePlayer } from './player/CoursePlayer';
 import { useAuth } from '../../../contexts/AuthContext';
-import { CheckCircle2, LayoutList, ListTree, PlayCircle, ArrowLeft, Radio, Video, Clock, Play, Calendar, PlaySquare, Lock, MapPin, ChevronDown, ChevronRight, FileText, Loader2, Layers, Folder, X } from 'lucide-react';
+import { CheckCircle2, LayoutList, ListTree, PlayCircle, ArrowLeft, Radio, Video, Clock, Play, Calendar, PlaySquare, Lock, MapPin, ChevronDown, ChevronRight, FileText, Loader2, Layers, Folder, X, Users } from 'lucide-react';
 import { StudentCourseEdital } from './edital/StudentCourseEdital';
 import { CourseReviewDashboard } from './reviews/CourseReviewDashboard';
 import { WelcomeVideoModal } from './WelcomeVideoModal';
@@ -445,46 +445,46 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
           </div>
 
           {/* SISTEMA DE ABAS (NOVO) */}
-          <div className="flex items-center gap-8 border-b border-gray-800 mb-8">
+          <div className="flex items-center gap-6 md:gap-8 border-b border-gray-800 mb-8 overflow-x-auto scrollbar-none whitespace-nowrap px-1">
             <button 
                 onClick={() => setActiveTab('MODULES')}
-                className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-bold text-xs uppercase tracking-widest transition-all
-                    ${activeTab === 'MODULES' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}
+                className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-black text-[10px] md:text-xs uppercase tracking-widest transition-all shrink-0
+                    ${activeTab === 'MODULES' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}
                 `}
             >
-                <LayoutList size={18} />
+                <LayoutList size={16} className="md:w-[18px] md:h-[18px]" />
                 Módulos do Curso
             </button>
             <button 
                 onClick={() => setActiveTab('EDITAL')}
-                className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-bold text-xs uppercase tracking-widest transition-all
-                    ${activeTab === 'EDITAL' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}
+                className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-black text-[10px] md:text-xs uppercase tracking-widest transition-all shrink-0
+                    ${activeTab === 'EDITAL' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}
                 `}
             >
-                <ListTree size={18} />
+                <ListTree size={16} className="md:w-[18px] md:h-[18px]" />
                 Edital Verticalizado
             </button>
 
             {courseLiveEvents.length > 0 && (
                 <button 
                     onClick={() => setActiveTab('LIVE')}
-                    className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-bold text-xs uppercase tracking-widest transition-all
-                        ${activeTab === 'LIVE' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}
+                    className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-black text-[10px] md:text-xs uppercase tracking-widest transition-all shrink-0
+                        ${activeTab === 'LIVE' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}
                     `}
                 >
-                    <Radio size={18} className={activeTab === 'LIVE' ? 'text-[var(--plan-theme)]' : ''} />
-                    🔴 Eventos ao Vivo
+                    <Radio size={16} className={`md:w-[18px] md:h-[18px] ${activeTab === 'LIVE' ? 'text-[var(--plan-theme)]' : ''}`} />
+                    Eventos ao Vivo
                 </button>
             )}
 
             {course.linkedPresentialId && (
               <button 
                   onClick={() => setActiveTab('PRESENTIAL')}
-                  className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-bold text-xs uppercase tracking-widest transition-all
-                      ${activeTab === 'PRESENTIAL' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}
+                  className={`flex items-center gap-2 pb-4 px-1 border-b-2 font-black text-[10px] md:text-xs uppercase tracking-widest transition-all shrink-0
+                      ${activeTab === 'PRESENTIAL' ? 'border-[var(--plan-theme)] text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}
                   `}
               >
-                  <MapPin size={18} className={activeTab === 'PRESENTIAL' ? 'text-[var(--plan-theme)]' : ''} />
+                  <Users size={16} className={`md:w-[18px] md:h-[18px] ${activeTab === 'PRESENTIAL' ? 'text-[var(--plan-theme)]' : ''}`} />
                   {course.linkedPresentialTabName || 'AULAS PRESENCIAIS'}
               </button>
             )}
@@ -501,7 +501,7 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                   ) : modules.length === 0 ? (
                       <div className="text-zinc-500 italic px-1 text-sm border-l-2 border-zinc-800 pl-4 py-2">Nenhum módulo disponível neste curso.</div>
                   ) : (
-                      <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent px-1">
+                      <div className="flex gap-4 md:gap-6 overflow-x-auto pb-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent px-1">
                           {modules.map(module => (
                               <StudentModuleCard 
                                   key={module.id} 
@@ -536,7 +536,7 @@ export function CourseDetails({ course, onBack }: CourseDetailsProps) {
                   ) : presentialStructure.length === 0 ? (
                       <div className="text-zinc-500 italic px-1 text-sm border-l-2 border-zinc-800 pl-4 py-2">Nenhum módulo disponível no momento.</div>
                   ) : (
-                      <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent px-1">
+                      <div className="flex gap-4 md:gap-6 overflow-x-auto pb-8 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent px-1">
                           {presentialStructure.map(mod => (
                               <StudentModuleCard 
                                   key={mod.id} 

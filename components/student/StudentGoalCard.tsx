@@ -344,6 +344,7 @@ export const StudentGoalCard: React.FC<StudentGoalCardProps> = ({ goal, onStart,
         const userEmail = currentUser?.email || 'usuario@insanus.com';
 
         await openWatermarkedPdf(fileUrl, {
+            uid: currentUser?.uid,
             email: userEmail,
             cpf: userCpf
         });
