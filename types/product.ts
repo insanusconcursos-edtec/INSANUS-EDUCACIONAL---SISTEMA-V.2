@@ -20,6 +20,8 @@ export interface ProductOffer {
   originalPrice?: number; // Novo: Preço de ancoragem
   pixDiscount?: number; // Desconto para PIX (%)
   boletoDiscount?: number; // Desconto para Boleto (%)
+  enrollmentFee?: number; // Taxa de matrícula
+  isEnrollmentFeeExempt?: boolean; // Isenção da taxa de matrícula
   lotPrices?: Record<string, number>; // Mapping lotId to price
   personDiscountEnabled?: boolean; // Habilita desconto por pessoa extra
   personDiscountPercentage?: number; // Porcentagem de desconto por pessoa (%)

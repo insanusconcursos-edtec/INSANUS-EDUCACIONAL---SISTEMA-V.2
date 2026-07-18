@@ -1452,6 +1452,7 @@ async function startServer() {
 // Start the server if we're not being imported as a module (simple check)
 if (!process.env.VERCEL) {
   startServer().then(() => {
+    /* 
     setTimeout(async () => {
       console.log('Fetching backfill endpoint...');
       try {
@@ -1463,6 +1464,7 @@ if (!process.env.VERCEL) {
         console.error('BACKFILL ERROR:', e);
       }
     }, 5000);
+    */
   });
 }
 

@@ -105,7 +105,7 @@ export const DisciplineMigrationModal: React.FC<Props> = ({
         {/* Footer */}
         <div className="p-6 bg-zinc-900/30 border-t border-zinc-800">
           <p className="text-xs text-zinc-500 font-medium leading-relaxed">
-            Ao confirmar, todos os tópicos de <span className="text-white font-bold">"{sourceDiscipline.name}"</span> serão movidos para uma nova pasta com o mesmo nome dentro da disciplina selecionada.
+            Ao confirmar, todos os tópicos de <span className="text-white font-bold">&quot;{sourceDiscipline.name}&quot;</span> serão movidos para uma nova pasta com o mesmo nome dentro da disciplina selecionada.
           </p>
         </div>
       </div>

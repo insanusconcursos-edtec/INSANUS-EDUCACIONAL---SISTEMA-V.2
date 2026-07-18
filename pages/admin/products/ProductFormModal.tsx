@@ -175,6 +175,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
       name: '',
       price: 0,
       originalPrice: 0,
+      enrollmentFee: 0,
       isDefault: offers.length === 0,
       isActive: true,
       isAffiliationEnabled: false,
@@ -431,63 +432,104 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                     offer.isDefault ? 'border-red-600/40 shadow-2xl shadow-red-600/5' : 'border-zinc-800'
                   }`}
                 >
-                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:gap-8 items-start">
-                    <div className="xl:col-span-2">
-                      <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">Nome da Oferta</label>
-                      <input
-                        type="text"
-                        value={offer.name}
-                        onChange={(e) => updateOffer(offer.id, { name: e.target.value })}
-                        placeholder="Ex: Preço Promocional"
-                        className="w-full bg-zinc-900 border border-zinc-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-bold"
-                      />
-                    </div>
-
-                    <div className="xl:col-span-3 grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:gap-10 items-start">
+                    <div className="xl:col-span-4 space-y-6">
                       <div>
-                        <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">Preço (R$)</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 font-bold text-[10px]">R$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={offer.price || ''}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              updateOffer(offer.id, { price: isNaN(val) ? 0 : val });
-                            }}
-                            className="w-full bg-zinc-900 border border-zinc-800 text-white rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-mono font-bold"
-                          />
-                        </div>
+                        <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">Nome da Oferta</label>
+                        <input
+                          type="text"
+                          value={offer.name}
+                          onChange={(e) => updateOffer(offer.id, { name: e.target.value })}
+                          placeholder="Ex: Preço Promocional"
+                          className="w-full bg-zinc-900 border border-zinc-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-bold"
+                        />
                       </div>
-                      <div>
-                        <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">De (R$)</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 font-bold text-[10px]">R$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={offer.originalPrice || ''}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value);
-                              updateOffer(offer.id, { originalPrice: isNaN(val) ? 0 : val });
-                            }}
-                            className="w-full bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-mono font-bold"
-                          />
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="xl:col-span-3 space-y-4">
-                      <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Config. Afiliação</label>
-                          <div 
-                            onClick={() => updateOffer(offer.id, { isAffiliationEnabled: !offer.isAffiliationEnabled })}
-                            className={`w-10 h-5 rounded-full relative cursor-pointer transition-all ${offer.isAffiliationEnabled ? 'bg-emerald-500' : 'bg-zinc-800'}`}
-                          >
-                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all ${offer.isAffiliationEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">Preço (R$)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 font-bold text-[10px]">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={offer.price || ''}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                updateOffer(offer.id, { price: isNaN(val) ? 0 : val });
+                              }}
+                              className="w-full bg-zinc-900 border border-zinc-800 text-white rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-mono font-bold"
+                            />
                           </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">De (R$)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 font-bold text-[10px]">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={offer.originalPrice || ''}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                updateOffer(offer.id, { originalPrice: isNaN(val) ? 0 : val });
+                              }}
+                              className="w-full bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-red-500 transition-all font-mono font-bold"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mb-2">Matrícula (R$)</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 font-bold text-[10px]">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={offer.enrollmentFee || ''}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                updateOffer(offer.id, { enrollmentFee: isNaN(val) ? 0 : val });
+                              }}
+                              className="w-full bg-zinc-900 border border-zinc-800 text-emerald-500 rounded-xl pl-8 pr-2 py-3 text-sm focus:outline-none focus:border-emerald-500 transition-all font-mono font-bold"
+                            />
+                          </div>
+                          {offer.enrollmentFee && offer.enrollmentFee > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => updateOffer(offer.id, { isEnrollmentFeeExempt: !offer.isEnrollmentFeeExempt })}
+                              className={`mt-2 w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-widest transition-all ${
+                                offer.isEnrollmentFeeExempt 
+                                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' 
+                                  : 'bg-zinc-900/50 text-zinc-600 border-zinc-800 hover:border-zinc-700'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${offer.isEnrollmentFeeExempt ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-800'}`} />
+                              {offer.isEnrollmentFeeExempt ? 'Taxa Isenta' : 'Conceder Isenção'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="xl:col-span-5 space-y-4">
+                      <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Config. Afiliação</label>
+                          <button
+                            type="button"
+                            onClick={() => updateOffer(offer.id, { isAffiliationEnabled: !offer.isAffiliationEnabled })}
+                            className={`
+                              relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
+                              ${offer.isAffiliationEnabled ? 'bg-emerald-500' : 'bg-zinc-800'}
+                            `}
+                          >
+                            <span
+                              className={`
+                                pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
+                                ${offer.isAffiliationEnabled ? 'translate-x-5' : 'translate-x-0'}
+                              `}
+                            />
+                          </button>
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -684,7 +726,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                       )}
 
                       {type === 'EVENTO_PRESENCIAL' && linkedPresentialEvents.length > 0 && (
-                        <div className="xl:col-span-4 bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                        <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
                           <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] block mb-3">Preços por Lote</label>
                           <div className="space-y-3">
                             {linkedPresentialEvents.flatMap(eventId => {
@@ -715,28 +757,60 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                       )}
                     </div>
 
-                    <div className="xl:col-span-4 flex items-center justify-end gap-2 xl:gap-3 pt-6 xl:pt-0 border-t xl:border-t-0 border-zinc-900">
-                      <button
-                        type="button"
-                        onClick={() => updateOffer(offer.id, { isActive: !offer.isActive })}
-                        className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl text-[8px] font-black uppercase transition-all min-w-[70px] ${
-                          offer.isActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-zinc-900 text-zinc-600 border border-zinc-800'
-                        }`}
-                      >
-                        <Globe size={16} />
-                        {offer.isActive ? 'Visível' : 'Oculto'}
-                      </button>
+                    <div className="xl:col-span-3 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateOffer(offer.id, { isActive: !offer.isActive })}
+                          className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-bold text-[9px] tracking-widest transition-all ${
+                            offer.isActive ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-zinc-900 text-zinc-600 border border-zinc-800'
+                          }`}
+                        >
+                          <Globe size={14} />
+                          {offer.isActive ? 'Visível' : 'Oculto'}
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setDefaultOffer(offer.id)}
-                        className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl text-[8px] font-black uppercase transition-all min-w-[100px] ${
-                          offer.isDefault ? 'bg-red-600 text-white shadow-xl shadow-red-600/20' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
-                        }`}
-                      >
-                        <Check size={16} />
-                        {offer.isDefault ? 'Favorito' : 'Tornar Padrão'}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setDefaultOffer(offer.id)}
+                          className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 rounded-xl border font-bold text-[9px] tracking-widest transition-all ${
+                            offer.isDefault ? 'bg-red-600 text-white shadow-xl shadow-red-600/20 border-red-600' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                          }`}
+                        >
+                          <Check size={14} />
+                          {offer.isDefault ? 'Favorito' : 'Padrão'}
+                        </button>
+                      </div>
+
+                      <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] block mb-3">Meios de Pagamento</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'creditCard', label: 'Cartão', icon: CreditCard },
+                            { id: 'pix', label: 'PIX', icon: QrCode },
+                            { id: 'boleto', label: 'Boleto', icon: Receipt }
+                          ].map(method => (
+                            <button
+                              key={method.id}
+                              type="button"
+                              onClick={() => {
+                                const methods = offer.paymentMethods || { creditCard: true, pix: true, boleto: true };
+                                updateOffer(offer.id, { 
+                                  paymentMethods: { ...methods, [method.id]: !methods[method.id as keyof typeof methods] } 
+                                });
+                              }}
+                              className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all ${
+                                (offer.paymentMethods?.[method.id as keyof typeof offer.paymentMethods] ?? true)
+                                  ? 'border-red-500/40 bg-red-500/5 text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.1)]'
+                                  : 'border-zinc-800 bg-zinc-950 text-zinc-600'
+                              }`}
+                            >
+                              <method.icon size={12} />
+                              <span className="text-[7px] font-black uppercase tracking-tighter">{method.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
                       <div className="flex items-center gap-2">
                         {product?.id && (
@@ -745,14 +819,14 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                               type="button"
                               onClick={() => setQrCodeOffer(offer)}
                               title="Gerar QR Code"
-                              className="p-3 bg-zinc-900 text-zinc-400 border border-zinc-800 rounded-xl hover:text-white hover:border-zinc-700 transition-all"
+                              className="flex-1 flex justify-center p-3 bg-zinc-900 text-zinc-400 border border-zinc-800 rounded-xl hover:text-white hover:border-zinc-700 transition-all"
                             >
                               <QrCode size={18} />
                             </button>
                             <button
                               type="button"
                               onClick={() => copyOfferLink(offer.id)}
-                              className={`p-3 rounded-xl transition-all ${
+                              className={`flex-1 flex justify-center p-3 rounded-xl transition-all ${
                                 copiedId === offer.id ? 'bg-green-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
                               }`}
                             >
@@ -764,7 +838,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                         <button
                           type="button"
                           onClick={() => removeOffer(offer.id)}
-                          className="p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 border border-zinc-800 rounded-xl transition-all"
+                          className="flex-1 flex justify-center p-3 bg-zinc-900 text-zinc-600 hover:text-red-500 hover:bg-red-500/10 border border-zinc-800 rounded-xl transition-all"
                         >
                           <Trash2 size={18} />
                         </button>

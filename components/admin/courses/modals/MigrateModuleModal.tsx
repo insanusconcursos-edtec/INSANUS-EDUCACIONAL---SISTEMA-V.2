@@ -44,7 +44,7 @@ export function MigrateModuleModal({ isOpen, onClose, sourceModule, availableMod
             <h3 className="text-xl font-black uppercase tracking-tight text-white">Migrar Disciplina</h3>
           </div>
           <p className="text-gray-400 text-sm">
-            Você está movendo todo o conteúdo de <span className="text-white font-bold">"{sourceModule.title}"</span> para dentro de outra disciplina.
+            Você está movendo todo o conteúdo de <span className="text-white font-bold">&quot;{sourceModule.title}&quot;</span> para dentro de outra disciplina.
           </p>
         </div>
 

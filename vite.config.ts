@@ -17,10 +17,6 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    server: {
-      host: '0.0.0.0',
-      port: 5173
-    },
     // Define 'process.env' para evitar erro "process is not defined" no navegador
     // E injeta a API_KEY se disponível
     define: {

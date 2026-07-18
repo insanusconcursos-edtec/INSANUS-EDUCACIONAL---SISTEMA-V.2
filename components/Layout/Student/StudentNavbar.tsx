@@ -107,26 +107,26 @@ const StudentNavbar: React.FC = () => {
 
   // Level 2 Nav Items
   const allNavItems = [
-    { label: 'PLANOS', path: '/app/dashboard/planos', icon: <GraduationCap className="w-4 h-4" /> },
-    { label: 'METAS DE HOJE', path: '/app/dashboard', icon: <Target className="w-4 h-4" /> },
-    { label: 'CALENDÁRIO', path: '/app/calendar', icon: <CalendarDays className="w-4 h-4" /> },
-    { label: 'EDITAL', path: '/app/edict', icon: <FileText className="w-4 h-4" /> },
+    { label: 'PLANOS', path: '/app/dashboard/planos', icon: <GraduationCap className="w-5 h-5" /> },
+    { label: 'METAS DE HOJE', path: '/app/dashboard', icon: <Target className="w-5 h-5" /> },
+    { label: 'CALENDÁRIO', path: '/app/calendar', icon: <CalendarDays className="w-5 h-5" /> },
+    { label: 'EDITAL', path: '/app/edict', icon: <FileText className="w-5 h-5" /> },
     { 
       label: 'MENTORIA', 
       path: '/app/dashboard?tab=mentorship', 
-      icon: <GraduationCap className="w-4 h-4" />,
+      icon: <GraduationCap className="w-5 h-5" />,
       isSpecial: true 
     },
     { 
       label: 'CALL', 
       path: '/app/dashboard?tab=call', 
-      icon: <Video className="w-4 h-4" />,
+      icon: <Video className="w-5 h-5" />,
       isSpecial: true 
     },
     { 
       label: 'SIMULADOS', 
       path: '/app/dashboard?tab=simulados', 
-      icon: <GraduationCap className="w-4 h-4" />,
+      icon: <FileText className="w-5 h-5" />,
       isSpecial: true 
     },
     { 
@@ -134,7 +134,7 @@ const StudentNavbar: React.FC = () => {
       path: '/app/dashboard?tab=live', 
       icon: (
         <div className="relative">
-          <Radio className="w-4 h-4" />
+          <Radio className="w-5 h-5" />
           {hasLiveEvent && (
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-brand-red rounded-full animate-pulse shadow-[0_0_5px_rgba(239,68,68,0.8)]" />
           )}
@@ -142,7 +142,7 @@ const StudentNavbar: React.FC = () => {
       ),
       isSpecial: true 
     },
-    { label: 'CONFIGURAÇÃO', path: '/app/config', icon: <Settings className="w-4 h-4" /> },
+    { label: 'CONFIGURAÇÃO', path: '/app/config', icon: <Settings className="w-5 h-5" /> },
   ];
 
   // Filter based on active plan
@@ -182,15 +182,15 @@ const StudentNavbar: React.FC = () => {
             <div className="md:hidden w-full">
               <button 
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="flex items-center justify-between w-full bg-[#121214] border border-white/10 rounded-md px-4 py-3 text-white font-medium transition-all active:scale-[0.98]"
+                className="flex items-center justify-between w-full bg-[#121214] border border-white/10 rounded-md px-4 py-3.5 text-white font-medium transition-all active:scale-[0.98]"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <div className={currentItem?.isSpecial ? "text-[var(--plan-theme)]" : "text-zinc-400"}>
                     {currentItem?.icon}
                   </div>
-                  <span className="text-[10px] font-bold tracking-widest uppercase">{currentItem?.label}</span>
+                  <span className="text-[11px] font-bold tracking-widest uppercase">{currentItem?.label}</span>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-5 h-5 text-zinc-500 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {isDropdownOpen && (
@@ -206,14 +206,14 @@ const StudentNavbar: React.FC = () => {
                         to={item.path}
                         onClick={() => setIsDropdownOpen(false)}
                         className={`
-                          flex items-center gap-3 w-full px-4 py-3 text-left transition-colors border-b border-white/5 last:border-0
+                          flex items-center gap-4 w-full px-4 py-4 text-left transition-colors border-b border-white/5 last:border-0
                           ${isActive ? 'bg-white/5 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}
                         `}
                       >
                         <div className={item.isSpecial ? "text-[var(--plan-theme)]" : ""}>
                           {item.icon}
                         </div>
-                        <span className="text-[10px] font-bold tracking-widest uppercase">{item.label}</span>
+                        <span className="text-[11px] font-bold tracking-widest uppercase">{item.label}</span>
                       </Link>
                     );
                   })}

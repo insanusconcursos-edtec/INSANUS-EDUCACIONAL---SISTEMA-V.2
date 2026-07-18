@@ -73,6 +73,11 @@ export default function StandaloneCheckout() {
       finalPrice = finalPrice - (finalPrice * (offer.boletoDiscount / 100));
     }
 
+    // Adiciona taxa de matrícula (não sofre descontos, por pessoa)
+    if (offer.enrollmentFee && offer.enrollmentFee > 0 && !offer.isEnrollmentFeeExempt) {
+      finalPrice += (offer.enrollmentFee * numPeople);
+    }
+
     return finalPrice;
   }, [offer, paymentMethod, friends]);
 
@@ -382,7 +387,8 @@ export default function StandaloneCheckout() {
           userCpf: (buyerData.cpf || "").replace(/\D/g, ''),
           isStandalone: "true",
           refId: refId || '',
-          friends: JSON.stringify(friends)
+          friends: JSON.stringify(friends),
+          enrollmentFeeTotal: (offer.enrollmentFee || 0) * (1 + friends.length)
         },
       };
 
@@ -1204,13 +1210,15 @@ export default function StandaloneCheckout() {
 
           {/* LADO DIREITO: Resumo do Pedido */}
           <aside className="space-y-6 order-1 lg:order-2">
-             <div className="bg-red-600/10 border border-red-600/20 p-4 rounded-2xl flex gap-3">
-               <ShieldCheck size={18} className="text-red-500 shrink-0" />
-               <p className="text-[10px] text-zinc-300 font-medium leading-relaxed">
-                 <span className="font-black text-red-500 uppercase block mb-1 tracking-widest">Garantia e Reembolso</span>
-                 O reembolso ao evento somente é válido se realizado em até 48 horas antes da data da realização. O não comparecimento não assegura reembolso.
-               </p>
-             </div>
+            {product.type === 'EVENTO_PRESENCIAL' && (
+              <div className="bg-red-600/10 border border-red-600/20 p-4 rounded-2xl flex gap-3">
+                <ShieldCheck size={18} className="text-red-500 shrink-0" />
+                <p className="text-[10px] text-zinc-300 font-medium leading-relaxed">
+                  <span className="font-black text-red-500 uppercase block mb-1 tracking-widest">Garantia e Reembolso</span>
+                  O reembolso ao evento somente é válido se realizado em até 48 horas antes da data da realização. O não comparecimento não assegura reembolso.
+                </p>
+              </div>
+            )}
              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-xl sticky top-8">
                 <div className="aspect-video relative group overflow-hidden border-b border-zinc-800">
                    <img 
@@ -1261,8 +1269,23 @@ export default function StandaloneCheckout() {
                                    <span className="text-[10px] text-emerald-500 font-mono font-bold">-{methodDiscount.value}%</span>
                                  </div>
                                )}
+                                {offer.enrollmentFee && offer.enrollmentFee > 0 && (
+                                  <div className="flex justify-between items-center py-2 border-b border-zinc-800/50 mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">
+                                        {offer.isEnrollmentFeeExempt ? 'Taxa de Matrícula Isenta' : 'Taxa de Matrícula'}
+                                      </span>
+                                      {!offer.isEnrollmentFeeExempt && (
+                                        <span className="text-[8px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded uppercase font-bold tracking-tighter">Obrigatório</span>
+                                      )}
+                                    </div>
+                                    <span className={`text-xs font-bold ${offer.isEnrollmentFeeExempt ? 'text-zinc-500 line-through decoration-emerald-500/50 decoration-2' : 'text-white'}`}>
+                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(offer.enrollmentFee * (1 + friends.length))}
+                                    </span>
+                                  </div>
+                                )}
                                <div className="flex items-center gap-2">
-                                 <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Total com Desconto</p>
+                                 <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Valor Final a Pagar</p>
                                  {discountPercentage > 0 && (
                                    <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[9px] font-black animate-pulse">
                                      {discountPercentage}% OFF

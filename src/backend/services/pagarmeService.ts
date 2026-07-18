@@ -125,7 +125,14 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
   // 2. MONTAGEM DO OBJETO SPLITS (CÁLCULO LÍQUIDO)
   const amountCents = Math.round(Number(orderData.transaction_amount) * 100);
   const pagarmeFees = calculatePagarmeFees(amountCents, paymentMethod, orderData.installments || 1);
-  const pool = amountCents - pagarmeFees;
+  const totalPool = amountCents - pagarmeFees;
+
+  // Taxa de matrícula (Destinada INTEGRALMENTE ao master, não entra no split)
+  const enrollmentFeeTotal = Number(orderData.metadata?.enrollmentFeeTotal || 0);
+  const enrollmentFeeCents = Math.round(enrollmentFeeTotal * 100);
+  
+  // O pool para distribuição é o total líquido menos a taxa de matrícula
+  const pool = Math.max(0, totalPool - enrollmentFeeCents);
 
   const splitArray: any[] = [];
   let distributed = 0;
@@ -157,7 +164,7 @@ export const createPagarmeOrder = async (orderData: any, initialCoproducers: any
     }
   });
 
-  // MASTER (Restante + Taxas)
+  // MASTER (Restante do pool + Taxa de Matrícula + Taxas do Pagar.me)
   const masterVal = amountCents - distributed;
   splitArray.push({
     recipient_id: MASTER_RECIPIENT_ID,
@@ -554,7 +561,14 @@ async function recordAdminSalesReport(orderData: any) {
     
     // Gateway Fee
     const gatewayFee = calculatePagarmeFees(amountCents, paymentMethod, installments);
-    const pool = amountCents - gatewayFee;
+    const totalPool = amountCents - gatewayFee;
+
+    // Taxa de matrícula
+    const enrollmentFeeTotal = Number(metadata.enrollmentFeeTotal || 0);
+    const enrollmentFeeCents = Math.round(enrollmentFeeTotal * 100);
+    
+    // Pool para comissões
+    const pool = Math.max(0, totalPool - enrollmentFeeCents);
 
     // Afiliado
     let affiliatePercent = 0;
@@ -631,6 +645,7 @@ async function recordAdminSalesReport(orderData: any) {
       courseName: pData.name || 'Produto',
       grossValue: amountCents,
       gatewayFee,
+      enrollmentFee: enrollmentFeeCents,
       affiliatePart,
       coproductionPart,
       netCompanyValue,
@@ -776,7 +791,14 @@ async function recordCoproductionCommissions(orderData: any) {
     const paymentMethod = orderData.charges?.[0]?.payment_method || 'pix';
     const installments = orderData.charges?.[0]?.last_transaction?.installments || 1;
     const fees = calculatePagarmeFees(amountCents, paymentMethod, installments);
-    const pool = Math.max(0, amountCents - fees);
+    const totalPool = Math.max(0, amountCents - fees);
+
+    // Taxa de matrícula
+    const enrollmentFeeTotal = Number(metadata.enrollmentFeeTotal || 0);
+    const enrollmentFeeCents = Math.round(enrollmentFeeTotal * 100);
+    
+    // Pool para comissões
+    const pool = Math.max(0, totalPool - enrollmentFeeCents);
 
     let affiliatePercent = 0;
     if (currentOffer && currentOffer.isAffiliationEnabled) {
