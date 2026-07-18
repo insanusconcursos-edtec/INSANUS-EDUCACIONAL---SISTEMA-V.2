@@ -4,7 +4,7 @@ import { X, Save, AlertCircle, Upload, ChevronDown, ChevronUp, Search, Plus, Tra
 import { toast } from 'react-hot-toast';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Product, ProductType, ProductOffer, ProductSplit } from '../../../types/product';
-import { createProduct, updateProduct, uploadProductCover } from '../../../services/productService';
+import { createProduct, updateProduct, uploadProductCover, getProducts } from '../../../services/productService';
 import { syncProductResourcesForStudents } from '../../../services/userService';
 import { getPlans } from '../../../services/planService';
 import { Plan } from '../../../types/plan';
@@ -63,20 +63,22 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
   const [availableSimulated, setAvailableSimulated] = useState<SimulatedExam[]>([]);
   const [availableLiveEvents, setAvailableLiveEvents] = useState<LiveEvent[]>([]);
   const [availablePresentialEvents, setAvailablePresentialEvents] = useState<PresentialEvent[]>([]);
+  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [availableCoproducers, setAvailableCoproducers] = useState<Coproducer[]>([]);
   const [activeTab, setActiveTab] = useState<'resources' | 'split'>('resources');
 
   useEffect(() => {
     const loadResources = async () => {
       try {
-        const [plans, courses, classes, simulated, liveEvents, presentialEvents, coproducers] = await Promise.all([
+        const [plans, courses, classes, simulated, liveEvents, presentialEvents, coproducers, productsList] = await Promise.all([
           getPlans(),
           courseService.getCourses(),
           classService.getClasses(),
           getSimulatedClasses(),
           liveEventService.getLiveEvents(),
           presentialEventService.getEvents(),
-          coproducerService.getAll()
+          coproducerService.getAll(),
+          getProducts()
         ]);
         setAvailablePlans(plans);
         setAvailableCourses(courses);
@@ -85,6 +87,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
         setAvailableLiveEvents(liveEvents);
         setAvailablePresentialEvents(presentialEvents);
         setAvailableCoproducers(coproducers);
+        setAvailableProducts(productsList);
       } catch (err) {
         console.error('Failed to load resources:', err);
         setError('Erro ao carregar recursos disponíveis.');
@@ -780,6 +783,164 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                           <Check size={14} />
                           {offer.isDefault ? 'Favorito' : 'Padrão'}
                         </button>
+                      </div>
+
+                      <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <label className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Oferta Condicional</label>
+                          <button
+                            type="button"
+                            onClick={() => updateOffer(offer.id, { isConditional: !offer.isConditional })}
+                            className={`
+                              relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none
+                              ${offer.isConditional ? 'bg-amber-500' : 'bg-zinc-800'}
+                            `}
+                          >
+                            <span
+                              className={`
+                                pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out
+                                ${offer.isConditional ? 'translate-x-5' : 'translate-x-0'}
+                              `}
+                            />
+                          </button>
+                        </div>
+
+                        {offer.isConditional && (
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-[8px] text-zinc-600 font-bold uppercase mb-2">Produtos Requisitados</p>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {(offer.requiredProductIds || []).map(id => {
+                                  const p = availableProducts.find(ap => ap.id === id);
+                                  return (
+                                    <div key={id} className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2 py-1 rounded-lg">
+                                      <span className="text-[9px] text-white font-bold">{p?.name || 'Produto Removido'}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateOffer(offer.id, { requiredProductIds: (offer.requiredProductIds || []).filter(rid => rid !== id) })}
+                                        className="text-red-500 hover:text-red-400"
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                                {offer.requiredProductId && !offer.requiredProductIds?.includes(offer.requiredProductId) && (
+                                  <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-2 py-1 rounded-lg">
+                                    <span className="text-[9px] text-white font-bold italic">
+                                      {availableProducts.find(ap => ap.id === offer.requiredProductId)?.name || 'Produto Anterior'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const current = offer.requiredProductIds || [];
+                                        updateOffer(offer.id, { 
+                                          requiredProductIds: [...current, offer.requiredProductId!],
+                                          requiredProductId: undefined 
+                                        });
+                                      }}
+                                      className="text-amber-500 hover:text-amber-400"
+                                      title="Migrar para lista múltipla"
+                                    >
+                                      <Plus size={10} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const current = offer.requiredProductIds || [];
+                                    if (!current.includes(e.target.value)) {
+                                      updateOffer(offer.id, { requiredProductIds: [...current, e.target.value] });
+                                    }
+                                  }
+                                }}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-[10px] font-bold text-white focus:outline-none focus:border-amber-500"
+                              >
+                                <option value="">Adicionar produto...</option>
+                                {availableProducts
+                                  .filter(p => p.id !== product?.id && !(offer.requiredProductIds || []).includes(p.id!))
+                                  .map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                  ))}
+                              </select>
+                              <p className="text-[7px] text-amber-500/70 mt-1 uppercase font-black tracking-tighter">
+                                O cliente deve possuir PELO MENOS UM destes produtos para liberar esta oferta.
+                              </p>
+                            </div>
+
+                            <div className="pt-2 border-t border-zinc-800/50">
+                              <p className="text-[8px] text-zinc-600 font-bold uppercase mb-2">Lista de Exceção (Acesso Direto)</p>
+                              <div className="space-y-2 mb-3 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                                {(offer.exceptionList || []).map((exc, idx) => (
+                                  <div key={idx} className="flex items-center justify-between bg-zinc-950 border border-zinc-800 px-2 py-1.5 rounded-lg group">
+                                    <div className="flex flex-col">
+                                      <span className="text-[9px] text-white font-bold">{exc.name}</span>
+                                      <span className="text-[7px] text-zinc-500">{exc.email} • {exc.cpf}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateOffer(offer.id, { exceptionList: (offer.exceptionList || []).filter((_, i) => i !== idx) })}
+                                      className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                ))}
+                                {(!offer.exceptionList || offer.exceptionList.length === 0) && (
+                                  <p className="text-[8px] text-zinc-700 italic text-center py-2">Nenhuma exceção cadastrada</p>
+                                )}
+                              </div>
+                              
+                              <div className="grid grid-cols-1 gap-2 p-2 bg-zinc-950/50 rounded-lg border border-zinc-800/30">
+                                <input 
+                                  type="text" 
+                                  placeholder="NOME COMPLETO"
+                                  id={`exc-name-${offer.id}`}
+                                  className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[9px] font-bold text-white placeholder:text-zinc-700 focus:border-amber-500/50 outline-none"
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input 
+                                    type="email" 
+                                    placeholder="E-MAIL"
+                                    id={`exc-email-${offer.id}`}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[9px] font-bold text-white placeholder:text-zinc-700 focus:border-amber-500/50 outline-none"
+                                  />
+                                  <input 
+                                    type="text" 
+                                    placeholder="CPF"
+                                    id={`exc-cpf-${offer.id}`}
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[9px] font-bold text-white placeholder:text-zinc-700 focus:border-amber-500/50 outline-none"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nameEl = document.getElementById(`exc-name-${offer.id}`) as HTMLInputElement;
+                                    const emailEl = document.getElementById(`exc-email-${offer.id}`) as HTMLInputElement;
+                                    const cpfEl = document.getElementById(`exc-cpf-${offer.id}`) as HTMLInputElement;
+                                    if (nameEl?.value && emailEl?.value && cpfEl?.value) {
+                                      const current = offer.exceptionList || [];
+                                      updateOffer(offer.id, { 
+                                        exceptionList: [...current, { name: nameEl.value, email: emailEl.value, cpf: cpfEl.value }] 
+                                      });
+                                      nameEl.value = '';
+                                      emailEl.value = '';
+                                      cpfEl.value = '';
+                                    } else {
+                                      toast.error('Preencha todos os campos da exceção.');
+                                    }
+                                  }}
+                                  className="w-full py-1.5 bg-zinc-800 hover:bg-amber-600/20 hover:text-amber-500 text-[8px] font-black uppercase text-zinc-400 rounded transition-all border border-zinc-700 hover:border-amber-500/30"
+                                >
+                                  Adicionar à Lista de Exceção
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800/50">

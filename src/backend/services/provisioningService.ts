@@ -52,7 +52,7 @@ interface Resources {
   liveEvents?: string[];
 }
 
-export const provisionPurchase = async (customerData: CustomerData, targetId: string, origin: 'ticto' | 'mp' | 'pagarme' = 'pagarme') => {
+export const provisionPurchase = async (customerData: CustomerData, targetId: string, origin: 'ticto' | 'mp' | 'pagarme' = 'pagarme', metadata: any = {}) => {
   const { dbAdmin, authAdmin } = getAdminConfig();
   try {
     const safeTargetId = String(targetId);
@@ -394,7 +394,8 @@ export const provisionPurchase = async (customerData: CustomerData, targetId: st
         endDate: Timestamp.fromDate(expirationDate),
         status: 'active',
         createdAt: FieldValue.serverTimestamp(),
-        accessDetails: accessesToGrant // Cópia dos acessos específicos liberados
+        accessDetails: accessesToGrant, // Cópia dos acessos específicos liberados
+        offerId: metadata?.offerId || null
       };
 
       await dbAdmin.collection('enrollments').add(enrollmentData);

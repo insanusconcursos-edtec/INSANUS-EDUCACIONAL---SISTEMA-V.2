@@ -385,7 +385,7 @@ export const handlePagarmeWebhook = async (payload: any, signature?: string) => 
         name: orderData.customer?.name || 'Cliente',
         cpf: orderData.customer?.document || '',
         phone: orderData.metadata?.userPhone || ''
-      }, String(productId), 'pagarme');
+      }, String(productId), 'pagarme', orderData.metadata);
 
       // 2. Provisionamento para os amigos (se houver)
       const friendsJson = orderData.metadata?.friends;
@@ -401,7 +401,7 @@ export const handlePagarmeWebhook = async (payload: any, signature?: string) => 
                   name: friend.name || 'Convidado',
                   cpf: friend.cpf || '',
                   phone: friend.phone || ''
-                }, String(productId), 'pagarme');
+                }, String(productId), 'pagarme', orderData.metadata);
               }
             }
           }

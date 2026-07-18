@@ -129,6 +129,9 @@ export default function StandaloneCheckout() {
     }
   }, [currentUser]);
 
+  const [isValidatingOffer, setIsValidatingOffer] = useState(false);
+  const [isOfferValidated, setIsOfferValidated] = useState(false);
+
   const validateStep1 = () => {
     const errors: Record<string, string> = {};
     if (!buyerData.name.trim()) errors.name = 'Nome completo é obrigatório';
@@ -155,8 +158,54 @@ export default function StandaloneCheckout() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleNextStep = () => {
+  const validateConditionalOffer = async () => {
+    if (!offer?.isConditional || isOfferValidated) return true;
+
+    // Se não houver produtos requisitados nem lista de exceção, libera por padrão
+    const hasRequired = (offer.requiredProductIds && offer.requiredProductIds.length > 0) || !!offer.requiredProductId;
+    const hasExceptions = offer.exceptionList && offer.exceptionList.length > 0;
+    
+    if (!hasRequired && !hasExceptions) return true;
+
+    setIsValidatingOffer(true);
+    try {
+      const response = await fetch('/api/offers/validate-conditional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: buyerData.email,
+          cpf: buyerData.cpf,
+          requiredProductId: offer.requiredProductId,
+          requiredProductIds: offer.requiredProductIds,
+          exceptionList: offer.exceptionList,
+          offerId: offer.id,
+          productId: product?.id
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setIsOfferValidated(true);
+        return true;
+      } else {
+        toast.error(data.message || 'Você não atende aos requisitos desta oferta.');
+        return false;
+      }
+    } catch (err) {
+      console.error('Erro ao validar oferta:', err);
+      toast.error('Erro ao validar elegibilidade da oferta.');
+      return false;
+    } finally {
+      setIsValidatingOffer(false);
+    }
+  };
+
+  const handleNextStep = async () => {
     if (validateStep1()) {
+      if (offer?.isConditional) {
+        const isValid = await validateConditionalOffer();
+        if (!isValid) return;
+      }
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
@@ -816,9 +865,17 @@ export default function StandaloneCheckout() {
 
                     <button 
                       onClick={handleNextStep}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl transition-all flex items-center justify-center gap-2 group uppercase tracking-widest text-sm shadow-lg shadow-red-600/10 active:scale-[0.98]"
+                      disabled={isValidatingOffer}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl transition-all flex items-center justify-center gap-2 group uppercase tracking-widest text-sm shadow-lg shadow-red-600/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Continuar para Pagamento
+                      {isValidatingOffer ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          Validando Oferta...
+                        </>
+                      ) : (
+                        'Continuar para Pagamento'
+                      )}
                     </button>
                   </div>
                 ) : (

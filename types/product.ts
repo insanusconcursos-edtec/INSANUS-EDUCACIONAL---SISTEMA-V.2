@@ -31,6 +31,10 @@ export interface ProductOffer {
     boleto: boolean;
   };
   maxInstallments?: number; // Máximo de parcelas (1-12)
+  isConditional?: boolean; // Habilita oferta condicional
+  requiredProductId?: string; // Mantido para compatibilidade simples
+  requiredProductIds?: string[]; // IDs dos produtos que o usuário deve ter para liberar a oferta
+  exceptionList?: { name: string; email: string; cpf: string; }[]; // Lista de usuários isentos da condição
   lotUrgencyEnabled?: boolean; // Habilita senso de urgência por lote
   lotUrgencyType?: 'quantity' | 'date'; // Tipo de urgência: por vagas ou por data
   lotQuantityLimit?: number; // Quantidade total de vagas no lote
