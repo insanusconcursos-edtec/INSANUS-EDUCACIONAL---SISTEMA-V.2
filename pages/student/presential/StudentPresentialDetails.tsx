@@ -76,16 +76,13 @@ export const StudentPresentialDetails: React.FC = () => {
           if (data) {
             setCurrentClass(data);
             
-            // Determine which ID to use for content (Modules, Planning, etc.)
-            const contentId = data.masterClassId || classId;
-
             // Check content availability in parallel
-            // Note: Schedule (eventsData) always stays with the specific classId
+            // Subjects, Topics and Modules are now unique to each class
             const [modulesData, eventsData, subjectsData, liveEventsData] = await Promise.all([
-              courseService.getModules(contentId),
+              courseService.getModules(classId),
               classScheduleService.getScheduleEventsByClass(classId),
-              curriculumService.getSubjectsByClass(contentId),
-              liveEventService.getLiveEventsByPresentialClass(contentId)
+              curriculumService.getSubjectsByClass(classId),
+              liveEventService.getLiveEventsByPresentialClass(classId)
             ]);
             
             const hModules = modulesData.length > 0;
@@ -157,8 +154,7 @@ export const StudentPresentialDetails: React.FC = () => {
       if (activeTab === 'TEACHING' && currentClass) {
         setLoadingModules(true);
         try {
-          const contentId = currentClass.masterClassId || currentClass.id;
-          const data = await courseService.getModules(contentId);
+          const data = await courseService.getModules(currentClass.id);
           setModules(data);
         } catch (error) {
           console.error("Error fetching modules:", error);

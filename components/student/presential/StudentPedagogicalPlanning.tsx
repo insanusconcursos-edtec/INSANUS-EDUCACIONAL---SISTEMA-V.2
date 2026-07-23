@@ -61,12 +61,10 @@ export function StudentPedagogicalPlanning({ classId, masterClassId, totalMeetin
   useEffect(() => {
     const loadData = async () => {
       try {
-        const contentId = masterClassId || classId;
-
         const [eventsData, subjectsData, topicsData, teachersData] = await Promise.all([
           classScheduleService.getScheduleEventsByClass(classId),
-          curriculumService.getSubjectsByClass(contentId),
-          curriculumService.getTopicsByClass(contentId),
+          curriculumService.getSubjectsByClass(classId),
+          curriculumService.getTopicsByClass(classId),
           teacherService.getTeachers()
         ]);
 

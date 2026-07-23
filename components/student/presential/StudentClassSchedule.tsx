@@ -44,12 +44,10 @@ export const StudentClassSchedule: React.FC<StudentClassScheduleProps> = ({ clas
   useEffect(() => {
     const loadData = async () => {
       try {
-        const contentId = masterClassId || classId;
-
         const [eventsData, subjectsData, topicsData, teachersData, holidaysData] = await Promise.all([
           classScheduleService.getScheduleEventsByClass(classId),
-          curriculumService.getSubjectsByClass(contentId),
-          curriculumService.getTopicsByClass(contentId),
+          curriculumService.getSubjectsByClass(classId),
+          curriculumService.getTopicsByClass(classId),
           teacherService.getTeachers(),
           holidayService.getHolidays()
         ]);

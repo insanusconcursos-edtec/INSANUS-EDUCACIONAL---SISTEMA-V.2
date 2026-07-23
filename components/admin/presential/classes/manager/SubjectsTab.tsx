@@ -56,6 +56,9 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [pdfDeleteModal, setPdfDeleteModal] = useState<{ isOpen: boolean, contentId: string | null }>({ isOpen: false, contentId: null });
+  const [importConfirmModal, setImportConfirmModal] = useState(false);
+  const [bulkTeacherConfirmModal, setBulkTeacherConfirmModal] = useState<{ isOpen: boolean, subjectId: string | null }>({ isOpen: false, subjectId: null });
 
   // Fetch Data
   const sanitizeModules = (modules: Module[]): Module[] => {
@@ -107,11 +110,18 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
 
   const handleImportFromMaster = async () => {
     if (!cls.masterClassId) return;
-    if (subjects.length > 0 && !confirm("Atenção: Esta ação irá importar as disciplinas e assuntos da Turma Mãe. Deseja continuar?")) return;
+    if (subjects.length > 0) {
+      setImportConfirmModal(true);
+      return;
+    }
+    await confirmImportFromMaster();
+  };
 
+  const confirmImportFromMaster = async () => {
     try {
       setIsCloning(true);
-      await curriculumService.cloneCurriculum(cls.masterClassId, cls.id);
+      setImportConfirmModal(false);
+      await curriculumService.cloneCurriculum(cls.masterClassId!, cls.id);
       await fetchData();
       if (onUpdate) await onUpdate(true);
     } catch (error) {
@@ -387,10 +397,16 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
     }
   };
 
-  const handleBulkApplyTeacher = async (subjectId: string) => {
-    if (!confirm("Deseja vincular o professor titular a todos os assuntos desta disciplina? Isso removerá professores específicos.")) return;
+  const handleBulkApplyTeacher = (subjectId: string) => {
+    setBulkTeacherConfirmModal({ isOpen: true, subjectId });
+  };
+
+  const confirmBulkApplyTeacher = async () => {
+    const subjectId = bulkTeacherConfirmModal.subjectId;
+    if (!subjectId) return;
     
     try {
+      setBulkTeacherConfirmModal({ isOpen: false, subjectId: null });
       const subjectTopics = topics.filter(t => t.subjectId === subjectId);
       
       // Optimistic update
@@ -597,12 +613,18 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
   };
 
   const handleRemovePdf = (contentId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este material?')) {
-      setNewModule(prev => ({
-        ...prev,
-        contents: prev.contents.filter(c => c.id !== contentId)
-      }));
-    }
+    setPdfDeleteModal({ isOpen: true, contentId });
+  };
+
+  const confirmRemovePdf = () => {
+    if (!pdfDeleteModal.contentId) return;
+    
+    setNewModule(prev => ({
+      ...prev,
+      contents: prev.contents.filter(c => c.id !== pdfDeleteModal.contentId)
+    }));
+    
+    setPdfDeleteModal({ isOpen: false, contentId: null });
   };
 
   const handleUpdatePdfTitle = (contentId: string, newTitle: string) => {
@@ -1536,6 +1558,105 @@ export const SubjectsTab: React.FC<SubjectsTabProps> = ({ cls, onUpdate }) => {
               >
                 {editingModule ? 'Salvar Alterações' : 'Adicionar Módulo'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import From Master Confirmation Modal */}
+      {importConfirmModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <GitBranch className="w-6 h-6 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Importar da Turma Mãe</h3>
+                <p className="text-zinc-400 text-sm mt-2">
+                  Atenção: Esta ação irá importar as disciplinas e assuntos da Turma Mãe. Deseja continuar?
+                </p>
+              </div>
+              <div className="flex gap-3 w-full pt-2">
+                <button
+                  onClick={() => setImportConfirmModal(false)}
+                  className="flex-1 px-4 py-2 rounded-lg font-bold uppercase text-xs tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmImportFromMaster}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold uppercase text-xs tracking-wider shadow-lg shadow-blue-600/20 transition-colors"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Apply Teacher Confirmation Modal */}
+      {bulkTeacherConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-brand-red/10 flex items-center justify-center">
+                <User className="w-6 h-6 text-brand-red" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Vincular Titular</h3>
+                <p className="text-zinc-400 text-sm mt-2">
+                  Deseja vincular o professor titular a todos os assuntos desta disciplina? Isso removerá professores específicos.
+                </p>
+              </div>
+              <div className="flex gap-3 w-full pt-2">
+                <button
+                  onClick={() => setBulkTeacherConfirmModal({ isOpen: false, subjectId: null })}
+                  className="flex-1 px-4 py-2 rounded-lg font-bold uppercase text-xs tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmBulkApplyTeacher}
+                  className="flex-1 px-4 py-2 bg-brand-red hover:bg-red-600 text-white rounded-lg font-bold uppercase text-xs tracking-wider shadow-lg shadow-brand-red/20 transition-colors"
+                >
+                  Vincular
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete PDF Confirmation Modal */}
+      {pdfDeleteModal.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Trash2 className="w-6 h-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Excluir Material</h3>
+                <p className="text-zinc-400 text-sm mt-2">
+                  Tem certeza que deseja excluir este material de apoio?
+                </p>
+              </div>
+              <div className="flex gap-3 w-full pt-2">
+                <button
+                  onClick={() => setPdfDeleteModal({ isOpen: false, contentId: null })}
+                  className="flex-1 px-4 py-2 rounded-lg font-bold uppercase text-xs tracking-wider text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmRemovePdf}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold uppercase text-xs tracking-wider shadow-lg shadow-red-600/20 transition-colors"
+                >
+                  Excluir
+                </button>
+              </div>
             </div>
           </div>
         </div>
