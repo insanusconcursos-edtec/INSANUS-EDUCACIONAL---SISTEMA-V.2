@@ -29,6 +29,7 @@ export interface SimulatedAttempt {
   wrongCount: number;
   blankCount: number;
   totalQuestions: number;
+  maxPossibleScore?: number;
   isApproved: boolean;
   completedAt: any;
   autodiagnosis?: {
@@ -83,23 +84,29 @@ export const submitExamAttempt = async (
   let wrong = 0;
   let blank = 0;
   let score = 0;
+  let totalMaxPoints = 0;
 
-  const correctAnswersMap = new Map<number, string>();
+  const questionsMap = new Map<number, ExamQuestion>();
   if (exam.questions) {
-    exam.questions.forEach(q => correctAnswersMap.set(q.index, q.answer));
+    exam.questions.forEach(q => {
+      questionsMap.set(q.index, q);
+    });
   }
 
   // Itera sobre o total de questões do simulado
   for (let i = 1; i <= exam.questionCount; i++) {
     // Normalização da chave (aceita number ou string)
     const userAnswer = userAnswers[i] || userAnswers[String(i)];
-    const correctAnswer = correctAnswersMap.get(i);
-    const questionData = exam.questions?.find(q => q.index === i);
+    const questionData = questionsMap.get(i);
+    const correctAnswer = questionData?.answer;
+    const questionWeight = questionData?.value || 1;
+
+    totalMaxPoints += questionWeight;
 
     // Se a questão foi anulada, conta como ponto para todos (Acerto Automático)
     if (questionData?.isAnnulled) {
         correct++;
-        score += 1;
+        score += questionWeight;
         continue;
     }
 
@@ -108,24 +115,24 @@ export const submitExamAttempt = async (
         // Em branco não pontua nem penaliza
     } else if (userAnswer === correctAnswer) {
         correct++;
-        score += 1; // +1 Ponto por acerto
+        score += questionWeight; // Ponto ponderado por acerto
     } else {
         wrong++;
         // Lógica de Penalidade (Estilo Cespe)
         if (exam.hasPenalty) {
-            score -= 1; // -1 Ponto por erro
+            score -= questionWeight; // Penalidade ponderada por erro
         }
     }
   }
 
   // 3. Aprovação e Nota Líquida
   // Permite nota negativa (padrão Cespe)
-  const maxPoints = exam.questionCount;
+  const maxPoints = totalMaxPoints > 0 ? totalMaxPoints : exam.questionCount;
   
   // Percentual para aprovação
   // Nota: Se a nota for negativa, consideramos 0 para efeito de % de aproveitamento visual,
   // mas o score salvo pode ser negativo. Para aprovação, score >= minPoints.
-  // Cálculo de aprovação baseado em percentual do total de questões
+  // Cálculo de aprovação baseado em percentual da pontuação total possível
   const minScore = (exam.minApprovalPercent / 100) * maxPoints;
   const isApproved = score >= minScore;
 
@@ -149,6 +156,7 @@ export const submitExamAttempt = async (
     wrongCount: wrong,
     blankCount: blank,
     totalQuestions: exam.questionCount,
+    maxPossibleScore: Number(maxPoints.toFixed(2)),
     isApproved,
     completedAt: serverTimestamp()
   };

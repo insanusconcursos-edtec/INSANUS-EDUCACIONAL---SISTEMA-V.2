@@ -548,7 +548,8 @@ const SimulatedExamConsole: React.FC<SimulatedExamConsoleProps> = ({ classId, ex
                   </thead>
                   <tbody className="divide-y divide-zinc-800/50">
                     {examResults.map((result) => {
-                      const percent = (result.score / (result.totalQuestions || 1)) * 100;
+                      const maxPoints = result.maxPossibleScore || result.totalQuestions || 1;
+                      const percent = (result.score / maxPoints) * 100;
                       return (
                         <tr key={result.id} className="hover:bg-zinc-900/30 transition-all group">
                           <td className="p-4">
@@ -689,7 +690,7 @@ const SimulatedExamConsole: React.FC<SimulatedExamConsoleProps> = ({ classId, ex
                         </td>
                         <td className="p-4 text-center text-emerald-500 font-bold">{r.correctCount}</td>
                         <td className="p-4 text-center text-red-500 font-bold">{r.wrongCount}</td>
-                        <td className="p-4 text-center text-zinc-500 font-mono text-[10px]">{((r.score / r.totalQuestions) * 100).toFixed(1)}%</td>
+                        <td className="p-4 text-center text-zinc-500 font-mono text-[10px]">{((r.score / (r.maxPossibleScore || r.totalQuestions || 1)) * 100).toFixed(1)}%</td>
                         <td className="p-4 text-center">
                           <span className="text-sm font-black text-white">{r.score.toFixed(1)}</span>
                         </td>

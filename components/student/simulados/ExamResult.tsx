@@ -72,7 +72,8 @@ export const ExamResult: React.FC<ExamResultProps> = ({ exam, attemptData, onBac
     // Sincronização de Nível (se for simulado de nivelamento)
     useEffect(() => {
         if (currentUser && exam.isLeveling && exam.levelingRanges) {
-            const percent = (attemptData.score / attemptData.totalQuestions) * 100;
+            const maxPoints = attemptData.maxPossibleScore || attemptData.totalQuestions;
+            const percent = (attemptData.score / maxPoints) * 100;
             let identifiedLevel: 'beginner' | 'intermediate' | 'advanced' | 'insane' = 'beginner';
             
             if (percent > exam.levelingRanges.advanced) identifiedLevel = 'insane';
@@ -101,7 +102,8 @@ export const ExamResult: React.FC<ExamResultProps> = ({ exam, attemptData, onBac
     // Estilização dinâmica para o Selo de Nivelamento
     const levelStyle = useMemo(() => {
         if (!exam.levelingRanges) return null;
-        const percent = (attemptData.score / attemptData.totalQuestions) * 100;
+        const maxPoints = attemptData.maxPossibleScore || attemptData.totalQuestions;
+        const percent = (attemptData.score / maxPoints) * 100;
         
         if (percent > exam.levelingRanges.advanced) return {
             label: 'Insano',
@@ -424,14 +426,14 @@ export const ExamResult: React.FC<ExamResultProps> = ({ exam, attemptData, onBac
                                             <div 
                                                 className={`h-full transition-all duration-1000`} 
                                                 style={{ 
-                                                    width: `${(attemptData.score / attemptData.totalQuestions) * 100}%`,
+                                                    width: `${(attemptData.score / (attemptData.maxPossibleScore || attemptData.totalQuestions)) * 100}%`,
                                                     backgroundColor: levelStyle.color.match(/\[(.*?)\]/)?.[1] || '#DC2626',
                                                     boxShadow: `0 0 10px ${levelStyle.color.match(/\[(.*?)\]/)?.[1] || '#DC2626'}`
                                                 }}
                                             />
                                         </div>
                                         <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                                            Aproveitamento de {((attemptData.score / attemptData.totalQuestions) * 100).toFixed(1)}%
+                                            Aproveitamento de {((attemptData.score / (attemptData.maxPossibleScore || attemptData.totalQuestions)) * 100).toFixed(1)}%
                                         </span>
                                     </div>
                                     <p className="text-xs text-zinc-500 font-medium mt-6 max-w-lg leading-relaxed">

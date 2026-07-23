@@ -85,7 +85,8 @@ export const StudentPerformanceDashboard: React.FC<{
         if (levelingExam) {
             levelingAttempt = attempts.find(a => a.simulatedId === levelingExam.id) || null;
             if (levelingAttempt && levelingExam.levelingRanges) {
-                const percent = (levelingAttempt.score / levelingAttempt.totalQuestions) * 100;
+                const maxPoints = levelingAttempt.maxPossibleScore || levelingAttempt.totalQuestions;
+                const percent = (levelingAttempt.score / maxPoints) * 100;
                 
                 if (percent > levelingExam.levelingRanges.advanced) identifiedLevel = 'insane';
                 else if (percent > levelingExam.levelingRanges.intermediate) identifiedLevel = 'advanced';

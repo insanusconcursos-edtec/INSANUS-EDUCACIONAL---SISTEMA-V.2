@@ -66,6 +66,7 @@ export interface StudentExamResult {
   wrongCount: number;
   blankCount: number;
   totalQuestions: number;
+  maxPossibleScore?: number;
   completedAt: any;
   isApproved: boolean;
 }
@@ -318,6 +319,7 @@ export const getStudentExamResults = async (classId: string, examId: string): Pr
       wrongCount: data.wrongCount,
       blankCount: data.blankCount,
       totalQuestions: data.totalQuestions,
+      maxPossibleScore: data.maxPossibleScore,
       completedAt: data.completedAt,
       isApproved: data.isApproved
     } as StudentExamResult;

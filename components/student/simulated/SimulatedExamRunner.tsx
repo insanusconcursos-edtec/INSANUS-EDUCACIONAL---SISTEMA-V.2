@@ -124,7 +124,8 @@ const SimulatedExamRunner: React.FC<SimulatedExamRunnerProps> = ({ exam, onClose
         
         // --- NIVELAMENTO AUTOMÁTICO ---
         if (exam.isLeveling && exam.levelingRanges) {
-            const percent = (result.score / result.totalQuestions) * 100;
+            const maxPoints = result.maxPossibleScore || result.totalQuestions;
+            const percent = (result.score / maxPoints) * 100;
             let detectedLevel: 'beginner' | 'intermediate' | 'advanced' | 'insane' = 'beginner';
             
             if (percent > exam.levelingRanges.advanced) detectedLevel = 'insane';
